@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2>Welcome to Fee Management System</h2>
+<p class="lead">Manage students, fees, and overdue reminders easily.</p>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Students</h5>
+                <a href="/students" class="btn btn-outline-primary btn-sm">View Students</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Fees</h5>
+                <a href="/fees" class="btn btn-outline-primary btn-sm">View Fees</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Overdue</h5>
+                <a href="/overdue" class="btn btn-outline-danger btn-sm">Check Overdue</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

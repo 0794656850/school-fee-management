@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Overdue Fees</h3>
+<table class="table">
+  <thead><tr><th>Student</th><th>Term</th><th>Balance</th><th>Due Date</th></tr></thead>
+  <tbody>
+    {% for f in overdue_fees %}
+      <tr>
+        <td>{{ f.student.name }}</td>
+        <td>{{ f.term }}</td>
+        <td>KES {{ '%.2f'|format(f.balance) }}</td>
+        <td>{{ f.due_date }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4">No overdue fees</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

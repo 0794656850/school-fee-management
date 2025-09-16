@@ -1,0 +1,8 @@
+body { background: #f5f7fb; }
+.navbar.bg-gradient {
+  background: linear-gradient(90deg,#0066cc,#00b4d8);
+}
+.card { border-radius: 12px; }
+.btn-primary { border-radius: 8px; }
+.btn-primary:hover { background-color: #005bb5; }
+.form-control:focus { border-color: #00b4d8; box-shadow: 0 0 0 0.2rem rgba(0,180,216,0.25); }
