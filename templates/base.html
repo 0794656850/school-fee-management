@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}CS Fee Management{% endblock %}</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #f8fafc, #eef2ff);
+      color: #1e293b;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      backdrop-filter: blur(16px);
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s ease;
+    }
+
+    .sidebar a {
+      transition: all 0.25s ease;
+    }
+
+    .sidebar a:hover {
+      transform: translateX(4px);
+    }
+
+    .active-link {
+      background: linear-gradient(to right, #2563eb20, #2563eb10);
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    main {
+      background: #f9fafb;
+    }
+
+    header {
+      backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .nav-button:hover {
+      background-color: #f1f5f9;
+    }
+  </style>
+</head>
+
+<body class="flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
+    <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+      <h1 class="text-xl font-extrabold text-blue-700 tracking-tight">CS Fee<span class="text-gray-600">Portal</span></h1>
+      <button id="toggleSidebar" class="md:hidden p-1 text-gray-600 hover:text-blue-600">
+        <i data-lucide="menu"></i>
+      </button>
+    </div>
+
+    <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <a href="{{ url_for('dashboard') }}" 
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if request.path == '/' %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="home"></i> <span>Dashboard</span>
+      </a>
+
+      <a href="{{ url_for('students') }}" 
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/students' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="users"></i> <span>Students</span>
+      </a>
+
+      <a href="#" 
+         onclick="openAddPaymentModal()" 
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-blue-50 text-gray-700">
+        <i data-lucide="dollar-sign"></i> <span>Add Payment</span>
+      </a>
+
+      <a href="{{ url_for('analytics') }}" 
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/analytics' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="bar-chart-2"></i> <span>Analytics</span>
+      </a>
+    </nav>
+
+    <div class="p-4 border-t border-gray-100 text-center text-gray-500 text-xs">
+      <p>© 2025 <span class="font-semibold text-blue-600">CS Fee System</span></p>
+      <p class="mt-1">Powered by Flask</p>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col overflow-y-auto">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-800 tracking-tight">
+        {% block page_title %}{% endblock %}
+      </h2>
+
+      <div class="flex items-center gap-3">
+        <button class="nav-button p-2 rounded-full hover:bg-gray-100 transition">
+          <i data-lucide="bell"></i>
+        </button>
+        <button class="nav-button p-2 rounded-full hover:bg-gray-100 transition">
+          <i data-lucide="user-circle"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <section class="p-8 min-h-screen bg-gradient-to-b from-white to-gray-50">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+
+  <script>
+    // Initialize icons
+    lucide.createIcons();
+
+    // Sidebar Toggle (Mobile)
+    const sidebar = document.querySelector('.sidebar');
+    const toggleBtn = document.getElementById('toggleSidebar');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('hidden');
+      });
+    }
+
+    // Example modal trigger placeholder
+    function openAddPaymentModal() {
+      window.location.href = "{{ url_for('payments') }}";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ student.name }} - Student Profile{% endblock %}
+{% block page_title %}Student Profile{% endblock %}
+{% block content %}
+
+<div class="bg-white shadow-md border border-gray-100 rounded-2xl p-8 space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div>
+      <h2 class="text-2xl font-semibold text-gray-800 flex items-center gap-2">
+        <i data-lucide="user" class="w-6 h-6 text-blue-600"></i>
+        {{ student.name }}
+      </h2>
+      <div class="mt-2 flex flex-wrap gap-3 text-sm text-gray-600">
+        <span class="px-3 py-1 bg-gray-100 rounded-full">
+          Admission No: <span class="font-medium text-gray-800">{{ student.admission_no or '—' }}</span>
+        </span>
+        <span class="px-3 py-1 bg-gray-100 rounded-full">
+          Class: <span class="font-medium text-gray-800">{{ student.class_name or '—' }}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-3 text-right">
+      <a href="{{ url_for('payments') }}" 
+         class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Payment
+      </a>
+      <a href="{{ url_for('students') }}" 
+         class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium text-sm transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Students
+      </a>
+    </div>
+  </div>
+
+  <!-- Balance Overview Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+
+    <!-- Current Balance -->
+    <div class="p-5 bg-red-50 border border-red-100 rounded-2xl shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <h4 class="text-sm font-medium text-gray-500 mb-1">Current Balance</h4>
+          <p class="text-2xl font-semibold text-red-600">
+            KES {{ "{:,.2f}".format(student.balance or student.fee_balance or 0) }}
+          </p>
+        </div>
+        <i data-lucide="alert-circle" class="w-6 h-6 text-red-500"></i>
+      </div>
+    </div>
+
+    <!-- Credit Balance -->
+    <div class="p-5 bg-green-50 border border-green-100 rounded-2xl shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <h4 class="text-sm font-medium text-gray-500 mb-1">Credit Balance</h4>
+          <p class="text-2xl font-semibold text-green-600">
+            {% if student.credit and student.credit > 0 %}
+              +KES {{ "{:,.2f}".format(student.credit) }}
+            {% else %}
+              KES 0.00
+            {% endif %}
+          </p>
+        </div>
+        <i data-lucide="wallet" class="w-6 h-6 text-green-500"></i>
+      </div>
+    </div>
+
+    <!-- Net Status -->
+    <div class="p-5 bg-blue-50 border border-blue-100 rounded-2xl shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <h4 class="text-sm font-medium text-gray-500 mb-1">Net Status</h4>
+          {% set net = (student.credit or 0) - (student.balance or student.fee_balance or 0) %}
+          {% if net > 0 %}
+            <p class="text-2xl font-semibold text-green-600">In Credit: KES {{ "{:,.2f}".format(net) }}</p>
+          {% elif net < 0 %}
+            <p class="text-2xl font-semibold text-red-600">Owes: KES {{ "{:,.2f}".format(-net) }}</p>
+          {% else %}
+            <p class="text-2xl font-semibold text-gray-600">Settled</p>
+          {% endif %}
+        </div>
+        <i data-lucide="scale" class="w-6 h-6 text-blue-500"></i>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Payment History Table -->
+  <div>
+    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <i data-lucide="receipt" class="text-gray-600"></i> Payment History
+    </h4>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+        <thead class="bg-gray-50 text-gray-600 font-medium">
+          <tr>
+            <th class="px-4 py-2 text-left border-b">#</th>
+            <th class="px-4 py-2 text-left border-b">Amount (KES)</th>
+            <th class="px-4 py-2 text-left border-b">Method</th>
+            <th class="px-4 py-2 text-left border-b">Reference</th>
+            <th class="px-4 py-2 text-left border-b">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payments %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-4 py-2 border-b text-gray-600">{{ loop.index }}</td>
+            <td class="px-4 py-2 border-b text-green-600 font-semibold">
+              {{ "{:,.2f}".format(payment.amount or 0) }}
+            </td>
+            <td class="px-4 py-2 border-b">{{ payment.method or '—' }}</td>
+            <td class="px-4 py-2 border-b">{{ payment.reference or '—' }}</td>
+            <td class="px-4 py-2 border-b text-gray-500">
+              {% if payment.date %}
+                {% if payment.date.__class__.__name__ == 'str' %}
+                  {{ payment.date }}
+                {% else %}
+                  {{ payment.date.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-gray-500 py-4">No payments found for this student.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  lucide.createIcons();
+});
+</script>
+
+{% endblock %}

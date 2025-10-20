@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - CS Fee Management{% endblock %}
+{% block page_title %}Dashboard Overview{% endblock %}
+{% block content %}
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+  
+  <!-- Total Students -->
+  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">Total Students</h4>
+        <p id="total_students" class="text-3xl font-bold text-gray-800 tracking-tight">
+          {{ total_students or 0 }}
+        </p>
+      </div>
+      <div class="bg-gradient-to-tr from-blue-500 to-blue-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
+        <i data-lucide="users" class="text-white w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Total Fees Collected -->
+  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">Total Fees Collected</h4>
+        <p id="total_collected" class="text-3xl font-bold text-green-600 tracking-tight">
+          KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}
+        </p>
+      </div>
+      <div class="bg-gradient-to-tr from-green-500 to-emerald-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
+        <i data-lucide="wallet" class="text-white w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Balance -->
+  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">Pending Balance</h4>
+        <p id="pending_balance" class="text-3xl font-bold text-red-600 tracking-tight">
+          KES {{ '{:,.2f}'.format(pending_balance or 0) }}
+        </p>
+      </div>
+      <div class="bg-gradient-to-tr from-red-500 to-pink-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
+        <i data-lucide="alert-circle" class="text-white w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Total Credit -->
+  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">Total Credit</h4>
+        <p id="total_credit" class="text-3xl font-bold text-amber-500 tracking-tight">
+          KES {{ '{:,.2f}'.format(total_credit or 0) }}
+        </p>
+      </div>
+      <div class="bg-gradient-to-tr from-yellow-400 to-amber-300 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
+        <i data-lucide="gift" class="text-white w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Payments Section -->
+<div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-8">
+  <div class="flex justify-between items-center mb-6">
+    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+      <i data-lucide="credit-card" class="text-blue-600"></i> Recent Payments
+    </h3>
+    <a href="{{ url_for('payments') }}" 
+       class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition transform hover:-translate-y-0.5">
+      + Add Payment
+    </a>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl border border-gray-200">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50/80">
+        <tr class="text-gray-700">
+          <th class="px-5 py-3 text-left font-medium border-b">#</th>
+          <th class="px-5 py-3 text-left font-medium border-b">Student Name</th>
+          <th class="px-5 py-3 text-left font-medium border-b">Class</th>
+          <th class="px-5 py-3 text-left font-medium border-b">Amount (KES)</th>
+          <th class="px-5 py-3 text-left font-medium border-b">Method</th>
+          <th class="px-5 py-3 text-left font-medium border-b">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in recent_payments %}
+        <tr class="hover:bg-blue-50/40 transition border-b">
+          <td class="px-5 py-3 text-gray-600">{{ loop.index }}</td>
+          <td class="px-5 py-3 font-medium text-gray-800">{{ p.name }}</td>
+          <td class="px-5 py-3 text-gray-600">{{ p.class_name }}</td>
+          <td class="px-5 py-3 text-green-600 font-semibold">{{ '{:,.2f}'.format(p.amount or 0) }}</td>
+          <td class="px-5 py-3 text-gray-700">{{ p.method or 'N/A' }}</td>
+          <td class="px-5 py-3 text-gray-500">
+            {% if p.date %}
+              {% if p.date.__class__.__name__ == 'str' %}
+                {{ p.date }}
+              {% else %}
+                {{ p.date.strftime('%Y-%m-%d %H:%M') }}
+              {% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center text-gray-500 py-6">No recent payments found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Live update script -->
+<script>
+lucide.createIcons();
+
+function updateDashboardData() {
+  fetch("/api/dashboard_data")
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("total_students").textContent = data.total_students;
+      document.getElementById("total_collected").textContent = 
+        "KES " + data.total_collected.toLocaleString(undefined, {minimumFractionDigits: 2});
+      document.getElementById("pending_balance").textContent = 
+        "KES " + data.total_balance.toLocaleString(undefined, {minimumFractionDigits: 2});
+      if (data.total_credit !== undefined) {
+        document.getElementById("total_credit").textContent =
+          "KES " + data.total_credit.toLocaleString(undefined, {minimumFractionDigits: 2});
+      }
+    })
+    .catch(err => console.error("Error fetching dashboard data:", err));
+}
+setInterval(updateDashboardData, 10000);
+updateDashboardData();
+</script>
+
+{% endblock %}
