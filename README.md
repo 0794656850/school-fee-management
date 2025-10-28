@@ -120,6 +120,22 @@ Set your envs via Compose or a `.env` file before running.
 - `scripts/test_daraja_token.py` – test Daraja token/config
 - `scripts/ai_index.py` / `scripts/ai_ask.py` – AI index and Q&A
 
+## Screenshots
+Drop your screenshots into `docs/screenshots/` using the filenames below and they will render here automatically on GitHub.
+
+| View | Image |
+| --- | --- |
+| Dashboard | ![Dashboard](docs/screenshots/dashboard.png) |
+| Students | ![Students](docs/screenshots/students.png) |
+| Add Payment | ![Payments](docs/screenshots/payments.png) |
+| Analytics | ![Analytics](docs/screenshots/analytics.png) |
+| Credit Ops | ![Credit Ops](docs/screenshots/credit-ops.png) |
+| Terms | ![Terms](docs/screenshots/terms.png) |
+| Invoices | ![Invoices](docs/screenshots/invoices.png) |
+| School Profile | ![School Profile](docs/screenshots/school-profile.png) |
+| Admin Security | ![Admin Security](docs/screenshots/admin-security.png) |
+| AI Assistant | ![AI Assistant](docs/screenshots/ai-assistant.png) |
+
 ## Development Tips
 - Schema safety: the app runs idempotent "ensure_*" migrations at startup to add missing columns/tables.
 - Multi-tenant: most tables include `school_id`; UI and queries scope by the active school.
@@ -127,4 +143,3 @@ Set your envs via Compose or a `.env` file before running.
 
 ## License
 No license specified. If you intend to open-source, add a suitable license file.
-
