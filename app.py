@@ -1792,6 +1792,39 @@ def analytics_data():
     )
 
 
+# ---------- DOCUMENTATION ----------
+@app.route("/docs")
+def docs():
+    """In-app documentation hub with optional promo/how-to video.
+
+    Looks for a local video file under static/media with the title provided by the user.
+    Supported extensions: .mp4, .webm, .mov. If present, renders a <video> player.
+    """
+    base_name = "Stop Guessing Fees_ Lovato_Tech Made Easy"
+    exts = [".mp4", ".webm", ".mov"]
+    video_rel = None
+    try:
+        static_root = os.path.join(app.root_path, "static", "media")
+        if not os.path.isdir(static_root):
+            try:
+                os.makedirs(static_root, exist_ok=True)
+            except Exception:
+                pass
+        for ext in exts:
+            candidate = os.path.join(static_root, base_name + ext)
+            if os.path.exists(candidate):
+                video_rel = f"media/{base_name}{ext}"
+                break
+    except Exception:
+        video_rel = None
+
+    return render_template(
+        "docs.html",
+        video_path=video_rel,
+        video_title=base_name,
+    )
+
+
 # ---------- RUN ----------
 if __name__ == "__main__":
     app.run(debug=True)

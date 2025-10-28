@@ -228,6 +228,11 @@
         <i data-lucide="bell"></i> <span>Reminders</span>
       </a>
 
+      <a href="{{ url_for('docs') }}"
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/docs' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="book-open"></i> <span>Documentation</span>
+      </a>
+
       <a href="{{ url_for('admin.school_profile') }}"
          class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/admin/school' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
         <i data-lucide="building-2"></i> <span>School Profile</span>

@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Documentation · {{ APP_TITLE }}{% endblock %}
+
+{% block content %}
+<section class="p-6">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">Documentation</h1>
+    </div>
+
+    {% if video_path %}
+      <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 class="text-lg font-semibold mb-3">Intro Video: {{ video_title }}</h2>
+        <video controls style="width: 100%; max-height: 520px; border-radius: 0.75rem;"
+               src="{{ url_for('static', filename=video_path) }}">
+          Your browser does not support the video tag.
+        </video>
+        <p class="text-xs text-gray-500 mt-2">File location: <code>static/{{ video_path }}</code></p>
+      </div>
+    {% else %}
+      <div class="rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <div class="font-semibold mb-1">Intro Video Not Found</div>
+        <p class="text-sm text-gray-700">Place your video file at
+          <code>static/media/Stop Guessing Fees_ Lovato_Tech Made Easy.mp4</code>
+          (or .webm/.mov). Then refresh this page to play it here.</p>
+      </div>
+    {% endif %}
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 class="text-lg font-semibold mb-2">Quick Start</h3>
+        <ol class="list-decimal ml-5 space-y-1 text-sm text-gray-700">
+          <li>Login at <code>/auth/login</code>. New schools bootstrap automatically.</li>
+          <li>Update school profile and branding at <a class="text-blue-600" href="{{ url_for('admin.school_profile') }}">Admin → School Profile</a>.</li>
+          <li>Add or import students at <a class="text-blue-600" href="{{ url_for('students') }}">Students</a>.</li>
+          <li>Configure the current year/term and generate invoices under <a class="text-blue-600" href="{{ url_for('terms.manage_terms') }}">Terms</a>.</li>
+          <li>Record payments on the Payments screen or via M-Pesa STK (Admin → Billing).</li>
+        </ol>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 class="text-lg font-semibold mb-2">Integrations</h3>
+        <ul class="list-disc ml-5 space-y-1 text-sm text-gray-700">
+          <li><strong>M-Pesa (Daraja)</strong>: configure at <a class="text-blue-600" href="{{ url_for('admin.mpesa_config') }}">Admin → M-Pesa</a>. Set callback to <code>/mpesa/callback</code>.</li>
+          <li><strong>WhatsApp</strong>: set tokens/template at <a class="text-blue-600" href="{{ url_for('admin.access_settings') }}">Admin → Settings</a>.</li>
+          <li><strong>AI Assistant</strong>: set <code>OPENAI_API_KEY</code>, build index with <code>scripts/ai_index.py</code>, then open <a class="text-blue-600" href="{{ url_for('ai.ai_home') }}">AI</a>.</li>
+        </ul>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:col-span-2">
+        <h3 class="text-lg font-semibold mb-2">Helpful Links</h3>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('analytics') }}">Analytics Overview</a>
+          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('terms.invoices_list') }}">Invoices</a>
+          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('credit.credit_home') }}">Credit Operations</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
