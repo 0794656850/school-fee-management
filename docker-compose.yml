@@ -1,0 +1,30 @@
+version: "3.9"
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-school_fee_db}
+      MYSQL_USER: ${MYSQL_USER:-app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppass}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  web:
+    build: .
+    environment:
+      SQLALCHEMY_DATABASE_URI: mysql+pymysql://${MYSQL_USER:-app}:${MYSQL_PASSWORD:-apppass}@db/${MYSQL_DATABASE:-school_fee_db}
+      SECRET_KEY: ${SECRET_KEY:-change-me}
+      SESSION_COOKIE_SECURE: "1"
+      PREFERRED_URL_SCHEME: https
+    depends_on:
+      - db
+    ports:
+      - "5000:5000"
+
+volumes:
+  db_data:
+

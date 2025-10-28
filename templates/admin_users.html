@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Manage Users{% endblock %}
+{% block page_title %}Users & Roles{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2"><i data-lucide="users"></i> Team Members</h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left border-b">Username</th>
+            <th class="px-3 py-2 text-left border-b">Email</th>
+            <th class="px-3 py-2 text-left border-b">Role</th>
+            <th class="px-3 py-2 text-left border-b">Status</th>
+            <th class="px-3 py-2 text-left border-b">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-3 py-2 border-b font-medium">{{ u.username }}</td>
+            <td class="px-3 py-2 border-b">{{ u.email or '-' }}</td>
+            <td class="px-3 py-2 border-b uppercase text-xs">{{ u.role }}</td>
+            <td class="px-3 py-2 border-b">{% if u.is_active %}<span class="text-emerald-700 text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">Active</span>{% else %}<span class="text-gray-600 text-xs px-2 py-0.5 rounded bg-gray-100 border">Inactive</span>{% endif %}</td>
+            <td class="px-3 py-2 border-b">
+              <form method="post" class="inline">
+                <input type="hidden" name="user_id" value="{{ u.id }}" />
+                {% if u.is_active %}
+                <button name="action" value="deactivate" class="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Deactivate</button>
+                {% else %}
+                <button name="action" value="activate" class="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700">Activate</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not users %}
+          <tr><td colspan="5" class="px-3 py-6 text-center text-gray-600">No users yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-3">Owners and admins can manage settings; staff/viewers have limited access.</p>
+  </div>
+
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2"><i data-lucide="user-plus"></i> Add User</h3>
+    {% if not is_pro %}
+      <div class="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">Multi-user is a Pro feature. You can add one user for free; upgrade to add more.</div>
+    {% endif %}
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="action" value="add" />
+      <div>
+        <label class="block text-sm text-gray-700">Username</label>
+        <input name="username" required class="w-full border border-gray-200 rounded-lg p-2" placeholder="e.g., bursar" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Email</label>
+        <input name="email" type="email" class="w-full border border-gray-200 rounded-lg p-2" placeholder="optional" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Role</label>
+        <select name="role" class="w-full border border-gray-200 rounded-lg p-2">
+          <option value="staff">Staff</option>
+          <option value="viewer">Viewer</option>
+          <option value="admin">Admin</option>
+          <option value="owner">Owner</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Temporary Password</label>
+        <input name="password" type="password" required class="w-full border border-gray-200 rounded-lg p-2" placeholder="Set a password" />
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm px-3 py-1.5">Save User</button>
+    </form>
+  </div>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}
+

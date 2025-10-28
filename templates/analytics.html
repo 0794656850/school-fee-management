@@ -3,160 +3,368 @@
 {% block page_title %}Analytics Overview{% endblock %}
 {% block content %}
 
-<!-- ===== Summary Cards ===== -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-
-  <!-- Total Students -->
-  <div class="rounded-2xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 text-white p-6 shadow-md hover:shadow-lg transition transform hover:-translate-y-1">
-    <h3 class="text-sm uppercase tracking-wide opacity-80 mb-1">Total Students</h3>
-    <p id="total_students" class="text-3xl font-bold tracking-tight">{{ total_students }}</p>
-    <div class="mt-2 h-1.5 w-20 bg-white/40 rounded-full"></div>
+<!-- Toolbar -->
+<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <button class="btn-brand px-3 py-2 rounded-lg text-sm flex items-center gap-2" id="exportCsv">
+      <i data-lucide="download"></i> Export CSV
+    </button>
+    <div class="hidden md:block text-gray-500 text-sm">Updated <span id="lastUpdated">—</span></div>
+  </div>
+  <div class="flex items-center gap-2">
+    <select id="timeframe" class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2">
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365" selected>Last 12 months</option>
+      <option value="all">All time</option>
+    </select>
+  </div>
   </div>
 
-  <!-- Total Fees Collected -->
-  <div class="rounded-2xl bg-gradient-to-br from-emerald-500 via-green-600 to-teal-700 text-white p-6 shadow-md hover:shadow-lg transition transform hover:-translate-y-1">
-    <h3 class="text-sm uppercase tracking-wide opacity-80 mb-1">Total Fees Collected</h3>
-    <p id="total_collected" class="text-3xl font-bold tracking-tight">KES {{ "{:,.2f}".format(total_collected or 0) }}</p>
-    <div class="mt-2 h-1.5 w-20 bg-white/40 rounded-full"></div>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+  <div class="kpi p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500">Total Collected</div>
+        <div class="text-2xl font-bold mt-1" id="kpi_collected">KES {{ "{:,.2f}".format(total_collected or 0) }}</div>
+      </div>
+      <div class="kpi__icon"><i data-lucide="wallet"></i></div>
+    </div>
+    <div class="mt-2 text-xs text-gray-500">MoM <span id="kpi_mom" class="font-medium">—</span></div>
   </div>
 
-  <!-- Pending Balance -->
-  <div class="rounded-2xl bg-gradient-to-br from-rose-500 via-red-600 to-pink-700 text-white p-6 shadow-md hover:shadow-lg transition transform hover:-translate-y-1">
-    <h3 class="text-sm uppercase tracking-wide opacity-80 mb-1">Pending Balance</h3>
-    <p id="total_balance" class="text-3xl font-bold tracking-tight">KES {{ "{:,.2f}".format(total_balance or 0) }}</p>
-    <div class="mt-2 h-1.5 w-20 bg-white/40 rounded-full"></div>
+  <div class="kpi p-5 kpi--danger">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500">Pending Balance</div>
+        <div class="text-2xl font-bold mt-1" id="kpi_pending">KES {{ "{:,.2f}".format(total_balance or 0) }}</div>
+      </div>
+      <div class="kpi__icon"><i data-lucide="alert-circle"></i></div>
+    </div>
+    <div class="mt-2 text-xs text-gray-500">Collection Rate <span id="kpi_collection_rate" class="font-medium">—</span></div>
   </div>
 
+  <div class="kpi p-5 kpi--success">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500">Total Credit</div>
+        <div class="text-2xl font-bold mt-1" id="kpi_credit">KES 0</div>
+      </div>
+      <div class="kpi__icon"><i data-lucide="gift"></i></div>
+    </div>
+    <div class="mt-2 text-xs text-gray-500">Active Classes <span id="kpi_classes" class="font-medium">—</span></div>
+  </div>
+
+  <div class="kpi p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500">Students</div>
+        <div class="text-2xl font-bold mt-1" id="kpi_students">{{ total_students }}</div>
+      </div>
+      <div class="kpi__icon"><i data-lucide="users"></i></div>
+    </div>
+    <div class="mt-2 text-xs text-gray-500">Avg per Student <span id="kpi_arpu" class="font-medium">—</span></div>
+  </div>
 </div>
 
-<!-- ===== Monthly Chart ===== -->
-<div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 mb-10 transition hover:shadow-md">
+<!-- Collection Overview -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+  <div class="kpi p-5">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Best Month</div>
+    <div class="mt-1 text-sm text-gray-700" id="co_best_month">—</div>
+    <div class="text-xl font-bold text-gray-900" id="co_best_value">KES 0</div>
+  </div>
+  <div class="kpi p-5">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Avg Monthly</div>
+    <div class="mt-1 text-sm text-gray-700">Last 12 months</div>
+    <div class="text-xl font-bold text-gray-900" id="co_avg_value">KES 0</div>
+  </div>
+  <div class="kpi p-5">
+    <div class="text-xs uppercase tracking-wide text-gray-500">12-Month Total</div>
+    <div class="mt-1 text-sm text-gray-700">Collections</div>
+    <div class="text-xl font-bold text-gray-900" id="co_total_12m">KES 0</div>
+  </div>
+  <div class="kpi p-5">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Median Monthly</div>
+    <div class="mt-1 text-sm text-gray-700">Distribution center</div>
+    <div class="text-xl font-bold text-gray-900" id="co_median_value">KES 0</div>
+  </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+  <div class="xl:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+        <i data-lucide="bar-chart-2" class="text-indigo-600"></i> Collections Overview
+      </h3>
+    </div>
+    <canvas id="monthlyChart" height="110"></canvas>
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
+      <i data-lucide="pie-chart" class="text-cyan-600"></i> Paid vs Pending
+    </h3>
+    <canvas id="paidPendingChart" height="180"></canvas>
+  </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
+      <i data-lucide="line-chart" class="text-emerald-600"></i> Daily Trend (30d)
+    </h3>
+    <canvas id="dailyChart" height="180"></canvas>
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
+      <i data-lucide="credit-card" class="text-sky-600"></i> Payment Methods
+    </h3>
+    <canvas id="methodChart" height="180"></canvas>
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
+      <i data-lucide="layers" class="text-amber-600"></i> Class Performance
+    </h3>
+    <canvas id="classChart" height="180"></canvas>
+  </div>
+</div>
+
+<!-- Top Debtors -->
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
   <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-    <i data-lucide="bar-chart-2" class="text-sky-600"></i> Monthly Fee Collections
+    <i data-lucide="alert-triangle" class="text-rose-600"></i> Top Outstanding Balances
   </h3>
-  <canvas id="monthlyChart" height="100"></canvas>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left border-collapse">
+      <thead class="border-b bg-gray-50 font-semibold text-gray-600 uppercase text-xs tracking-wide">
+        <tr>
+          <th class="py-2 px-3">Student</th>
+          <th class="py-2 px-3">Class</th>
+          <th class="py-2 px-3 text-right">Outstanding (KES)</th>
+        </tr>
+      </thead>
+      <tbody id="debtors_tbody">
+        <tr><td colspan="3" class="text-center text-gray-400 py-3">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-3 text-xs text-gray-500">Tip: Click a class in the chart to filter.</div>
+  
 </div>
 
-<!-- ===== Class Summary ===== -->
-<div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-md transition">
-  <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-    <i data-lucide="layers" class="text-emerald-600"></i> Class Fee Summary
-  </h3>
-
-  <table class="w-full text-sm text-left border-collapse">
-    <thead class="border-b bg-gray-50 font-semibold text-gray-600 uppercase text-xs tracking-wide">
-      <tr>
-        <th class="py-2 px-3">Class</th>
-        <th class="py-2 px-3 text-center">Students</th>
-        <th class="py-2 px-3 text-right">Paid (KES)</th>
-        <th class="py-2 px-3 text-right">Pending (KES)</th>
-        <th class="py-2 px-3 text-center">% Paid</th>
-      </tr>
-    </thead>
-    <tbody id="class_summary">
-      <tr><td colspan="5" class="text-center text-gray-400 py-3">Loading...</td></tr>
-    </tbody>
-  </table>
-</div>
-
-<!-- ===== Scripts ===== -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Scripts -->
 <script>
-let chart;
+let monthlyChart, paidPendingChart, dailyChart, methodChart, classChart;
 
-// --- Render Monthly Chart ---
-function renderChart(data) {
+function fmtKes(v) { return `KES ${Number(v||0).toLocaleString()}`; }
+function nowString(){ const d=new Date(); return d.toLocaleString(); }
+
+function rollingAverage(arr, windowSize=3){
+  const out=[]; for(let i=0;i<arr.length;i++){ const s=Math.max(0,i-windowSize+1); const win=arr.slice(s,i+1); out.push(win.reduce((a,b)=>a+Number(b||0),0)/win.length); } return out;
+}
+
+function renderMonthlyChart(monthly){
   const ctx = document.getElementById('monthlyChart').getContext('2d');
-  const labels = data.map(m => m.month);
-  const totals = data.map(m => m.total);
-
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
+  const labels = monthly.map(m=>m.month);
+  const totals = monthly.map(m=>Number(m.total||0));
+  const avg = rollingAverage(totals, 3);
+  if (monthlyChart) monthlyChart.destroy();
+  monthlyChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'KES Collected',
-        data: totals,
-        borderRadius: 6,
-        backgroundColor: 'rgba(56, 189, 248, 0.8)', // Sky blue accent
-        hoverBackgroundColor: 'rgba(56, 189, 248, 1)',
-      }]
+      datasets: [
+        { label: 'Collected', data: totals, borderRadius: 8, backgroundColor: 'rgba(79,70,229,0.85)' },
+        { type: 'line', label: '3-mo Avg', data: avg, borderColor: '#06b6d4', backgroundColor: 'transparent', tension: .35 }
+      ]
     },
     options: {
       responsive: true,
-      scales: {
-        x: { ticks: { color: '#475569' }, grid: { color: '#f1f5f9' } },
-        y: { 
-          beginAtZero: true, 
-          ticks: { color: '#475569', callback: v => 'KES ' + v.toLocaleString() },
-          grid: { color: '#f1f5f9' } 
+      plugins: { 
+        legend: { display: true }, 
+        tooltip: { 
+          mode:'index', 
+          intersect:false,
+          callbacks: {
+            label: function(ctx){
+              const v = ctx.parsed.y ?? ctx.parsed;
+              return `${ctx.dataset.label}: ${fmtKes(v)}`;
+            }
+          }
         }
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.85)',
-          titleColor: '#fff',
-          bodyColor: '#e2e8f0',
-          borderColor: '#334155',
-          borderWidth: 1
-        }
+      scales: {
+        x: { grid: { color:'#f1f5f9' } },
+        y: { beginAtZero:true, ticks:{ callback:v=>`KES ${v.toLocaleString()}` } }
       }
     }
   });
 }
 
-// --- Update Analytics (Real-Time) ---
-function updateAnalytics() {
-  fetch('/api/analytics_data')
-    .then(res => res.json())
-    .then(data => {
-      // Update totals
-      fetch('/api/dashboard_data')
-        .then(r => r.json())
-        .then(summary => {
-          document.getElementById('total_students').innerText = summary.total_students;
-          document.getElementById('total_collected').innerText = `KES ${summary.total_collected.toLocaleString()}`;
-          document.getElementById('total_balance').innerText = `KES ${summary.total_balance.toLocaleString()}`;
-        });
-
-      // Chart
-      renderChart(data.monthly_data);
-
-      // Class Summary
-      const tbody = document.getElementById('class_summary');
-      tbody.innerHTML = '';
-      data.class_summary.forEach(c => {
-        const paid = Number(c.total_paid || 0);
-        const pending = Number(c.total_pending || 0);
-        const percent = c.percent_paid || 0;
-
-        let barColor;
-        if (percent >= 80) barColor = 'bg-emerald-500';
-        else if (percent >= 50) barColor = 'bg-amber-400';
-        else barColor = 'bg-rose-500';
-
-        tbody.innerHTML += `
-          <tr class="border-b last:border-0 hover:bg-gray-50 transition">
-            <td class="py-2 px-3 font-medium text-gray-800">${c.class_name}</td>
-            <td class="py-2 px-3 text-center text-gray-700">${c.total_students}</td>
-            <td class="py-2 px-3 text-right text-emerald-600 font-semibold">KES ${paid.toLocaleString()}</td>
-            <td class="py-2 px-3 text-right text-rose-600 font-semibold">KES ${pending.toLocaleString()}</td>
-            <td class="py-2 px-3 text-center">
-              <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden mb-1">
-                <div class="${barColor} h-2.5 rounded-full transition-all" style="inline-size:${percent}%"></div>
-              </div>
-              <span class="text-xs text-slate-600 font-medium">${percent}%</span>
-            </td>
-          </tr>`;
-      });
-    })
-    .catch(err => console.error('Error fetching analytics data:', err));
+function renderPaidPending(collected, pending){
+  const ctx = document.getElementById('paidPendingChart').getContext('2d');
+  if (paidPendingChart) paidPendingChart.destroy();
+  paidPendingChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Paid', 'Pending'],
+      datasets: [{ data: [collected, pending], backgroundColor: ['#10b981','#ef4444'] }]
+    },
+    options: { 
+      plugins: { 
+        legend: { position:'bottom' },
+        tooltip: { callbacks: { label: (ctx)=> `${ctx.label}: ${fmtKes(ctx.parsed)}` } }
+      } 
+    }
+  });
 }
 
-// Auto-refresh every 20s
-setInterval(updateAnalytics, 10000);
+function updateCollectionOverview(monthly){
+  const bestMonthEl = document.getElementById('co_best_month');
+  const bestValEl   = document.getElementById('co_best_value');
+  const avgEl       = document.getElementById('co_avg_value');
+  const totEl       = document.getElementById('co_total_12m');
+  const medEl       = document.getElementById('co_median_value');
+
+  if (!monthly || !monthly.length){
+    bestMonthEl.innerText = '—';
+    [bestValEl, avgEl, totEl, medEl].forEach(el=> el.innerText = fmtKes(0));
+    return;
+  }
+  const vals = monthly.map(m=>Number(m.total||0));
+  const sum = vals.reduce((a,b)=>a+b,0);
+  const avg = sum / vals.length;
+  const sorted = vals.slice().sort((a,b)=>a-b);
+  const mid = Math.floor(sorted.length/2);
+  const median = sorted.length % 2 === 0 ? (sorted[mid-1]+sorted[mid])/2 : sorted[mid];
+  let bestIdx = 0; let bestVal = -Infinity;
+  vals.forEach((v,i)=>{ if (v>bestVal){ bestVal=v; bestIdx=i; } });
+
+  bestMonthEl.innerText = monthly[bestIdx]?.month || '—';
+  bestValEl.innerText = fmtKes(bestVal);
+  avgEl.innerText = fmtKes(avg);
+  totEl.innerText = fmtKes(sum);
+  medEl.innerText = fmtKes(median);
+}
+
+function renderDaily(daily){
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  const labels = daily.map(d=>d.day);
+  const totals = daily.map(d=>Number(d.total||0));
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets:[{ label:'Daily', data: totals, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.14)', fill:true, tension:.35 }]},
+    options: { 
+      plugins: { tooltip: { callbacks: { label: (ctx)=> `${ctx.dataset.label}: ${fmtKes(ctx.parsed.y)}` } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>`KES ${v.toLocaleString()}` } } } 
+    }
+  });
+}
+
+function renderMethods(rows){
+  const ctx = document.getElementById('methodChart').getContext('2d');
+  const labels = rows.map(r=>r.method || 'Other');
+  const totals = rows.map(r=>Number(r.total||0));
+  if (methodChart) methodChart.destroy();
+  methodChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data: totals, backgroundColor:['#60a5fa','#34d399','#fbbf24','#f472b6','#93c5fd','#a7f3d0'] }] },
+    options: { plugins: { legend: { position:'bottom' }, tooltip: { callbacks: { label: (ctx)=> `${ctx.label}: ${fmtKes(ctx.parsed)}` }}}} 
+  });
+}
+
+function renderClassPerformance(rows){
+  const ctx = document.getElementById('classChart').getContext('2d');
+  const labels = rows.map(r=>r.class_name||'-');
+  const perc = rows.map(r=>Number(r.percent_paid||0));
+  if (classChart) classChart.destroy();
+  classChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets:[{ label:'% Paid', data: perc, backgroundColor:'#f59e0b', borderRadius:6 }]},
+    options: { 
+      indexAxis:'y', 
+      scales:{ x:{ suggestedMax: 100, ticks:{ callback:v=>v+'%' } } }, 
+      plugins:{ legend:{ display:false }, tooltip: { callbacks: { label: (ctx)=> `${ctx.parsed.x}%` } } } 
+    }
+  });
+}
+
+function updateDebtors(rows){
+  const tbody = document.getElementById('debtors_tbody');
+  tbody.innerHTML = '';
+  if (!rows || rows.length === 0){ tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-3">No data</td></tr>'; return; }
+  rows.forEach(r=>{
+    tbody.innerHTML += `<tr class="border-b last:border-0">
+      <td class="py-2 px-3 font-medium">${r.name}</td>
+      <td class="py-2 px-3">${r.class_name||'-'}</td>
+      <td class="py-2 px-3 text-right text-rose-600 font-semibold">${fmtKes(r.balance)}</td>
+    </tr>`
+  });
+}
+
+async function refreshSummary(){
+  const res = await fetch('/api/dashboard_data');
+  const s = await res.json();
+  document.getElementById('kpi_students').innerText = s.total_students?.toLocaleString();
+  document.getElementById('kpi_collected').innerText = fmtKes(s.total_collected);
+  document.getElementById('kpi_pending').innerText = fmtKes(s.total_balance);
+  document.getElementById('kpi_credit').innerText = fmtKes(s.total_credit);
+  const collectionRate = (s.total_collected + s.total_balance) > 0 ? Math.round((s.total_collected/(s.total_collected+s.total_balance))*100) : 0;
+  document.getElementById('kpi_collection_rate').innerText = collectionRate + '%';
+  return s;
+}
+
+async function updateAnalytics(){
+  try {
+    const [s, resp] = await Promise.all([
+      refreshSummary(),
+      fetch('/api/analytics_data')
+    ]);
+    const data = await resp.json();
+
+    // KPIs derived
+    const arpu = s.total_students > 0 ? (s.total_collected / s.total_students) : 0;
+    document.getElementById('kpi_arpu').innerText = fmtKes(arpu.toFixed(0));
+    document.getElementById('kpi_classes').innerText = data.meta?.active_classes ?? '—';
+
+    // MoM label
+    const mom = data.mom || { percent_change: 0 };
+    const momEl = document.getElementById('kpi_mom');
+    momEl.innerText = (mom.percent_change>=0? '▲ ':'▼ ') + Math.abs(mom.percent_change).toLocaleString() + '%';
+    momEl.className = 'font-medium ' + (mom.percent_change>=0? 'text-emerald-600':'text-rose-600');
+
+    // Charts
+    renderMonthlyChart(data.monthly_data || []);
+    updateCollectionOverview(data.monthly_data || []);
+    renderPaidPending(Number(s.total_collected||0), Number(s.total_balance||0));
+    renderDaily(data.daily_trend || []);
+    renderMethods(data.method_breakdown || []);
+    renderClassPerformance(data.class_summary || []);
+    updateDebtors(data.top_debtors || []);
+
+    document.getElementById('lastUpdated').innerText = nowString();
+  } catch (e){
+    console.error('Analytics update failed', e);
+  }
+}
+
+// Wire up timeframe (placeholder UI)
+document.getElementById('timeframe').addEventListener('change', ()=>{
+  // For future: can pass query params to backend to filter
+  updateAnalytics();
+});
+
+// Export CSV (re-uses existing payments export)
+document.getElementById('exportCsv').addEventListener('click', ()=>{ window.location.href = '/export_payments'; });
+
+setInterval(updateAnalytics, 15000);
 document.addEventListener('DOMContentLoaded', updateAnalytics);
 </script>
 

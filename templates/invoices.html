@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Invoices - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Invoices{% endblock %}
+
+{% block content %}
+<div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+  <form class="flex items-center gap-3 flex-wrap" method="get" action="{{ url_for('terms.invoices_list') }}">
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-gray-600">Year</label>
+      <input type="number" name="year" value="{{ year or '' }}" min="2000" max="2100" class="border rounded-lg px-2 py-1 text-sm">
+    </div>
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-gray-600">Term</label>
+      <select name="term" class="border rounded-lg px-2 py-1 text-sm">
+        <option value="1" {% if (term or 0)==1 %}selected{% endif %}>Term 1</option>
+        <option value="2" {% if (term or 0)==2 %}selected{% endif %}>Term 2</option>
+        <option value="3" {% if (term or 0)==3 %}selected{% endif %}>Term 3</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-gray-600">Search</label>
+      <input type="text" name="q" value="{{ q or '' }}" placeholder="Student, Class, Invoice #" class="border rounded-lg px-2 py-1 text-sm w-56">
+    </div>
+    <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm px-3 py-1.5">Apply</button>
+    <a href="{{ url_for('terms.manage_term_fees', year=year, term=term) }}" class="ml-auto inline-flex items-center gap-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm px-3 py-1.5">
+      Manage Term Fees
+    </a>
+  </form>
+
+  <div class="mt-4 overflow-x-auto">
+    <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-3 py-2 text-left border-b">Invoice #</th>
+          <th class="px-3 py-2 text-left border-b">Student</th>
+          <th class="px-3 py-2 text-left border-b">Class</th>
+          <th class="px-3 py-2 text-left border-b">Due Date</th>
+          <th class="px-3 py-2 text-left border-b">Status</th>
+          <th class="px-3 py-2 text-right border-b">Total</th>
+          <th class="px-3 py-2 text-center border-b">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-3 py-2 border-b">#{{ inv.id }}</td>
+          <td class="px-3 py-2 border-b">{{ inv.student_name }}</td>
+          <td class="px-3 py-2 border-b">{{ inv.class_name or '-' }}</td>
+          <td class="px-3 py-2 border-b">{{ inv.due_date or '-' }}</td>
+          <td class="px-3 py-2 border-b">{{ inv.status }}</td>
+          <td class="px-3 py-2 border-b text-right">KES {{ "{:,.2f}".format(inv.total or 0) }}</td>
+          <td class="px-3 py-2 border-b text-center">
+            <a href="{{ url_for('terms.invoice_view', invoice_id=inv.id) }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">Print</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-3 py-6 text-center text-gray-500">
+            {% if q %}No results for "{{ q }}".{% else %}No invoices found for the selected term.{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

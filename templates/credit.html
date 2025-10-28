@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}Credit Operations - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Credit (Overpay) Operations{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <i data-lucide="shrink"></i> Apply Credit to Balance
+    </h3>
+    <form method="POST" action="{{ url_for('credit.apply_credit') }}" class="space-y-4">
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">Student</label>
+        <div class="relative" id="apply-student-combo">
+          <input type="text" placeholder="Search student..." class="mb-2 w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500" autocomplete="off" />
+          <input type="hidden" name="student_id" required />
+          <div class="absolute z-20 hidden left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"></div>
+        </div>
+        <div id="apply-available" class="mt-1 text-xs text-gray-500"></div>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">Amount (KES)</label>
+        <input type="number" step="0.01" min="1" name="amount" id="apply-amount" required class="w-full border rounded-lg p-2.5 text-sm" />
+      </div>
+      <div class="text-right">
+        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700">Apply</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <i data-lucide="wallet"></i> Refund Credit
+    </h3>
+    <form method="POST" action="{{ url_for('credit.refund_credit') }}" class="space-y-4">
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">Student</label>
+        <div class="relative" id="refund-student-combo">
+          <input type="text" placeholder="Search student..." class="mb-2 w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" autocomplete="off" />
+          <input type="hidden" name="student_id" required />
+          <div class="absolute z-20 hidden left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"></div>
+        </div>
+        <div id="refund-available" class="mt-1 text-xs text-gray-500"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-gray-700 mb-1">Amount (KES)</label>
+          <input type="number" step="0.01" min="1" name="amount" id="refund-amount" required class="w-full border rounded-lg p-2.5 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-700 mb-1">Method</label>
+          <div class="relative" id="refund-method-combo">
+            <input type="text" placeholder="Search method..." class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" autocomplete="off" />
+            <input type="hidden" name="method" />
+            <div class="absolute z-20 hidden left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">Reference</label>
+        <input type="text" name="reference" placeholder="Receipt/Transaction ID" class="w-full border rounded-lg p-2.5 text-sm" />
+      </div>
+      <div class="text-right">
+        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700">Refund</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <i data-lucide="arrow-left-right"></i> Transfer Credit
+    </h3>
+    <form method="POST" action="{{ url_for('credit.transfer_credit') }}" class="space-y-4" id="transfer-form">
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">From Student</label>
+        <div class="relative" id="transfer-from-combo">
+          <input type="text" placeholder="Search source..." class="mb-2 w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-cyan-500" autocomplete="off" />
+          <input type="hidden" name="from_student_id" required />
+          <div class="absolute z-20 hidden left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"></div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">To Student</label>
+        <div class="relative" id="transfer-to-combo">
+          <input type="text" placeholder="Search destination..." class="mb-2 w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-cyan-500" autocomplete="off" />
+          <input type="hidden" name="to_student_id" required />
+          <div class="absolute z-20 hidden left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"></div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700 mb-1">Amount (KES)</label>
+        <input type="number" step="0.01" min="1" name="amount" id="transfer-amount" required class="w-full border rounded-lg p-2.5 text-sm" />
+        <div id="transfer-amount-help" class="mt-1 text-xs text-gray-500"></div>
+      </div>
+      <div class="text-right">
+        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-cyan-600 hover:bg-cyan-700">Transfer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="mt-8 rounded-2xl border border-dashed border-gray-300 p-6 bg-gray-50">
+  <h4 class="text-sm font-semibold text-gray-700 mb-2">Accounts With Credit</h4>
+  <div class="text-xs text-gray-600 mb-3">Quick reference to students currently having credit on account.</div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for s in credit_students %}
+    <div class="rounded-xl border border-gray-200 bg-white p-3 flex items-center justify-between">
+      <div>
+        <div class="font-medium">{{ s.name }}</div>
+        <div class="text-xs text-gray-500">{{ s.class_name }}</div>
+      </div>
+      <div class="text-emerald-700 text-sm font-semibold">KES {{ '{:,.2f}'.format(s.credit or 0) }}</div>
+    </div>
+    {% else %}
+    <div class="text-sm text-gray-500">No students currently have credit.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+if (typeof lucide !== 'undefined') lucide.createIcons();
+
+// Premium combo search (no <select>): keyboard + mouse, badges, highlights
+// NOTE: We now support live backend search for large datasets.
+const studentsData = {{ credit_students | tojson | safe }};
+const transferToData = {{ transfer_targets | tojson | safe }};
+const refundMethods = [
+  { value: 'Cash', label: 'Cash' },
+  { value: 'M-Pesa', label: 'M-Pesa' },
+  { value: 'Bank Transfer', label: 'Bank Transfer' },
+  { value: 'Cheque', label: 'Cheque' },
+];
+
+function highlight(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    text.substring(0, idx) +
+    '<span class="bg-yellow-100 text-yellow-900 rounded px-0.5">' +
+    text.substring(idx, idx + q.length) +
+    '</span>' +
+    text.substring(idx + q.length)
+  );
+}
+
+function mountCombo(root, options) {
+  const input = root.querySelector('input[type="text"]');
+  const hidden = root.querySelector('input[type="hidden"]');
+  const list = root.querySelector('div.absolute');
+  let items = options.data || [];
+  let active = -1;
+  let reqId = 0; // for racing
+  let debounce = null;
+
+  function render(q = '') {
+    const filtered = q
+      ? items.filter(it => options.label(it).toLowerCase().includes(q.toLowerCase()))
+      : items.slice(0, 50);
+    list.innerHTML = filtered.map((it, i) => {
+      const isStudent = !!it.id && it.class_name !== undefined;
+      const badge = isStudent
+        ? `<span class="ml-auto text-emerald-700 bg-emerald-50 border border-emerald-200 text-xs px-2 py-0.5 rounded-full">KES ${(it.credit||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>`
+        : '';
+      const sub = isStudent ? `<div class="text-xs text-gray-500">${it.class_name}</div>` : '';
+      return `
+        <div class="px-3 py-2 flex items-center gap-3 hover:bg-gray-50 cursor-pointer ${i===active?'bg-indigo-50':''}" data-index="${i}">
+          <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+          <div class="flex-1">
+            <div class="text-sm font-medium">${highlight(options.label(it), q)}</div>
+            ${sub}
+          </div>
+          ${badge}
+        </div>`;
+    }).join('');
+    list.classList.toggle('hidden', filtered.length === 0);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // attach item click
+    Array.from(list.children).forEach((row, i) => {
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const it = filtered[i];
+        input.value = options.label(it);
+        hidden.value = options.value(it);
+        list.classList.add('hidden');
+        if (typeof options.onSelect === 'function') {
+          try { options.onSelect(it); } catch (_) {}
+        }
+      });
+    });
+    return filtered;
+  }
+
+  let lastFiltered = render('');
+
+  async function refreshFromServer(q) {
+    if (typeof options.fetch !== 'function') return render(q);
+    const my = ++reqId;
+    try {
+      const data = await options.fetch(q);
+      if (my !== reqId) return [];
+      items = Array.isArray(data) ? data : [];
+    } catch (_) {
+      // keep previous items on error
+    }
+    return render(q);
+  }
+
+  input.addEventListener('input', (e) => {
+    active = -1;
+    const q = e.target.value;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => { refreshFromServer(q).then(arr => { lastFiltered = arr; }); }, 200);
+  });
+  input.addEventListener('focus', () => {
+    const q = input.value || '';
+    refreshFromServer(q).then(arr => { lastFiltered = arr; });
+  });
+  input.addEventListener('keydown', (e) => {
+    const max = lastFiltered.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); active = Math.min(max, active + 1); render(input.value);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); active = Math.max(0, active - 1); render(input.value);
+    } else if (e.key === 'Enter') {
+      if (active >= 0 && active <= max) {
+        e.preventDefault();
+        const it = lastFiltered[active];
+        input.value = options.label(it);
+        hidden.value = options.value(it);
+        list.classList.add('hidden');
+        if (typeof options.onSelect === 'function') {
+          try { options.onSelect(it); } catch (_) {}
+        }
+      }
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!root.contains(e.target)) list.classList.add('hidden');
+  });
+}
+
+// Build datasets
+const studentOptions = studentsData.map(s => ({ id: s.id, name: s.name, class_name: s.class_name, credit: s.credit, balance: s.balance }));
+const transferToOptions = transferToData.map(s => ({ id: s.id, name: s.name, class_name: s.class_name, credit: s.credit, balance: s.balance }));
+
+// Mount combos
+let applySelected = null;
+const applyAmountInput = document.getElementById('apply-amount');
+const applyAvail = document.getElementById('apply-available');
+function fmtKES(v) { try { return Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); } catch(_) { return v; } }
+function refreshApplyAvail() {
+  if (!applySelected) { if (applyAvail) applyAvail.textContent=''; return; }
+  const maxApply = Math.max(0, Math.min(Number(applySelected.credit||0), Number(applySelected.balance||0)));
+  if (applyAmountInput) applyAmountInput.max = String(maxApply);
+  if (applyAvail) applyAvail.textContent = `Available to apply: KES ${fmtKES(maxApply)} (Credit ${fmtKES(applySelected.credit||0)} • Debt ${fmtKES(applySelected.balance||0)})`;
+}
+mountCombo(document.getElementById('apply-student-combo'), {
+  data: studentOptions,
+  label: (s) => `${s.name} (${s.class_name})`,
+  value: (s) => s.id,
+  onSelect: (s) => { applySelected = s; refreshApplyAvail(); },
+  fetch: async (q) => {
+    const res = await fetch(`/credit/api/search_sources?q=${encodeURIComponent(q||'')}`);
+    if (!res.ok) return studentOptions;
+    return await res.json();
+  }
+});
+
+let refundSelected = null;
+const refundAmountInput = document.getElementById('refund-amount');
+const refundAvail = document.getElementById('refund-available');
+function refreshRefundAvail() {
+  if (!refundSelected) { if (refundAvail) refundAvail.textContent=''; return; }
+  const maxRefund = Math.max(0, Number(refundSelected.credit||0));
+  if (refundAmountInput) refundAmountInput.max = String(maxRefund);
+  if (refundAvail) refundAvail.textContent = `Available credit: KES ${fmtKES(maxRefund)}`;
+}
+mountCombo(document.getElementById('refund-student-combo'), {
+  data: studentOptions,
+  label: (s) => `${s.name} (${s.class_name})`,
+  value: (s) => s.id,
+  onSelect: (s) => { refundSelected = s; refreshRefundAvail(); },
+  fetch: async (q) => {
+    const res = await fetch(`/credit/api/search_sources?q=${encodeURIComponent(q||'')}`);
+    if (!res.ok) return studentOptions;
+    return await res.json();
+  }
+});
+
+let transferSource = null;
+const transferAmountInput = document.getElementById('transfer-amount');
+const transferAmountHelp = document.getElementById('transfer-amount-help');
+const transferForm = document.getElementById('transfer-form');
+
+function fmtKES(v) {
+  try { return Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (_) { return v; }
+}
+
+function updateTransferLimits() {
+  if (!transferAmountInput) return;
+  const avail = transferSource ? (transferSource.credit || 0) : null;
+  if (avail !== null) {
+    transferAmountInput.max = String(avail);
+    if (transferAmountHelp) transferAmountHelp.textContent = `Available credit: KES ${fmtKES(avail)}`;
+  } else {
+    transferAmountInput.removeAttribute('max');
+    if (transferAmountHelp) transferAmountHelp.textContent = '';
+  }
+  validateTransferAmount();
+}
+
+function validateTransferAmount() {
+  if (!transferAmountInput) return true;
+  const val = parseFloat(transferAmountInput.value || '0');
+  const avail = transferSource ? parseFloat(transferSource.credit || 0) : Infinity;
+  if (isFinite(avail) && val > avail) {
+    transferAmountInput.setCustomValidity(`Insufficient credit: available KES ${fmtKES(avail)}.`);
+    return false;
+  }
+  transferAmountInput.setCustomValidity('');
+  return true;
+}
+
+if (transferAmountInput) {
+  transferAmountInput.addEventListener('input', validateTransferAmount);
+}
+
+if (transferForm) {
+  transferForm.addEventListener('submit', (e) => {
+    if (!validateTransferAmount()) {
+      e.preventDefault();
+      try { transferAmountInput.reportValidity(); } catch (_) { alert('Insufficient credit for this transfer.'); }
+    }
+  });
+}
+
+mountCombo(document.getElementById('transfer-from-combo'), {
+  data: studentOptions,
+  label: (s) => `${s.name} (${s.class_name})`,
+  value: (s) => s.id,
+  onSelect: (s) => { transferSource = s; updateTransferLimits(); },
+  fetch: async (q) => {
+    const res = await fetch(`/credit/api/search_sources?q=${encodeURIComponent(q||'')}`);
+    if (!res.ok) return studentOptions;
+    return await res.json();
+  }
+});
+
+mountCombo(document.getElementById('transfer-to-combo'), {
+  data: transferToOptions,
+  label: (s) => `${s.name} (${s.class_name})`,
+  value: (s) => s.id,
+  fetch: async (q) => {
+    const res = await fetch(`/credit/api/search_targets?q=${encodeURIComponent(q||'')}`);
+    if (!res.ok) return transferToOptions;
+    return await res.json();
+  }
+});
+
+mountCombo(document.getElementById('refund-method-combo'), {
+  data: refundMethods,
+  label: (m) => m.label,
+  value: (m) => m.value
+});
+</script>
+
+{% endblock %}

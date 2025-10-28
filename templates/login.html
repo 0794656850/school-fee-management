@@ -1,0 +1,86 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  <style>
+    :root {
+      --brand-600: #4f46e5;
+      --bg-app: linear-gradient(135deg, #eef2ff, #f8fafc);
+      --surface: rgba(255,255,255,0.88);
+      --text: #0f172a;
+      --border: #e5e7eb;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text); }
+    .glass { background: var(--surface); backdrop-filter: blur(16px); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
+    .ring-brand { box-shadow: 0 0 0 6px rgba(79,70,229,.06); }
+  </style>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <script>
+      window.__flash__ = {{ messages|tojson }};
+    </script>
+  {% endif %}
+  {% endwith %}
+  </head>
+  <body class="min-h-screen flex items-center justify-center p-6">
+    <!-- Flash messages on top -->
+    <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
+
+    <div class="max-w-xl w-full">
+      <div class="text-center mb-8">
+        <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" class="h-28 w-28 mx-auto rounded-2xl ring-1 ring-blue-100 ring-brand shadow" alt="{{ BRAND_NAME }} Logo"/>
+        <h1 class="text-3xl font-extrabold mt-4 tracking-tight text-slate-800">{{ BRAND_NAME }}</h1>
+        <p class="text-sm text-slate-600 mt-1">Smart, modern fee management for schools</p>
+      </div>
+      <!-- Single modern login card -->
+      <div class="glass rounded-2xl p-6 border border-gray-100">
+        <div class="text-center mb-4">
+          <h2 class="text-xl font-bold">School Profile Login</h2>
+          <p class="text-sm text-gray-500">Sign in to access your dashboard</p>
+        </div>
+        <form method="post" action="{{ url_for('auth.login', next=next_url) }}" class="space-y-4">
+          <input type="hidden" name="next" value="{{ next_url }}" />
+          <div>
+            <label class="block text-sm font-medium text-gray-700">School name or code</label>
+            <input name="school_name" placeholder="e.g., Greenfield Academy or greenfield-academy"
+                   class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Password</label>
+            <input required name="password" type="password" placeholder="Enter your password"
+                   class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <button class="w-full py-2.5 rounded-xl text-white font-semibold transition" style="background:linear-gradient(90deg,#0f4460,#6b4b4b,#f97316)">Login to Dashboard</button>
+          <div class="text-center text-sm text-gray-600">
+            <div>Forgot your password?</div>
+            <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline"><i data-lucide='message-circle'></i> Contact Admin via WhatsApp</a>
+          </div>
+        </form>
+        <div class="text-center mt-6 text-sm">
+          <span class="text-gray-600">New here?</span>
+          <a href="{{ url_for('auth.register') }}" class="ml-1 font-medium text-indigo-700 hover:underline">Create a new profile</a>
+        </div>
+      </div>
+      <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 LOVATO.TECH - Smart School Fee Management Platform</div>
+    </div>
+    <script>
+      lucide.createIcons();
+      const flash = window.__flash__ || [];
+      const box = document.getElementById('flash');
+      const styles = { success: 'bg-green-50 text-green-700 border-green-200', error: 'bg-red-50 text-red-700 border-red-200', info: 'bg-blue-50 text-blue-700 border-blue-200', warning: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
+      flash.forEach(([cat, msg]) => {
+        const div = document.createElement('div');
+        div.className = `mb-2 border rounded-lg px-4 py-3 text-sm shadow ${styles[cat]||'bg-gray-50 text-gray-700 border-gray-200'}`;
+        div.textContent = msg;
+        box.appendChild(div);
+      });
+    </script>
+  </body>
+</html>
+

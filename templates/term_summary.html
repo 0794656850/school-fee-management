@@ -1,0 +1,80 @@
+﻿{% extends "base.html" %}
+{% block title %}Term Summary - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Term Summary{% endblock %}
+
+<div class="max-w-6xl mx-auto">
+  <div class="bg-white rounded-2xl shadow p-6">
+    <form class="flex items-center gap-3 flex-wrap" method="get" action="{{ url_for('terms.term_summary') }}">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-600">Year</label>
+        <input type="number" name="year" value="{{ year or '' }}" min="2000" max="2100" class="border rounded-lg px-2 py-1 text-sm">
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-600">Term</label>
+        <select name="term" class="border rounded-lg px-2 py-1 text-sm">
+          <option value="1" {% if (term or 0)==1 %}selected{% endif %}>Term 1</option>
+          <option value="2" {% if (term or 0)==2 %}selected{% endif %}>Term 2</option>
+          <option value="3" {% if (term or 0)==3 %}selected{% endif %}>Term 3</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-600">Class</label>
+        <select name="class" class="border rounded-lg px-2 py-1 text-sm">
+          <option value="">All</option>
+          {% for c in classes %}
+          <option value="{{ c }}" {% if class_filter==c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm px-3 py-1.5">Filter</button>
+      <a href="{{ url_for('terms.manage_term_fees', year=year, term=term) }}" class="ml-auto inline-flex items-center gap-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm px-3 py-1.5">
+        Manage Term Fees
+      </a>
+    </form>
+
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left border-b">Student</th>
+            <th class="px-3 py-2 text-left border-b">Class</th>
+            <th class="px-3 py-2 text-right border-b">Carry-In</th>
+            <th class="px-3 py-2 text-right border-b">Term Fee</th>
+            <th class="px-3 py-2 text-right border-b">Payments (Term)</th>
+            <th class="px-3 py-2 text-right border-b">Closing (To Date)</th>
+            <th class="px-3 py-2 text-right border-b">Credit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-3 py-2 border-b">{{ r.name }}</td>
+            <td class="px-3 py-2 border-b">{{ r.class_name or '-' }}</td>
+            <td class="px-3 py-2 border-b text-right">KES {{ "{:,.2f}".format(r.carry_in or 0) }}</td>
+            <td class="px-3 py-2 border-b text-right">KES {{ "{:,.2f}".format(r.term_fee or 0) }}</td>
+            <td class="px-3 py-2 border-b text-right">KES {{ "{:,.2f}".format(r.payments or 0) }}</td>
+            <td class="px-3 py-2 border-b text-right {{ 'text-red-600' if (r.closing or 0) > 0 else 'text-emerald-700' }}">KES {{ "{:,.2f}".format(r.closing or 0) }}</td>
+            <td class="px-3 py-2 border-b text-right">KES {{ "{:,.2f}".format(r.credit or 0) }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="px-3 py-6 text-center text-gray-500">No records found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if totals %}
+        <tfoot class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-right border-t" colspan="2">Totals</th>
+            <th class="px-3 py-2 text-right border-t">KES {{ "{:,.2f}".format(totals.carry_in or 0) }}</th>
+            <th class="px-3 py-2 text-right border-t">KES {{ "{:,.2f}".format(totals.term_fee or 0) }}</th>
+            <th class="px-3 py-2 text-right border-t">KES {{ "{:,.2f}".format(totals.payments or 0) }}</th>
+            <th class="px-3 py-2 text-right border-t">KES {{ "{:,.2f}".format(totals.closing or 0) }}</th>
+            <th class="px-3 py-2 text-right border-t"></th>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>

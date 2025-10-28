@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Admin Security - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Admin Security{% endblock %}
+{% block content %}
+
+<div class="max-w-xl">
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <h3 class="text-base font-semibold mb-1">Change Admin Password</h3>
+    <p class="text-sm text-gray-600 mb-4">Secure your admin area with a strong password.</p>
+
+    <form method="post" action="{{ url_for('admin.admin_security') }}" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Current Password</label>
+        <input required type="password" name="current_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Enter current admin password" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">New Password</label>
+        <input required type="password" id="new_password" name="new_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="At least 6 characters" />
+        <div id="strength" class="text-xs mt-1 text-gray-500">Strength: <span id="slabel">—</span></div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Confirm New Password</label>
+        <input required type="password" name="confirm_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Re-enter new password" />
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Update Password</button>
+        <a href="{{ url_for('admin.dashboard') }}" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="mt-6 text-xs text-gray-500">
+    <p>Tip: Use a passphrase with 3–4 words and numbers. Never reuse passwords.</p>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const np = document.getElementById('new_password');
+    const sl = document.getElementById('slabel');
+    if(!np||!sl) return;
+    function score(p){
+      if(!p) return 0;
+      let s = 0;
+      if(p.length >= 6) s+=1; if(p.length>=10) s+=1;
+      if(/[A-Z]/.test(p)) s+=1; if(/[a-z]/.test(p)) s+=1;
+      if(/[0-9]/.test(p)) s+=1; if(/[^A-Za-z0-9]/.test(p)) s+=1;
+      return Math.min(s,5);
+    }
+    function label(s){ return ['Very weak','Weak','Ok','Good','Strong','Excellent'][s] || '—'; }
+    np.addEventListener('input', ()=>{ sl.textContent = label(score(np.value)); });
+  })();
+</script>
+
+{% endblock %}
+

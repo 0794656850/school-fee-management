@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Premium Receipt</title>
+  <style>
+    :root {
+      --text: #0f172a; /* slate-900 */
+      --muted: #64748b; /* slate-500 */
+      --border: #e2e8f0; /* slate-200 */
+      --ring: rgba(79,70,229,.25);
+      --brand-from: #4338ca; /* indigo-700 */
+      --brand-to: #06b6d4;   /* cyan-500 */
+      --surface: #ffffff;
+      --surface-weak: #f8fafc;
+    }
+    
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(120% 120% at 10% 0%, #eef2ff 0%, #f8fafc 40%, #e0f7fa 100%);
+    }
+    .receipt {
+      max-width: 560px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0;
+      background: var(--surface);
+      box-shadow: 0 12px 32px rgba(15,23,42,.08);
+      overflow: hidden;
+      position: relative;
+      isolation: isolate;
+    }
+    /* Soft watermark */
+    .receipt::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -20% auto;
+      width: 240px; height: 240px;
+      background: radial-gradient(closest-side, rgba(79,70,229,.08), transparent 65%);
+      filter: blur(6px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .hdr {
+      position: relative;
+      background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+      color: #fff;
+      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,.25);
+    }
+    .logo {
+      width: 42px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.15);
+    }
+    .brand {
+      font-weight: 800; font-size: 18px; line-height: 1.2; letter-spacing: .2px;
+    }
+    .sub {
+      font-size: 11px; opacity: .9; margin-top: 2px;
+    }
+    .badge {
+      font-size: 11px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .6px; font-weight: 700;
+    }
+    .content { position: relative; z-index: 1; padding: 16px 20px 8px; }
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+    .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; }
+    .label { color: var(--muted); }
+    .value { color: var(--text); font-weight: 600; }
+    .amount {
+      margin: 12px 0; background: linear-gradient(135deg, #e0f2fe, #eef2ff); border: 1px solid var(--border); border-radius: 14px; padding: 16px; text-align: center;
+    }
+    .amount .caption { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+    .amount .value { display: block; font-size: 26px; font-weight: 900; color: #0f172a; }
+    .tear { border-top: 1px dashed var(--border); position: relative; margin: 14px 0; }
+    .tear::before, .tear::after { content: ""; position: absolute; top: -6px; width: 12px; height: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; }
+    .tear::before { left: -6px; }
+    .tear::after { right: -6px; }
+    .footer { margin: 10px 0 4px; text-align: center; font-size: 12px; color: var(--muted); }
+    .qrblock { text-align:center; margin-top: 8px; }
+    .qrwrap { display:inline-block; padding:10px; border:1px solid var(--border); border-radius:12px; background: var(--surface-weak); box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
+    .actions { margin: 12px auto 16px; text-align: center; }
+    .btn { display: inline-block; padding: 10px 14px; font-size: 13px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: #f8fafc; color: #0f172a; box-shadow: 0 2px 6px rgba(15,23,42,.05); }
+    .btn:hover { filter: saturate(1.05); }
+
+    @media print {
+      @page { size: A5; margin: 10mm; }
+      body { padding: 0; background: #fff; }
+      .actions { display: none !important; }
+      .receipt { border: none; padding: 0; max-width: initial; box-shadow: none; }
+    }
+  </style>
+  <script>
+    function doPrint() { window.print(); }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <meta name="referrer" content="no-referrer" />
+  <style media="print">
+    /* Ensure crisp print */
+    img, svg { filter: none !important; }
+  </style>
+  </head>
+<body>
+  <div class="receipt">
+    <div class="hdr">
+      <img class="logo" src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ brand }} Logo" onerror="this.style.display='none'" />
+      <div>
+        <div class="brand">{{ brand or SCHOOL_NAME or 'Receipt' }}</div>
+        {% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL %}
+          <div class="sub">
+            {% if SCHOOL_ADDRESS %}{{ SCHOOL_ADDRESS }}{% endif %}
+            {% if SCHOOL_PHONE %}{% if SCHOOL_ADDRESS %} • {% endif %}{{ SCHOOL_PHONE }}{% endif %}
+            {% if SCHOOL_EMAIL %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE %} • {% endif %}{{ SCHOOL_EMAIL }}{% endif %}
+          </div>
+        {% else %}
+          <div class="sub">Official Payment Receipt</div>
+        {% endif %}
+      </div>
+      <div><span class="badge">PAID</span></div>
+    </div>
+
+    <div class="content">
+      <div class="section" style="margin-bottom:10px;">
+        <div class="grid">
+          <div class="row"><div class="label">Receipt No.</div><div class="value">#{{ payment.id }}</div></div>
+          <div class="row"><div class="label">Date</div><div class="value">{% if payment.date %}{% if payment.date.__class__.__name__ == "str" %}{{ payment.date }}{% else %}{{ payment.date.strftime('%Y-%m-%d %H:%M') }}{% endif %}{% else %}N/A{% endif %}</div></div>
+          <div class="row"><div class="label">Student</div><div class="value">{{ payment.student_name }}</div></div>
+          <div class="row"><div class="label">Class</div><div class="value">{{ payment.class_name or 'N/A' }}</div></div>
+          <div class="row"><div class="label">Method</div><div class="value">{{ payment.method or 'N/A' }}</div></div>
+          <div class="row"><div class="label">Reference</div><div class="value">{{ payment.reference or 'N/A' }}</div></div>
+          <div class="row"><div class="label">Year / Term</div><div class="value">{{ payment.year or 'N/A' }} / {{ payment.term or 'N/A' }}</div></div>
+        </div>
+        <div class="amount">
+          <div class="caption">Amount Paid</div>
+          <span class="value">KES {{ "{:,.2f}".format(payment.amount or 0) }}</span>
+        </div>
+        <div class="grid">
+          <div class="row"><div class="label">Current Balance</div><div class="value">{% if current_balance is not none %}KES {{ "{:,.2f}".format(current_balance) }}{% else %}N/A{% endif %}</div></div>
+          <div class="row"><div class="label">Credit on Account</div><div class="value">{% if current_credit is not none %}KES {{ "{:,.2f}".format(current_credit) }}{% else %}N/A{% endif %}</div></div>
+        </div>
+        <div class="tear"></div>
+        <div class="footer">Thank you for your payment.</div>
+      </div>
+
+      {% if payment_link %}
+      <div class="section qrblock">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Scan to pay via your preferred app</div>
+        <div class="qrwrap"><div id="qr"></div></div>
+        <div style="font-size:11px; color:var(--muted); margin-top:6px; word-break:break-all">{{ payment_link }}</div>
+      </div>
+      <script>
+        try {
+          var link = {{ payment_link|tojson }};
+          var payload = link || ({{ brand|tojson }} + ' payment');
+          new QRCode(document.getElementById('qr'), { text: payload, width: 120, height: 120 });
+        } catch (e) { /* ignore */ }
+      </script>
+      {% endif %}
+
+      {% if verify_url %}
+      <div class="section qrblock" style="margin-top:10px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Scan to verify receipt</div>
+        <div class="qrwrap"><div id="qr-verify"></div></div>
+        <div style="font-size:11px; color:var(--muted); margin-top:6px; word-break:break-all">{{ verify_url }}</div>
+      </div>
+      <script>
+        try {
+          var v = {{ verify_url|tojson }};
+          new QRCode(document.getElementById('qr-verify'), { text: v, width: 120, height: 120 });
+        } catch (e) { /* ignore */ }
+      </script>
+      {% endif %}
+
+      <div class="actions">
+        <a class="btn" href="{{ url_for('payment_receipt_pdf', payment_id=payment.id) }}">Download PDF</a>
+        <button class="btn" onclick="doPrint()">Print Receipt</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

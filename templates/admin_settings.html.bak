@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Settings - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Admin Settings{% endblock %}
+{% block content %}
+
+<div class="grid md:grid-cols-2 gap-6">
+  <!-- Access Settings -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">Access Settings</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Portal</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Set the username and password used for normal portal login (non-admin).</p>
+
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="form" value="access" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Username</label>
+        <input type="text" name="APP_LOGIN_USERNAME" value="{{ values.APP_LOGIN_USERNAME or '' }}"
+               class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. bursar" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        <input type="password" name="APP_LOGIN_PASSWORD" value=""
+               class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Leave blank to keep current">
+        <p class="text-xs text-gray-500 mt-1">Stored securely (hashed). Leave blank to keep current.</p>
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Access</button>
+    </form>
+  </div>
+
+  <!-- Admin Security -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">Admin Security</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100">Secure</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Change the global admin password.</p>
+
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="form" value="admin_pwd" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Current Password</label>
+        <input required type="password" name="current_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Enter current admin password" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">New Password</label>
+        <input required type="password" name="new_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="At least 6 characters" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Confirm New Password</label>
+        <input required type="password" name="confirm_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Re-enter new password" />
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Update Password</button>
+    </form>
+  </div>
+
+  <!-- WhatsApp Config (Pro) -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">WhatsApp</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full {{ 'bg-emerald-50 text-emerald-700 border-emerald-100' if whatsapp_enabled else 'bg-amber-50 text-amber-700 border-amber-100' }}">{{ 'Active' if whatsapp_enabled else 'Pending' }}</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Configure WhatsApp Cloud API. You can paste the Access Token and Phone Number ID later — this section is ready.</p>
+
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="form" value="whatsapp" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Access Token</label>
+        <input type="text" name="WHATSAPP_ACCESS_TOKEN" value="{{ values.WHATSAPP_ACCESS_TOKEN or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="EAAG... (paste later)">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Phone Number ID</label>
+        <input type="text" name="WHATSAPP_PHONE_NUMBER_ID" value="{{ values.WHATSAPP_PHONE_NUMBER_ID or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. 123456789012345">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Template Name (optional)</label>
+          <input type="text" name="WHATSAPP_TEMPLATE_NAME" value="{{ values.WHATSAPP_TEMPLATE_NAME or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. fee_reminder">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Language</label>
+          <input type="text" name="WHATSAPP_TEMPLATE_LANG" value="{{ values.WHATSAPP_TEMPLATE_LANG or 'en_US' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="en_US">
+        </div>
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save WhatsApp</button>
+    </form>
+    {% if not whatsapp_enabled and whatsapp_reason %}
+      <div class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">{{ whatsapp_reason }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Reminder Settings (Pro) -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">Reminder Settings</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Premium</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Choose which phone column to use when sending reminders and set a default message template. Placeholders: {name}, {balance}, {class_name}, {school_name}.</p>
+
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="form" value="reminders" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Student Phone Column</label>
+        <input type="text" name="REMINDER_PHONE_COLUMN" value="{{ values.REMINDER_PHONE_COLUMN or 'phone' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. phone">
+        <p class="text-xs text-gray-500 mt-1">This must match a column in the students table.</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Default Message</label>
+        <textarea name="REMINDER_DEFAULT_MESSAGE" rows="3" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Message template">{{ values.REMINDER_DEFAULT_MESSAGE }}</textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Reminders</button>
+        <a href="{{ url_for('reminders.reminders_home') }}" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 inline-flex items-center gap-2"><i data-lucide="send"></i><span>Open Reminder Center</span></a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();</script>
+{% endblock %}

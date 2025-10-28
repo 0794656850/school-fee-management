@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Fee Reminders - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Send Fee Reminders{% endblock %}
+{% block content %}
+
+<div class="rounded-2xl shadow-sm border border-gray-100 overflow-hidden bg-white">
+  <!-- Premium Header -->
+  <div class="bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 text-white px-6 py-6">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="inline-flex p-2.5 rounded-xl bg-white/20 ring-1 ring-white/30 shadow">
+            <i data-lucide="message-circle" class="w-5 h-5 text-white"></i>
+          </span>
+          <h3 class="text-xl font-semibold tracking-tight">Fee Reminder Center</h3>
+        </div>
+        <p class="mt-2 text-white/90 text-sm">Reach out to guardians and students with a polished WhatsApp message. Use dynamic placeholders to personalize at scale.</p>
+      </div>
+      <div class="hidden sm:flex items-center gap-4">
+        <div class="text-right">
+          <div class="text-xs text-white/80">Recipients</div>
+          <div class="text-lg font-bold">{{ students|length }}</div>
+        </div>
+        <div class="h-8 w-px bg-white/30"></div>
+        <div class="text-right">
+          <div class="text-xs text-white/80">Total Outstanding</div>
+          <div class="text-lg font-bold">KES {{ "{:,.2f}".format((students|sum(attribute='balance')) or 0) }}</div>
+        </div>
+        <div class="h-8 w-px bg-white/30"></div>
+        <div class="text-right">
+          <div class="text-xs text-white/80">WhatsApp</div>
+          <div class="text-lg font-bold">
+            {% set with_phone = students|selectattr('phone')|list %}
+            {{ with_phone|length }} ready
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="p-6 space-y-6">
+    <!-- Filters: Class and Minimum Balance -->
+    <form method="get" class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Class</label>
+        <select name="class" class="rounded-lg border-gray-300 text-sm min-w-[200px]">
+          <option value="">All classes</option>
+          {% for c in classes or [] %}
+            <option value="{{ c }}" {% if selected_class==c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Minimum Balance (KES)</label>
+        <input type="number" name="min_balance" step="0.01" min="0" value="{{ min_balance or 0 }}" class="rounded-lg border-gray-300 text-sm w-40">
+      </div>
+      <div>
+        <button class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+          <i data-lucide="filter"></i>
+          <span>Apply Filters</span>
+        </button>
+      </div>
+    </form>
+    {% if not whatsapp_enabled %}
+      <div class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        <div class="text-sm">WhatsApp is not configured. Set WHATSAPP_* in environment to enable sending.</div>
+      </div>
+    {% endif %}
+
+    <!-- Message Designer -->
+    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <label for="messageTemplate" class="text-sm font-medium text-gray-800">Message Template</label>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{name}</span>
+          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{balance}</span>
+          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{class_name}</span>
+          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{school_name}</span>
+        </div>
+      </div>
+      {{ default_message_template or 'Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.' }}
+      <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
+        <div>Use placeholders above to personalize messages.</div>
+        <div id="charCount">0 characters</div>
+      </div>
+    </div>
+
+    <!-- Bulk Action -->
+    <form id="sendAllForm" action="{{ url_for('reminders.send_all_reminders') }}" method="post" class="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-3">
+      <div class="text-sm text-gray-600">Send to all contacts with a phone number using the message above.</div>
+      <div class="flex items-center gap-2">
+        <input type="hidden" name="message" id="sendAllMessage" />
+        <button type="submit" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Send All via WhatsApp</span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Recipients Table -->
+    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600">
+          <tr>
+            <th class="px-4 py-3 text-left">#</th>
+            <th class="px-4 py-3 text-left">Student</th>
+            <th class="px-4 py-3 text-left">Class</th>
+            <th class="px-4 py-3 text-left">Balance</th>
+            <th class="px-4 py-3 text-left">Phone</th>
+            <th class="px-4 py-3 text-center">Action</th>
+          </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+          {% for s in students %}
+            <tr class="hover:bg-gray-50/60">
+              <td class="px-4 py-3 text-gray-500">{{ loop.index }}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-medium">
+                    {{ (s.name[:1] if s.name else '?') | upper }}
+                  </span>
+                  <div>
+                    <div class="font-medium text-gray-900">{{ s.name }}</div>
+                    <div class="text-xs text-gray-500">ID: {{ s.id }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                {% if s.class_name %}
+                  <span class="inline-flex px-2 py-1 rounded-md text-xs bg-indigo-50 text-indigo-700 border border-indigo-100">{{ s.class_name }}</span>
+                {% else %}
+                  <span class="text-gray-400 text-xs">-</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-semibold">
+                <span class="text-rose-600">KES {{ "{:,.2f}".format(s.balance or 0) }}</span>
+              </td>
+              <td class="px-4 py-3">
+                {% if s.phone %}
+                  <span class="inline-flex items-center gap-1 text-gray-700"><i data-lucide="phone" class="w-4 h-4"></i>{{ s.phone }}</span>
+                {% else %}
+                  <span class="text-gray-400">N/A</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if s.balance > 0 and s.phone %}
+                  <button type="button"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                          onclick="openSendModal({{ s.id }}, '{{ s.name|replace("'","\\'") }}', '{{ s.class_name|default('')|replace("'","\\'") }}', {{ (s.balance or 0)|float }}, '{{ s.phone|default('')|replace("'","\\'") }}')">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>Send</span>
+                  </button>
+                {% else %}
+                  <span class="text-gray-400 text-xs">No action</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-gray-500 py-6">No students found.</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Premium Modal -->
+<div id="sendModal" class="fixed inset-0 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeSendModal()"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100">
+    <div class="flex items-center justify-between mb-4">
+      <h4 class="text-base font-semibold">Send WhatsApp Reminder</h4>
+      <button class="text-gray-400 hover:text-gray-600" type="button" onclick="closeSendModal()"><i data-lucide="x"></i></button>
+    </div>
+    <div>
+      <label class="text-xs text-gray-500">Preview</label>
+      <div id="preview" class="mt-1 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50"></div>
+    </div>
+    <form id="sendForm" method="post" class="mt-4">
+      <input type="hidden" name="message" id="sendMessage" />
+      <div class="flex justify-end gap-2">
+        <button type="button" class="px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50" onclick="closeSendModal()">Cancel</button>
+        <button type="submit" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+          <i data-lucide="send"></i>
+          <span>Send WhatsApp</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function fmt(num) { try { return Number(num).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); } catch { return num; } }
+  function openSendModal(id, name, className, balance, phone) {
+    const tpl = document.getElementById('messageTemplate').value || '';
+    const msg = tpl
+      .replaceAll('{name}', name)
+      .replaceAll('{balance}', fmt(balance))
+      .replaceAll('{class_name}', className || '');
+    document.getElementById('preview').textContent = msg;
+    document.getElementById('sendMessage').value = msg;
+    const form = document.getElementById('sendForm');
+    form.action = `{{ url_for('reminders.send_sms_reminder', student_id=0) }}`.replace('/0', `/${id}`);
+    const modal = document.getElementById('sendModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+  function closeSendModal() {
+    const modal = document.getElementById('sendModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  // Live character count
+  (function(){
+    const ta = document.getElementById('messageTemplate');
+    const cc = document.getElementById('charCount');
+    const update = ()=>{ if(ta&&cc){ cc.textContent = (ta.value||'').length + ' characters'; } };
+    if (ta) { ta.addEventListener('input', update); update(); }
+  })();
+  // Attach message to bulk form on submit
+  document.getElementById('sendAllForm')?.addEventListener('submit', () => {
+    document.getElementById('sendAllMessage').value = document.getElementById('messageTemplate').value;
+  });
+  // Icons
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  
+</script>
+{% endblock %}
+

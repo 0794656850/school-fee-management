@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register School - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  <style>
+    :root { --brand-600:#4f46e5; --bg-app:linear-gradient(135deg,#eef2ff,#f8fafc); --surface:rgba(255,255,255,.88); --text:#0f172a; --border:#e5e7eb; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text); }
+    .glass { background: var(--surface); backdrop-filter: blur(16px); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
+  </style>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <script>window.__flash__ = {{ messages|tojson }};</script>
+  {% endif %}
+  {% endwith %}
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+  <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
+  <div class="max-w-3xl w-full">
+    <div class="text-center mb-6">
+      <a href="{{ url_for('auth.login') }}" class="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
+        <i data-lucide="arrow-left"></i>
+        Back to Login
+      </a>
+      <h1 class="text-2xl font-bold mt-2">Create a New School Profile</h1>
+      <p class="text-sm text-gray-600">After registration, you will go straight into the system.</p>
+    </div>
+    <div class="glass rounded-2xl p-6 border border-gray-100">
+      <form method="post" action="{{ url_for('auth.register_school') }}" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">School Name</label>
+          <input name="school_name" placeholder="Enter school name" required class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">School Category</label>
+            <select name="school_category" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="">Select category</option>
+              <option>Kindergarten</option>
+              <option>Primary</option>
+              <option>Junior Secondary</option>
+              <option>High School</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">School Phone</label>
+            <input name="school_phone" placeholder="+254..." class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">School Address</label>
+          <input name="school_address" placeholder="Enter school address" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Admin Name</label>
+            <input name="admin_name" placeholder="Admin name" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Admin Email</label>
+            <input name="admin_email" type="email" placeholder="admin@example.com" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Username</label>
+            <input name="username" placeholder="Choose a username" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Password</label>
+            <input name="password" type="password" placeholder="Create a password" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
+          <input name="confirm_password" type="password" placeholder="Confirm password" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <button class="mt-2 w-full py-2.5 rounded-xl text-white font-semibold transition" style="background:linear-gradient(90deg,#0f4460,#6b4b4b,#f97316)">Register School</button>
+      </form>
+    </div>
+    <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 LOVATO.TECH - Smart School Fee Management Platform</div>
+  </div>
+  <script>
+    lucide.createIcons();
+    const flash = window.__flash__ || [];
+    const box = document.getElementById('flash');
+    const styles = { success: 'bg-green-50 text-green-700 border-green-200', error: 'bg-red-50 text-red-700 border-red-200', info: 'bg-blue-50 text-blue-700 border-blue-200', warning: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
+    flash.forEach(([cat, msg]) => {
+      const div = document.createElement('div');
+      div.className = `mb-2 border rounded-lg px-4 py-3 text-sm shadow ${styles[cat]||'bg-gray-50 text-gray-700 border-gray-200'}`;
+      div.textContent = msg;
+      box.appendChild(div);
+    });
+  </script>
+</body>
+</html>

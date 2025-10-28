@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Access Settings - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Access Settings{% endblock %}
+{% block content %}
+
+<div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm max-w-xl">
+  <p class="text-sm text-gray-600 mb-4">Configure the username and password used to sign in to the portal. Defaults are <span class="font-mono">user</span> / <span class="font-mono">9133</span>.</p>
+
+  <form method="post">
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Username</label>
+      <input type="text" name="APP_LOGIN_USERNAME" value="{{ values.get('APP_LOGIN_USERNAME','') }}"
+             class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. bursar" required>
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700">Password</label>
+      <input type="password" name="APP_LOGIN_PASSWORD" value=""
+             class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Leave blank to keep current">
+      <p class="text-xs text-gray-500 mt-1">Stored securely (hashed). Leave blank to keep current password.</p>
+    </div>
+
+    <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Access</button>
+  </form>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}

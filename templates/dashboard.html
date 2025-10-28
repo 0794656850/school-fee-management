@@ -1,148 +1,343 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - CS Fee Management{% endblock %}
+{% block title %}Dashboard - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}Dashboard Overview{% endblock %}
 {% block content %}
 
-<!-- Summary Cards -->
-<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+<!-- Hero / Welcome -->
+<div class="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-6 md:p-8 mb-8">
+  <div class="absolute -top-8 -right-8 h-40 w-40 rounded-full bg-gradient-to-tr from-indigo-400/20 to-cyan-400/20 blur-2xl"></div>
+  <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative">
+    <div>
+      <div class="flex items-center gap-2 text-xs font-medium text-indigo-700 mb-2">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+        <span>Live overview</span>
+      </div>
+      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800">
+        {% if SCHOOL_FIRST_LOGIN_AT %}Welcome back.{% else %}Welcome.{% endif %}
+      </h1>
+      <p class="mt-1 text-sm text-slate-600">Finance at a glance</p>
+      <p class="mt-1.5 text-sm text-slate-600">Track collections, balances and trends. Updated in real time.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('payments') }}" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
+        <i data-lucide="plus"></i>
+        Add Payment
+      </a>
+      <a href="{{ url_for('analytics') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50">
+        <i data-lucide="bar-chart-2"></i>
+        Analytics
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- School Profile Card -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6 flex items-center gap-4">
+    <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="School Logo" class="h-12 w-12 rounded-lg ring-1 ring-blue-100" onerror="this.style.display='none'" />
+    <div class="min-w-0">
+      <div class="text-sm text-gray-500">School</div>
+      <div class="font-semibold truncate">{{ SCHOOL_NAME }}</div>
+      {% if SCHOOL_PHONE or SCHOOL_EMAIL %}
+      <div class="text-xs text-gray-500 truncate">{{ SCHOOL_PHONE }}{% if SCHOOL_PHONE and SCHOOL_EMAIL %} • {% endif %}{{ SCHOOL_EMAIL }}</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6 flex items-center gap-4">
+    <div class="min-w-0">
+      <div class="text-sm text-gray-500">Brand</div>
+      <div class="font-semibold">{{ BRAND_NAME }} {{ PORTAL_TITLE }}</div>
+      <div class="text-xs text-gray-500">Smart, modern fee management for schools</div>
+    </div>
+  </div>
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6 flex items-center gap-4">
+    <div class="min-w-0">
+      <div class="text-sm text-gray-500">Current Term</div>
+      <div class="font-semibold">{{ (CURRENT_YEAR or '—') }} / Term {{ (CURRENT_TERM or '—') }}</div>
+      {% if LATE_PENALTY_KIND %}
+      <div class="text-xs text-gray-500">Late penalty: {{ LATE_PENALTY_VALUE }} {{ 'percent' if LATE_PENALTY_KIND=='percent' else 'KES' }}{% if LATE_PENALTY_GRACE_DAYS %} • {{ LATE_PENALTY_GRACE_DAYS }}d grace{% endif %}</div>
+      {% endif %}
+    </div>
+  </div>
   
+</div>
+
+<!-- Premium KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-10">
   <!-- Total Students -->
-  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+  <div class="kpi group p-6">
     <div class="flex items-center justify-between">
       <div>
         <h4 class="text-sm font-medium text-gray-500 mb-1">Total Students</h4>
-        <p id="total_students" class="text-3xl font-bold text-gray-800 tracking-tight">
-          {{ total_students or 0 }}
-        </p>
+        <p id="total_students" class="text-3xl font-extrabold text-gray-900 tracking-tight">{{ total_students or 0 }}</p>
+        <div class="mt-2 text-[11px] text-gray-500">Roster size</div>
       </div>
-      <div class="bg-gradient-to-tr from-blue-500 to-blue-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
-        <i data-lucide="users" class="text-white w-6 h-6"></i>
-      </div>
+      <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="users" class="text-white w-6 h-6"></i></div>
     </div>
   </div>
 
   <!-- Total Fees Collected -->
-  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+  <div class="kpi kpi--success group p-6">
     <div class="flex items-center justify-between">
       <div>
-        <h4 class="text-sm font-medium text-gray-500 mb-1">Total Fees Collected</h4>
-        <p id="total_collected" class="text-3xl font-bold text-green-600 tracking-tight">
-          KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}
-        </p>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">Total Collected</h4>
+        <p id="total_collected" class="text-3xl font-extrabold text-emerald-600 tracking-tight">KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}</p>
+        <div id="mom_badge" class="mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+          <span>Loading MoM…</span>
+        </div>
       </div>
-      <div class="bg-gradient-to-tr from-green-500 to-emerald-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
-        <i data-lucide="wallet" class="text-white w-6 h-6"></i>
+      <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="wallet" class="text-white w-6 h-6"></i></div>
+    </div>
+  </div>
+
+  <!-- This Term Outstanding -->
+  <div class="kpi kpi--danger group p-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4 class="text-sm font-medium text-gray-500 mb-1">This Term Outstanding</h4>
+        <p id="term_outstanding" class="text-3xl font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(term_outstanding or 0) }}</p>
+        <div class="mt-2 text-[11px] text-rose-700/80">Fees due for current term</div>
       </div>
+      <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="alert-octagon" class="text-white w-6 h-6"></i></div>
     </div>
   </div>
 
   <!-- Pending Balance -->
-  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+  <div class="kpi kpi--danger group p-6">
     <div class="flex items-center justify-between">
       <div>
         <h4 class="text-sm font-medium text-gray-500 mb-1">Pending Balance</h4>
-        <p id="pending_balance" class="text-3xl font-bold text-red-600 tracking-tight">
-          KES {{ '{:,.2f}'.format(pending_balance or 0) }}
-        </p>
+        <p id="pending_balance" class="text-3xl font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(pending_balance or 0) }}</p>
+        <div class="mt-2 text-[11px] text-rose-700/80">Outstanding across all students</div>
       </div>
-      <div class="bg-gradient-to-tr from-red-500 to-pink-400 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
-        <i data-lucide="alert-circle" class="text-white w-6 h-6"></i>
-      </div>
+      <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="alert-circle" class="text-white w-6 h-6"></i></div>
     </div>
   </div>
 
   <!-- Total Credit -->
-  <div class="group bg-white/80 backdrop-blur-md shadow-sm hover:shadow-lg border border-gray-100 rounded-2xl p-6 transition transform hover:-translate-y-1">
+  <div class="kpi kpi--warn group p-6">
     <div class="flex items-center justify-between">
       <div>
         <h4 class="text-sm font-medium text-gray-500 mb-1">Total Credit</h4>
-        <p id="total_credit" class="text-3xl font-bold text-amber-500 tracking-tight">
-          KES {{ '{:,.2f}'.format(total_credit or 0) }}
-        </p>
+        <p id="total_credit" class="text-3xl font-extrabold text-amber-500 tracking-tight">KES {{ '{:,.2f}'.format(total_credit or 0) }}</p>
+        <div class="mt-2 text-[11px] text-amber-700/80">Prepaid/overpayment</div>
       </div>
-      <div class="bg-gradient-to-tr from-yellow-400 to-amber-300 p-3 rounded-xl shadow-sm group-hover:scale-110 transition">
-        <i data-lucide="gift" class="text-white w-6 h-6"></i>
-      </div>
+      <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="gift" class="text-white w-6 h-6"></i></div>
     </div>
   </div>
 </div>
 
-<!-- Recent Payments Section -->
-<div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-8">
-  <div class="flex justify-between items-center mb-6">
-    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
-      <i data-lucide="credit-card" class="text-blue-600"></i> Recent Payments
-    </h3>
-    <a href="{{ url_for('payments') }}" 
-       class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition transform hover:-translate-y-0.5">
-      + Add Payment
-    </a>
+<!-- Charts + Insights -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+  <!-- Monthly Collections Chart -->
+  <div class="lg:col-span-2 bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="line-chart" class="text-indigo-600"></i> Monthly Collections</h3>
+    </div>
+    <canvas id="monthlyChart" height="110"></canvas>
   </div>
 
-  <div class="overflow-x-auto rounded-xl border border-gray-200">
-    <table class="min-w-full text-sm">
-      <thead class="bg-gray-50/80">
-        <tr class="text-gray-700">
-          <th class="px-5 py-3 text-left font-medium border-b">#</th>
-          <th class="px-5 py-3 text-left font-medium border-b">Student Name</th>
-          <th class="px-5 py-3 text-left font-medium border-b">Class</th>
-          <th class="px-5 py-3 text-left font-medium border-b">Amount (KES)</th>
-          <th class="px-5 py-3 text-left font-medium border-b">Method</th>
-          <th class="px-5 py-3 text-left font-medium border-b">Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in recent_payments %}
-        <tr class="hover:bg-blue-50/40 transition border-b">
-          <td class="px-5 py-3 text-gray-600">{{ loop.index }}</td>
-          <td class="px-5 py-3 font-medium text-gray-800">{{ p.name }}</td>
-          <td class="px-5 py-3 text-gray-600">{{ p.class_name }}</td>
-          <td class="px-5 py-3 text-green-600 font-semibold">{{ '{:,.2f}'.format(p.amount or 0) }}</td>
-          <td class="px-5 py-3 text-gray-700">{{ p.method or 'N/A' }}</td>
-          <td class="px-5 py-3 text-gray-500">
-            {% if p.date %}
-              {% if p.date.__class__.__name__ == 'str' %}
-                {{ p.date }}
-              {% else %}
-                {{ p.date.strftime('%Y-%m-%d %H:%M') }}
-              {% endif %}
-            {% else %}
-              —
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="text-center text-gray-500 py-6">No recent payments found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <!-- Payment Methods Donut -->
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="pie-chart" class="text-cyan-600"></i> Payment Methods</h3>
+    </div>
+    <canvas id="methodChart" height="110"></canvas>
   </div>
 </div>
 
-<!-- Live update script -->
-<script>
-lucide.createIcons();
+<!-- Top Debtors + Recent Payments -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Top Debtors -->
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="alert-triangle" class="text-rose-600"></i> Top Debtors</h3>
+    </div>
+    <div id="debtors_empty" class="hidden text-sm text-gray-500">No debtor data.</div>
+    <ul id="debtors_list" class="divide-y divide-gray-100"></ul>
+  </div>
 
-function updateDashboardData() {
-  fetch("/api/dashboard_data")
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("total_students").textContent = data.total_students;
-      document.getElementById("total_collected").textContent = 
-        "KES " + data.total_collected.toLocaleString(undefined, {minimumFractionDigits: 2});
-      document.getElementById("pending_balance").textContent = 
-        "KES " + data.total_balance.toLocaleString(undefined, {minimumFractionDigits: 2});
-      if (data.total_credit !== undefined) {
-        document.getElementById("total_credit").textContent =
-          "KES " + data.total_credit.toLocaleString(undefined, {minimumFractionDigits: 2});
+  <!-- Recent Payments Table -->
+  <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2">
+        <i data-lucide="credit-card" class="text-blue-600"></i> Recent Payments
+      </h3>
+      <a href="{{ url_for('payments') }}" class="px-4 py-2 btn-brand text-white text-sm font-medium rounded-lg">+ Add Payment</a>
+    </div>
+    <div class="overflow-x-auto rounded-xl border border-gray-200">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50/80">
+          <tr class="text-gray-700">
+            <th class="px-5 py-3 text-left font-medium border-b">#</th>
+            <th class="px-5 py-3 text-left font-medium border-b">Student Name</th>
+            <th class="px-5 py-3 text-left font-medium border-b">Class</th>
+            <th class="px-5 py-3 text-left font-medium border-b">Amount (KES)</th>
+            <th class="px-5 py-3 text-left font-medium border-b">Method</th>
+            <th class="px-5 py-3 text-left font-medium border-b">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in recent_payments %}
+          <tr class="hover:bg-blue-50/40 transition border-b">
+            <td class="px-5 py-3 text-gray-600">{{ loop.index }}</td>
+            <td class="px-5 py-3 font-medium text-gray-800">{{ p.name }}</td>
+            <td class="px-5 py-3 text-gray-600">{{ p.class_name }}</td>
+            <td class="px-5 py-3 text-green-600 font-semibold">{{ '{:,.2f}'.format(p.amount or 0) }}</td>
+            <td class="px-5 py-3 text-gray-700">{{ p.method or 'N/A' }}</td>
+            <td class="px-5 py-3 text-gray-500">
+              {% if p.date %}
+                {% if p.date.__class__.__name__ == 'str' %}
+                  {{ p.date }}
+                {% else %}
+                  {{ p.date.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center text-gray-500 py-6">No recent payments found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard Scripts -->
+<script>
+  // Icons
+  lucide.createIcons();
+
+  // Live totals
+  function updateDashboardData() {
+    fetch("/api/dashboard_data")
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("total_students").textContent = data.total_students;
+        document.getElementById("total_collected").textContent =
+          "KES " + Number(data.total_collected || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        if (document.getElementById("term_outstanding")) {
+          document.getElementById("term_outstanding").textContent =
+            "KES " + Number(data.term_outstanding || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        }
+        document.getElementById("pending_balance").textContent =
+          "KES " + Number(data.total_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        if (data.total_credit !== undefined) {
+          document.getElementById("total_credit").textContent =
+            "KES " + Number(data.total_credit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        }
+      })
+      .catch(err => console.error("Error fetching dashboard data:", err));
+  }
+  setInterval(updateDashboardData, 10000);
+  updateDashboardData();
+
+  // Analytics-driven charts and insights
+  const monthlyCtx = document.getElementById('monthlyChart');
+  const methodCtx  = document.getElementById('methodChart');
+
+  let monthlyChart, methodChart;
+
+  function renderCharts(payload) {
+    const months = (payload.monthly_data || []).map(r => r.month);
+    const monthTotals = (payload.monthly_data || []).map(r => Number(r.total || 0));
+
+    if (monthlyCtx) {
+      if (monthlyChart) monthlyChart.destroy();
+      monthlyChart = new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+          labels: months,
+          datasets: [{
+            label: 'KES',
+            data: monthTotals,
+            tension: 0.35,
+            fill: true,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79,70,229,0.12)',
+            pointBackgroundColor: '#4f46e5',
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { x: { grid: { display: false } }, y: { grid: { color: '#eef2ff' } } }
+        }
+      });
+    }
+
+    const methods = (payload.method_breakdown || []).map(r => r.method || 'N/A');
+    const methodTotals = (payload.method_breakdown || []).map(r => Number(r.total || 0));
+    if (methodCtx) {
+      if (methodChart) methodChart.destroy();
+      methodChart = new Chart(methodCtx, {
+        type: 'doughnut',
+        data: {
+          labels: methods,
+          datasets: [{
+            data: methodTotals,
+            backgroundColor: ['#06b6d4','#4f46e5','#10b981','#f59e0b','#ef4444','#8b5cf6'],
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+      });
+    }
+
+    // Top debtors list
+    const list = document.getElementById('debtors_list');
+    const empty = document.getElementById('debtors_empty');
+    if (list && empty) {
+      list.innerHTML = '';
+      const items = payload.top_debtors || [];
+      if (!items.length) {
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        items.forEach((d, idx) => {
+          const li = document.createElement('li');
+          li.className = 'py-3 px-1 flex items-center justify-between';
+          li.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 w-5">${idx + 1}</span>
+              <div>
+                <div class="text-sm font-medium text-gray-800">${d.name || 'Student'}</div>
+                <div class="text-xs text-gray-500">${d.class_name || ''}</div>
+              </div>
+            </div>
+            <div class="text-sm font-semibold text-rose-600">KES ${(Number(d.balance || 0)).toLocaleString()}</div>
+          `;
+          list.appendChild(li);
+        });
       }
-    })
-    .catch(err => console.error("Error fetching dashboard data:", err));
-}
-setInterval(updateDashboardData, 10000);
-updateDashboardData();
+    }
+
+    // Month-over-month badge
+    const mom = payload.mom || { percent_change: 0 };
+    const badge = document.getElementById('mom_badge');
+    if (badge) {
+      const pct = Number(mom.percent_change || 0);
+      const up = pct >= 0;
+      badge.className = `mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${up ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`;
+      badge.innerHTML = `
+        <i data-lucide="${up ? 'trending-up' : 'trending-down'}" class="w-3.5 h-3.5"></i>
+        <span>${up ? '+' : ''}${pct.toFixed(1)}% MoM</span>
+      `;
+      lucide.createIcons();
+    }
+  }
+
+  function loadAnalytics() {
+    fetch('/api/analytics_data')
+      .then(r => r.json())
+      .then(renderCharts)
+      .catch(e => console.warn('Analytics load failed', e));
+  }
+  loadAnalytics();
 </script>
 
 {% endblock %}

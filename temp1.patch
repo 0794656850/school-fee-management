@@ -1,0 +1,77 @@
+﻿*** Begin Patch
+*** Add File: routes/credit_routes.py
++from __future__ import annotations
++
++from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
++from datetime import datetime
++import json
++import mysql.connector
++from urllib.parse import urlparse
++
++from utils.audit import append_audit_log
++
++
++credit_bp = Blueprint("credit", __name__, url_prefix="/credit")
++
++
++def _db():
++    cfg = current_app.config
++    host = "localhost"; user = "root"; password = ""; database = "school_fee_db"
++    uri = cfg.get("SQLALCHEMY_DATABASE_URI", "")
++    if uri and uri.startswith("mysql"):
++        try:
++            parsed = urlparse(uri)
++            host = parsed.hostname or host
++            user = parsed.username or user
++            password = parsed.password or password
++            if parsed.path and len(parsed.path) > 1:
++                database = parsed.path.lstrip("/")
++        except Exception:
++            pass
++    import os
++    host = os.environ.get("DB_HOST", host)
++    user = os.environ.get("DB_USER", user)
++    password = os.environ.get("DB_PASSWORD", password)
++    database = os.environ.get("DB_NAME", database)
++    return mysql.connector.connect(host=host, user=user, password=password, database=database)
++
++
++def ensure_credit_ops_table(conn) -> None:
++    cur = conn.cursor()
++    cur.execute(
++        """
++        CREATE TABLE IF NOT EXISTS credit_operations (
++            id INT AUTO_INCREMENT PRIMARY KEY,
++            ts DATETIME NOT NULL,
++            actor VARCHAR(100),
++            student_id INT NOT NULL,
++            op_type VARCHAR(32) NOT NULL,
++            amount DECIMAL(12,2) NOT NULL,
++            reference VARCHAR(128),
++            method VARCHAR(64),
++            meta TEXT
++        )
++        """
++    )
++    conn.commit()
++
++
++def _detect_balance_column(cur) -> str:
++    cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
++    has_balance = bool(cur.fetchone())
++    return "balance" if has_balance else "fee_balance"
++
++
++@credit_bp.route("/")
++def credit_home():
++    db = _db()
++    cur = db.cursor(dictionary=True)
++    try:
++        ensure_credit_ops_table(db)
++        cur.execute("SELECT id, name, class_name, COALESCE(credit,0) AS credit FROM students WHERE COALESCE(credit,0) > 0 ORDER BY name")
++        credit_students = cur.fetchall() or []
++    finally:
++        db.close()
++    return render_template("credit.html", credit_students=credit_students)
++
+*** End Patch

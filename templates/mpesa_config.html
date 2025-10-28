@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}M-Pesa Settings - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}M-Pesa (Daraja) Settings{% endblock %}
+{% block content %}
+
+<div class="max-w-3xl mx-auto">
+  <div class="bg-white border rounded-2xl shadow p-6">
+    <p class="text-sm text-gray-600">Enter your Safaricom Daraja API credentials. These are stored securely in your database and used for STK Push. If environment variables are set, they will take precedence until you save here.</p>
+
+    <form method="post" class="mt-4 grid grid-cols-1 gap-3">
+      <div>
+        <label class="block text-sm font-medium">Environment</label>
+        <select name="DARAJA_ENV" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <option value="sandbox" {% if (values.DARAJA_ENV or '').lower() != 'production' %}selected{% endif %}>Sandbox</option>
+          <option value="production" {% if (values.DARAJA_ENV or '').lower() == 'production' %}selected{% endif %}>Production</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Consumer Key</label>
+        <input type="text" name="DARAJA_CONSUMER_KEY" value="{{ values.DARAJA_CONSUMER_KEY or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Consumer Secret</label>
+        <input type="text" name="DARAJA_CONSUMER_SECRET" value="{{ values.DARAJA_CONSUMER_SECRET or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Business ShortCode (Paybill/Till)</label>
+        <input type="text" name="DARAJA_SHORT_CODE" value="{{ values.DARAJA_SHORT_CODE or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Lipa Na M-PESA Passkey</label>
+        <input type="text" name="DARAJA_PASSKEY" value="{{ values.DARAJA_PASSKEY or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Callback URL</label>
+        <input type="url" name="DARAJA_CALLBACK_URL" value="{{ values.DARAJA_CALLBACK_URL or '' }}" placeholder="https://yourdomain.tld/mpesa/callback" class="border rounded-lg px-3 py-2 text-sm w-full">
+        <div class="text-xs text-gray-500 mt-1">Must be publicly accessible. For production, use HTTPS. If left empty, the app attempts to infer an external URL but this often fails without a configured SERVER_NAME.</div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium">Account Reference</label>
+          <input type="text" name="DARAJA_ACCOUNT_REF" value="{{ values.DARAJA_ACCOUNT_REF or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Transaction Description</label>
+          <input type="text" name="DARAJA_TRANSACTION_DESC" value="{{ values.DARAJA_TRANSACTION_DESC or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+      </div>
+      <div class="mt-2 flex items-center gap-2">
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm">Save Settings</button>
+        <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-600 hover:underline">Back to Admin</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}

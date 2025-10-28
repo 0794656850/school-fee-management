@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Term Fees - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Manage Term Fees{% endblock %}
+{% block content %}
+
+<div class="max-w-6xl mx-auto">
+  <div class="bg-white rounded-2xl shadow p-6">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Year {{ year }}, Term {{ term or '-' }}</h2>
+        {% if is_pro %}
+        <p class="text-xs text-gray-500">Define components, class defaults, overrides, discounts, and generate invoices.</p>
+        {% else %}
+        <p class="text-xs text-gray-500">Basic mode: apply a flat fee per student or in bulk. Advanced itemization requires Pro.</p>
+        {% endif %}
+      </div>
+      <form class="flex items-center gap-2" method="get" action="{{ url_for('terms.manage_term_fees') }}">
+        <input type="number" name="year" value="{{ year or '' }}" min="2000" max="2100" class="border rounded-lg px-2 py-1 text-sm" placeholder="Year">
+        <select name="term" class="border rounded-lg px-2 py-1 text-sm">
+          <option value="1" {% if (term or 0)==1 %}selected{% endif %}>Term 1</option>
+          <option value="2" {% if (term or 0)==2 %}selected{% endif %}>Term 2</option>
+          <option value="3" {% if (term or 0)==3 %}selected{% endif %}>Term 3</option>
+        </select>
+        <button class="bg-indigo-600 text-white rounded-lg px-3 py-1.5 text-sm">Go</button>
+      </form>
+      <form class="flex items-center gap-2" method="post" action="{{ url_for('terms.apply_flat_fee_all') }}">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="term" value="{{ term }}">
+        <select name="class_name" class="border rounded-lg px-2 py-1 text-sm min-w-40">
+          <option value="">All classes</option>
+          {% for cl in classes %}
+            <option value="{{ cl }}">{{ cl }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" name="amount" min="0" step="0.01" class="border rounded-lg px-2 py-1 text-sm w-36" placeholder="Flat fee (KES)" required>
+        <button class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm">Apply To All</button>
+      </form>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% if is_pro %}
+      <div class="col-span-1 border rounded-xl p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold">Fee Components</h3>
+        </div>
+        <form class="mt-3 flex flex-col gap-2" method="post" action="{{ url_for('terms.add_component') }}">
+          <input type="text" name="name" placeholder="Name (e.g., Tuition)" class="border rounded-lg px-2 py-1 text-sm" required>
+          <input type="text" name="code" placeholder="Code (optional)" class="border rounded-lg px-2 py-1 text-sm">
+          <div class="flex items-center gap-2">
+            <input type="number" step="0.01" min="0" name="default_amount" class="border rounded-lg px-2 py-1 text-sm w-32" placeholder="Default">
+            <label class="text-xs text-gray-600 inline-flex items-center gap-1">
+              <input type="checkbox" name="is_optional"> Optional
+            </label>
+            <button class="ml-auto bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 text-sm">Add</button>
+          </div>
+        </form>
+        <div class="mt-3 text-xs text-gray-600">Existing:</div>
+        <ul class="mt-1 space-y-1">
+          {% for c in components %}
+          <li class="text-sm flex items-center justify-between">
+            <span>{{ c.name }}{% if c.default_amount %} - Default KES {{ "{:,.2f}".format(c.default_amount) }}{% endif %}{% if c.is_optional %} - Optional{% endif %}</span>
+          </li>
+          {% else %}
+          <li class="text-sm text-gray-500">No components yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="col-span-1 border rounded-xl p-4">
+        <h3 class="font-semibold">Class Defaults</h3>
+        <form class="mt-2" method="post" action="{{ url_for('terms.set_class_defaults') }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="term" value="{{ term }}">
+          <div class="flex items-center gap-2">
+            <select name="class_name" class="border rounded-lg px-2 py-1 text-sm w-full" required>
+              <option value="" disabled selected>Select class</option>
+              {% for cl in classes %}
+                <option value="{{ cl }}">{{ cl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mt-3 space-y-2">
+            {% for c in components %}
+              <label class="flex items-center justify-between gap-2 text-sm">
+                <span>{{ c.name }}</span>
+                <input type="number" step="0.01" min="0" name="comp_{{ c.id }}" class="border rounded-lg px-2 py-1 w-32" placeholder="KES">
+              </label>
+            {% else %}
+              <div class="text-sm text-gray-500">Add components first.</div>
+            {% endfor %}
+          </div>
+          <div class="mt-3 flex justify-end">
+            <button class="bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 text-sm">Save Defaults</button>
+          </div>
+        </form>
+      </div>
+      {% else %}
+      <div class="col-span-2 border rounded-xl p-4 bg-gray-50">
+        <h3 class="font-semibold">Premium Itemization</h3>
+        <p class="text-sm text-gray-600 mt-1">Set itemized fee components, class defaults, per-student overrides, discounts, and generate invoices with Pro.</p>
+        <a href="{{ url_for('admin.billing') }}" class="mt-3 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 text-sm">Upgrade</a>
+      </div>
+      {% endif %}
+
+      <div class="col-span-1 border rounded-xl p-4">
+        <h3 class="font-semibold">Invoices</h3>
+        <form class="mt-2 flex flex-col gap-2" method="post" action="{{ url_for('terms.generate_invoices') }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="term" value="{{ term }}">
+          <label class="text-sm">Due date
+            <input type="date" name="due_date" placeholder="Optional" class="border rounded-lg px-2 py-1 text-sm w-full">
+          </label>
+          <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-sm">Generate/Update Invoices</button>
+          <div class="text-xs text-gray-500">Builds invoice items from components, class defaults, overrides and discounts.</div>
+        </form>
+      </div>
+    </div>
+
+    <div class="mt-6 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2">
+        <i data-lucide="search" class="w-4 h-4 text-gray-500"></i>
+        <input id="feeSearch" type="text" placeholder="Search by student or class" class="border rounded-lg px-2 py-1 text-sm w-64" />
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="bulkAmount" type="number" step="0.01" min="0" placeholder="Set legacy flat for all" class="border rounded-lg px-2 py-1 text-sm w-48">
+        <button id="applyAll" type="button" class="bg-gray-100 text-gray-800 rounded-lg px-3 py-1.5 text-sm border hover:bg-gray-200">Apply to all</button>
+        <button id="saveAll" type="button" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm hover:bg-emerald-700">Save all</button>
+      </div>
+    </div>
+
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left border-b">Student</th>
+            <th class="px-3 py-2 text-left border-b">Class</th>
+            <th class="px-3 py-2 text-left border-b">Balance</th>
+            <th class="px-3 py-2 text-left border-b">Credit</th>
+            {% if is_pro %}
+            <th class="px-3 py-2 text-left border-b">Computed Total</th>
+            {% endif %}
+            <th class="px-3 py-2 text-left border-b">Legacy Flat</th>
+            {% if is_pro %}
+            <th class="px-3 py-2 text-left border-b">Overrides</th>
+            <th class="px-3 py-2 text-left border-b">Discount</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody id="feeTableBody">
+          {% for s in students %}
+          <tr class="align-top hover:bg-gray-50">
+            <td class="px-3 py-2 border-b name-cell">{{ s.name }}</td>
+            <td class="px-3 py-2 border-b class-cell">{{ s.class_name or '-' }}</td>
+            <td class="px-3 py-2 border-b">KES {{ "{:,.2f}".format(s.balance or 0) }}</td>
+            <td class="px-3 py-2 border-b">KES {{ "{:,.2f}".format(s.credit or 0) }}</td>
+            {% if is_pro %}
+            <td class="px-3 py-2 border-b">
+              <div class="font-medium">KES {{ "{:,.2f}".format(s.computed_total or 0) }}</div>
+              {% if s.computed_components %}
+                <div class="text-xs text-gray-600">
+                  {% for cid, amt in s.computed_components.items() %}
+                    {% set cname = comp_name_map[cid] %}
+                    <div>{{ cname }}: KES {{ "{:,.2f}".format(amt) }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+            {% endif %}
+            <td class="px-3 py-2 border-b">
+              <form class="flex items-center gap-2" action="{{ url_for('terms.set_term_fee') }}" method="post">
+                <input type="hidden" name="student_id" value="{{ s.id }}">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="term" value="{{ term }}">
+                <input type="number" step="0.01" min="0" name="fee_amount" value="{{ s.legacy_fee or 0 }}" class="border rounded-lg px-2 py-1 w-28 fee-input">
+                <button class="bg-gray-100 text-gray-800 rounded-lg px-3 py-1.5">Save</button>
+              </form>
+              <div class="text-[11px] text-gray-500">Use only if not itemizing.</div>
+            </td>
+            {% if is_pro %}
+            <td class="px-3 py-2 border-b">
+              <form action="{{ url_for('terms.set_student_items') }}" method="post" class="space-y-1">
+                <input type="hidden" name="student_id" value="{{ s.id }}">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="term" value="{{ term }}">
+                {% for c in components %}
+                  <label class="flex items-center justify-between gap-2 text-sm">
+                    <span>{{ c.name }}</span>
+                    <input type="number" step="0.01" min="0" name="comp_{{ c.id }}" value="{{ s.computed_components[c.id] if s.computed_components and c.id in s.computed_components else '' }}" class="border rounded-lg px-2 py-1 w-28">
+                  </label>
+                {% else %}
+                  <div class="text-sm text-gray-500">Add components first.</div>
+                {% endfor %}
+                <div class="pt-2 flex justify-end">
+                  <button class="bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 text-sm">Save Overrides</button>
+                </div>
+              </form>
+            </td>
+            <td class="px-3 py-2 border-b">
+              <form action="{{ url_for('terms.set_discount') }}" method="post" class="space-y-2">
+                <input type="hidden" name="student_id" value="{{ s.id }}">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="term" value="{{ term }}">
+                <div class="flex items-center gap-2">
+                  <select name="kind" class="border rounded-lg px-2 py-1 text-sm">
+                    <option value="amount" {% if s.discount and s.discount.kind == 'amount' %}selected{% endif %}>Amount</option>
+                    <option value="percent" {% if s.discount and s.discount.kind == 'percent' %}selected{% endif %}>Percent</option>
+                  </select>
+                  <input type="number" step="0.01" min="0" name="value" value="{{ s.discount.value if s.discount else '' }}" class="border rounded-lg px-2 py-1 text-sm w-24" placeholder="Value">
+                </div>
+                <input type="text" name="reason" placeholder="Reason (optional)" class="border rounded-lg px-2 py-1 text-sm w-full">
+                <div class="flex justify-end">
+                  <button class="bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 text-sm">Save Discount</button>
+                </div>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="px-3 py-6 text-center text-gray-500">
+              <div class="flex flex-col items-center gap-2">
+                <i data-lucide="users" class="w-5 h-5 text-gray-400"></i>
+                <div>No students found for the selected year/term.</div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (window.lucide) { try { window.lucide.createIcons(); } catch (e) {} }
+  (function() {
+    const search = document.getElementById('feeSearch');
+    const tbody = document.getElementById('feeTableBody');
+    if (!search || !tbody) return;
+    const normalize = s => (s || '').toString().toLowerCase();
+    search.addEventListener('input', () => {
+      const q = normalize(search.value);
+      for (const row of tbody.querySelectorAll('tr')) {
+        const name = normalize(row.querySelector('.name-cell')?.textContent);
+        const klass = normalize(row.querySelector('.class-cell')?.textContent);
+        row.style.display = (!q || name.includes(q) || klass.includes(q)) ? '' : 'none';
+      }
+    });
+  })();
+  (function() {
+    const applyBtn = document.getElementById('applyAll');
+    const input = document.getElementById('bulkAmount');
+    if (!applyBtn || !input) return;
+    applyBtn.addEventListener('click', () => {
+      const val = input.value;
+      if (val === '' || Number(val) < 0) return;
+      document.querySelectorAll('input.fee-input').forEach(el => { el.value = val; });
+    });
+  })();
+  (function() {
+    const saveBtn = document.getElementById('saveAll');
+    if (!saveBtn) return;
+    saveBtn.addEventListener('click', async () => {
+      const forms = Array.from(document.querySelectorAll('tbody#feeTableBody form[action$="/fees/set"]'));
+      if (!forms.length) return;
+      saveBtn.disabled = true;
+      const original = saveBtn.textContent;
+      saveBtn.textContent = 'Saving...';
+      try {
+        for (let i = 0; i < forms.length; i++) {
+          const f = forms[i];
+          const data = new FormData(f);
+          await fetch(f.action, { method: 'POST', body: data });
+        }
+        window.location.reload();
+      } catch (e) {
+        alert('Some items failed to save. Please try again.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = original;
+      }
+    });
+  })();
+</script>
+{% endblock %}

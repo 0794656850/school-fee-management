@@ -4,5 +4,11 @@ flask_migrate
 flask_mail
 python-dotenv
 pymysql
+mysql-connector-python
 apscheduler
 reportlab
+requests
+sentence-transformers
+scikit-learn
+numpy
+openai>=1.0.0

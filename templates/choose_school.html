@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container" style="max-width:480px;margin-top:40px;">
+  <h2>Select School</h2>
+  <p class="text-muted">Enter your school name or code. A new school will be created if it doesn’t exist.</p>
+  <form method="post" action="{{ url_for('choose_school', next=next_url) }}">
+    <div class="mb-3">
+      <label for="school_name" class="form-label">School Name</label>
+      <input type="text" class="form-control" id="school_name" name="school_name" placeholder="e.g., Green Valley High">
+    </div>
+    <div class="mb-3">
+      <label for="school_code" class="form-label">School Code (optional)</label>
+      <input type="text" class="form-control" id="school_code" name="school_code" placeholder="letters/numbers only">
+      <div class="form-text">If blank, a code is generated from the name.</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Continue</button>
+  </form>
+</div>
+{% endblock %}
+

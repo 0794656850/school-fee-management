@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice #{{ invoice.id }}</title>
+  <style>
+    :root { --text:#111827; --muted:#6b7280; --border:#e5e7eb; --brand:#111827; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color: var(--text); background:#fff; }
+    .invoice { max-width: 720px; margin: 0 auto; border:1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .brand { font-weight: 800; font-size: 20px; color: var(--brand); }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .top { display:flex; justify-content:space-between; gap: 12px; align-items:flex-start; }
+    .meta { text-align:right; font-size: 13px; }
+    .divider { border-top: 1px dashed var(--border); margin: 12px 0; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; background:#fafafa; }
+    tfoot td { font-weight: 700; }
+    .right { text-align: right; }
+    .actions { margin-top: 12px; text-align: center; }
+    .btn { display:inline-block; padding:8px 12px; border:1px solid var(--border); border-radius:8px; background:#f9fafb; cursor:pointer; }
+    @media print {
+      @page { size:A4; margin: 12mm; }
+      body { padding: 0; }
+      .invoice { border:none; padding:0; }
+      .actions { display:none; }
+    }
+  </style>
+  <script>
+    function doPrint() { window.print(); }
+  </script>
+</head>
+<body>
+  <div class="invoice">
+    <div class="top">
+      <div>
+        <div class="brand">{{ SCHOOL_NAME or BRAND_NAME or 'Invoice' }}</div>
+        <div class="sub">
+          {% if SCHOOL_ADDRESS %}{{ SCHOOL_ADDRESS }}{% endif %}
+          {% if SCHOOL_PHONE %}{% if SCHOOL_ADDRESS %} • {% endif %}{{ SCHOOL_PHONE }}{% endif %}
+          {% if SCHOOL_EMAIL %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE %} • {% endif %}{{ SCHOOL_EMAIL }}{% endif %}
+        </div>
+      </div>
+      <div class="meta">
+        <div><strong>Invoice #</strong> {{ invoice.id }}</div>
+        <div><strong>Year/Term</strong> {{ invoice.year }} / {{ invoice.term }}</div>
+        <div><strong>Due</strong> {{ invoice.due_date or 'N/A' }}</div>
+        <div><strong>Status</strong> {{ invoice.status|capitalize }}</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-size:13px;">
+      <div><strong>Student:</strong> {{ invoice.student_name }}</div>
+      <div><strong>Class:</strong> {{ invoice.class_name or 'N/A' }}</div>
+    </div>
+
+    <div class="divider"></div>
+  <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="right">Amount (KES)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.description }}</td>
+          <td class="right">{{ "{:,.2f}".format(it.amount or 0) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="2" class="right" style="color: var(--muted);">No items</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        {% if penalty_amount and penalty_amount > 0 %}
+        <tr>
+          <td class="right">{{ penalty_label or 'Late Penalty' }}</td>
+          <td class="right">KES {{ "{:,.2f}".format(penalty_amount) }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td class="right">Total</td>
+          <td class="right">KES {{ "{:,.2f}".format((invoice.total or 0) + (penalty_amount or 0)) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    {% if SCHOOL_WEBSITE %}
+    <div class="divider"></div>
+    <div class="sub" style="text-align:center;">{{ SCHOOL_WEBSITE }}</div>
+    {% endif %}
+
+    <div class="actions"><button class="btn" onclick="doPrint()">Print Invoice</button></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,279 @@
+﻿*** Begin Patch
+*** Add File: routes/credit_routes.py
++from __future__ import annotations
++
++from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
++from datetime import datetime
++import json
++import mysql.connector
++from urllib.parse import urlparse
++
++from utils.audit import append_audit_log
++
++
++credit_bp = Blueprint("credit", __name__, url_prefix="/credit")
++
++
++def _db():
++    cfg = current_app.config
++    host = "localhost"; user = "root"; password = ""; database = "school_fee_db"
++    uri = cfg.get("SQLALCHEMY_DATABASE_URI", "")
++    if uri and uri.startswith("mysql"):
++        try:
++            parsed = urlparse(uri)
++            host = parsed.hostname or host
++            user = parsed.username or user
++            password = parsed.password or password
++            if parsed.path and len(parsed.path) > 1:
++                database = parsed.path.lstrip("/")
++        except Exception:
++            pass
++    import os
++    host = os.environ.get("DB_HOST", host)
++    user = os.environ.get("DB_USER", user)
++    password = os.environ.get("DB_PASSWORD", password)
++    database = os.environ.get("DB_NAME", database)
++    return mysql.connector.connect(host=host, user=user, password=password, database=database)
++
++
++def ensure_credit_ops_table(conn) -> None:
++    cur = conn.cursor()
++    cur.execute(
++        """
++        CREATE TABLE IF NOT EXISTS credit_operations (
++            id INT AUTO_INCREMENT PRIMARY KEY,
++            ts DATETIME NOT NULL,
++            actor VARCHAR(100),
++            student_id INT NOT NULL,
++            op_type VARCHAR(32) NOT NULL,
++            amount DECIMAL(12,2) NOT NULL,
++            reference VARCHAR(128),
++            method VARCHAR(64),
++            meta TEXT
++        )
++        """
++    )
++    conn.commit()
++
++
++def _detect_balance_column(cur) -> str:
++    cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
++    has_balance = bool(cur.fetchone())
++    return "balance" if has_balance else "fee_balance"
++
++
++@credit_bp.route("/")
++def credit_home():
++    db = _db()
++    cur = db.cursor(dictionary=True)
++    try:
++        ensure_credit_ops_table(db)
++        cur.execute("SELECT id, name, class_name, COALESCE(credit,0) AS credit FROM students WHERE COALESCE(credit,0) > 0 ORDER BY name")
++        credit_students = cur.fetchall() or []
++    finally:
++        db.close()
++    return render_template("credit.html", credit_students=credit_students)
++
++
++@credit_bp.route("/apply", methods=["POST"])
++def apply_credit():
++    student_id = request.form.get("student_id", type=int)
++    amount = request.form.get("amount", type=float)
++    if not student_id or not amount or amount <= 0:
++        flash("Provide a valid student and amount to apply.", "warning")
++        return redirect(url_for("credit.credit_home"))
++
++    db = _db()
++    cur = db.cursor(dictionary=True)
++    try:
++        col = _detect_balance_column(cur)
++        cur.execute(f"SELECT {col} AS balance, COALESCE(credit,0) AS credit, name FROM students WHERE id=%s", (student_id,))
++        row = cur.fetchone()
++        if not row:
++            flash("Student not found.", "error")
++            return redirect(url_for("credit.credit_home"))
++
++        balance = float(row.get("balance") or 0)
++        credit = float(row.get("credit") or 0)
++        to_apply = min(amount, credit, balance if balance > 0 else amount)
++        if to_apply <= 0:
++            flash("Nothing to apply: either no credit or no outstanding balance.", "info")
++            return redirect(url_for("credit.credit_home"))
++
++        new_balance = max(balance - to_apply, 0)
++        new_credit = max(credit - to_apply, 0)
++        cur.execute(f"UPDATE students SET {col}=%s, credit=%s WHERE id=%s", (new_balance, new_credit, student_id))
++        db.commit()
++
++        try:
++            append_audit_log(
++                db,
++                actor=session.get("username"),
++                action="CREDIT_APPLY",
++                entity_type="student",
++                entity_id=student_id,
++                details={"applied": to_apply, "balance_before": balance, "balance_after": new_balance, "credit_before": credit, "credit_after": new_credit},
++            )
++        except Exception:
++            pass
++
++        ensure_credit_ops_table(db)
++        cur2 = db.cursor()
++        cur2.execute(
++            "INSERT INTO credit_operations (ts, actor, student_id, op_type, amount, reference, method, meta) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
++            (datetime.utcnow(), session.get("username"), student_id, "apply", to_apply, None, None, json.dumps({"source": "manual"})),
++        )
++        db.commit()
++
++        flash(f"Applied KES {to_apply:,.2f} credit for {row.get('name')}.", "success")
++    except Exception as e:
++        db.rollback()
++        flash(f"Error applying credit: {e}", "error")
++    finally:
++        db.close()
++    return redirect(url_for("credit.credit_home"))
++
++
++@credit_bp.route("/refund", methods=["POST"])
++def refund_credit():
++    student_id = request.form.get("student_id", type=int)
++    amount = request.form.get("amount", type=float)
++    method = (request.form.get("method") or "").strip() or None
++    reference = (request.form.get("reference") or "").strip() or None
++    if not student_id or not amount or amount <= 0:
++        flash("Provide a valid student and amount to refund.", "warning")
++        return redirect(url_for("credit.credit_home"))
++
++    db = _db()
++    cur = db.cursor(dictionary=True)
++    try:
++        cur.execute("SELECT COALESCE(credit,0) AS credit, name FROM students WHERE id=%s", (student_id,))
++        row = cur.fetchone()
++        if not row:
++            flash("Student not found.", "error")
++            return redirect(url_for("credit.credit_home"))
++
++        credit = float(row.get("credit") or 0)
++        to_refund = min(amount, credit)
++        if to_refund <= 0:
++            flash("No available credit to refund.", "info")
++            return redirect(url_for("credit.credit_home"))
++
++        new_credit = max(credit - to_refund, 0)
++        cur.execute("UPDATE students SET credit=%s WHERE id=%s", (new_credit, student_id))
++        db.commit()
++
++        try:
++            append_audit_log(
++                db,
++                actor=session.get("username"),
++                action="CREDIT_REFUND",
++                entity_type="student",
++                entity_id=student_id,
++                details={"refunded": to_refund, "credit_before": credit, "credit_after": new_credit, "method": method, "reference": reference},
++            )
++        except Exception:
++            pass
++
++        ensure_credit_ops_table(db)
++        cur2 = db.cursor()
++        cur2.execute(
++            "INSERT INTO credit_operations (ts, actor, student_id, op_type, amount, reference, method, meta) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
++            (datetime.utcnow(), session.get("username"), student_id, "refund", to_refund, reference, method, json.dumps({})),
++        )
++        db.commit()
++
++        flash(f"Refunded KES {to_refund:,.2f} to {row.get('name')}.", "success")
++    except Exception as e:
++        db.rollback()
++        flash(f"Error refunding credit: {e}", "error")
++    finally:
++        db.close()
++    return redirect(url_for("credit.credit_home"))
++
++
++@credit_bp.route("/transfer", methods=["POST"])
++def transfer_credit():
++    from_id = request.form.get("from_student_id", type=int)
++    to_id = request.form.get("to_student_id", type=int)
++    amount = request.form.get("amount", type=float)
++    if not from_id or not to_id or from_id == to_id or not amount or amount <= 0:
++        flash("Provide valid students and transfer amount.", "warning")
++        return redirect(url_for("credit.credit_home"))
++
++    db = _db()
++    cur = db.cursor(dictionary=True)
++    try:
++        col = _detect_balance_column(cur)
++        # Load both students
++        cur.execute("SELECT id, name, COALESCE(credit,0) AS credit FROM students WHERE id=%s", (from_id,))
++        src = cur.fetchone()
++        cur.execute(f"SELECT id, name, COALESCE({col},0) AS balance, COALESCE(credit,0) AS credit FROM students WHERE id=%s", (to_id,))
++        dst = cur.fetchone()
++        if not src or not dst:
++            flash("Student not found.", "error")
++            return redirect(url_for("credit.credit_home"))
++
++        available = float(src.get("credit") or 0)
++        to_transfer = min(amount, available)
++        if to_transfer <= 0:
++            flash("Source student has no available credit.", "info")
++            return redirect(url_for("credit.credit_home"))
++
++        # Apply to destination's balance first, surplus becomes credit.
++        dst_balance = float(dst.get("balance") or 0)
++        apply_to_balance = min(dst_balance, to_transfer)
++        leftover = to_transfer - apply_to_balance
++        new_dst_balance = max(dst_balance - apply_to_balance, 0)
++        new_dst_credit = float(dst.get("credit") or 0) + leftover
++
++        new_src_credit = max(available - to_transfer, 0)
++
++        # Update both students atomically
++        cur.execute("UPDATE students SET credit=%s WHERE id=%s", (new_src_credit, from_id))
++        cur.execute(f"UPDATE students SET {col}=%s, credit=%s WHERE id=%s", (new_dst_balance, new_dst_credit, to_id))
++        db.commit()
++
++        # Audit
++        try:
++            append_audit_log(
++                db,
++                actor=session.get("username"),
++                action="CREDIT_TRANSFER",
++                entity_type="student",
++                entity_id=from_id,
++                details={"to": to_id, "transferred": to_transfer, "src_credit_before": available, "src_credit_after": new_src_credit},
++            )
++            append_audit_log(
++                db,
++                actor=session.get("username"),
++                action="CREDIT_RECEIVE",
++                entity_type="student",
++                entity_id=to_id,
++                details={"from": from_id, "applied_to_balance": apply_to_balance, "added_to_credit": leftover, "new_balance": new_dst_balance, "new_credit": new_dst_credit},
++            )
++        except Exception:
++            pass
++
++        ensure_credit_ops_table(db)
++        cur2 = db.cursor()
++        meta = {"to_id": to_id, "applied_to_balance": apply_to_balance, "added_to_credit": leftover}
++        cur2.execute(
++            "INSERT INTO credit_operations (ts, actor, student_id, op_type, amount, reference, method, meta) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
++            (datetime.utcnow(), session.get("username"), from_id, "transfer", to_transfer, None, None, json.dumps(meta)),
++        )
++        db.commit()
++
++        flash(
++            f"Transferred KES {to_transfer:,.2f} from {src.get('name')} to {dst.get('name')}. "
++            f"Applied {apply_to_balance:,.2f} to balance; {leftover:,.2f} as credit.",
++            "success",
++        )
++    except Exception as e:
++        db.rollback()
++        flash(f"Error transferring credit: {e}", "error")
++    finally:
++        db.close()
++    return redirect(url_for("credit.credit_home"))
++
+*** End Patch

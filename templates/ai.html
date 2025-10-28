@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}AI Assistant - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}AI Assistant{% endblock %}
+
+{% block content %}
+{# Always render the assistant. If no API key, backend uses heuristic mode. #}
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <aside class="md:col-span-1 bg-white border rounded-2xl shadow p-3 flex flex-col">
+    <div class="flex items-center justify-between mb-2">
+      <div class="font-semibold">Chats</div>
+      <button id="newChat" class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"><i data-lucide="plus"></i> New</button>
+    </div>
+    <div id="chats" class="flex-1 overflow-y-auto space-y-1 text-sm"></div>
+  </aside>
+  <section class="md:col-span-3 bg-white border rounded-2xl shadow flex flex-col">
+    <div class="flex items-center justify-between p-3 border-b">
+      <div id="chatTitle" class="font-medium">Select or start a chat</div>
+      <button id="deleteChat" class="hidden inline-flex items-center gap-1 px-2 py-1 text-xs bg-rose-50 text-rose-700 border border-rose-200 rounded"><i data-lucide='trash-2'></i> Delete</button>
+    </div>
+    <div id="log" class="h-96 overflow-y-auto p-4 space-y-3 text-sm"></div>
+    <div class="border-t p-3 flex items-center gap-2">
+      <input id="msg" type="text" class="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring" placeholder="Type your question..." />
+      <button id="send" class="btn-brand px-4 py-2 rounded-lg text-white">Send</button>
+    </div>
+  </section>
+</div>
+
+<div class="mt-3 text-xs text-gray-500">
+  {% if not settings.get('OPENAI_API_KEY') and not settings.get('AZURE_OPENAI_API_KEY') %}
+    AI is in heuristic mode.
+  {% else %}
+  {% endif %}
+</div>
+
+<script>
+  const chatsEl = document.getElementById('chats');
+  const log = document.getElementById('log');
+  const msg = document.getElementById('msg');
+  const send = document.getElementById('send');
+  const newBtn = document.getElementById('newChat');
+  const delBtn = document.getElementById('deleteChat');
+  const chatTitle = document.getElementById('chatTitle');
+  let currentChatId = null;
+
+  function add(role, text) {
+    const wrap = document.createElement('div');
+    wrap.className = role === 'user' ? 'text-right' : 'text-left';
+    const bubble = document.createElement('div');
+    bubble.className = (role === 'user')
+      ? 'inline-block bg-indigo-600 text-white rounded-lg px-3 py-2'
+      : 'inline-block bg-gray-100 text-gray-800 rounded-lg px-3 py-2';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function renderChats(items){
+    chatsEl.innerHTML = '';
+    for (const c of (items||[])){
+      const btn = document.createElement('button');
+      btn.className = 'w-full text-left px-2 py-1 rounded hover:bg-gray-100 ' + (currentChatId===c.id? 'bg-gray-100' : '');
+      btn.textContent = c.title || ('Chat #' + c.id);
+      btn.onclick = () => selectChat(c.id, c.title);
+      chatsEl.appendChild(btn);
+    }
+  }
+
+  async function loadChats(){
+    const r = await fetch('/ai/api/chats');
+    const j = await r.json();
+    if (j.ok) renderChats(j.chats);
+  }
+
+  async function selectChat(id, title){
+    currentChatId = id; chatTitle.textContent = title || ('Chat #' + id);
+    delBtn.classList.remove('hidden');
+    log.innerHTML = '';
+    const r = await fetch('/ai/api/messages?chat_id=' + id);
+    const j = await r.json();
+    if (j.ok){
+      for (const m of j.messages){ add(m.role, m.content); }
+    }
+    if (window.lucide) try{ lucide.createIcons(); }catch(e){}
+  }
+
+  async function ask(q) {
+    add('user', q);
+    msg.value = '';
+    try {
+      const r = await fetch('/ai/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:q, chat_id: currentChatId})});
+      const j = await r.json();
+      if (j.chat_id && !currentChatId){ currentChatId = j.chat_id; loadChats(); delBtn.classList.remove('hidden'); chatTitle.textContent = j.title || 'Chat'; }
+      add('assistant', j.answer || 'No answer');
+    } catch (e) { add('assistant', 'Error contacting AI.'); }
+  }
+
+  newBtn.addEventListener('click', async () => {
+    const provided = prompt('Chat title? (optional)') || undefined;
+    const r = await fetch('/ai/api/new_chat', {method:'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({title: provided})});
+    const j = await r.json();
+    if (j.ok){ currentChatId = j.chat_id; await loadChats(); delBtn.classList.remove('hidden'); chatTitle.textContent = j.title || (provided || 'Chat'); log.innerHTML = ''; }
+  });
+  delBtn.addEventListener('click', async () => {
+    if (!currentChatId) return;
+    if (!confirm('Delete this chat?')) return;
+    await fetch('/ai/api/chats/' + currentChatId, { method: 'DELETE' });
+    currentChatId = null; chatTitle.textContent = 'Select or start a chat'; log.innerHTML = ''; delBtn.classList.add('hidden');
+    await loadChats();
+  });
+  send.addEventListener('click', () => { if (msg.value.trim()) ask(msg.value.trim()); });
+  msg.addEventListener('keydown', (e) => { if (e.key === 'Enter' && msg.value.trim()) ask(msg.value.trim()); });
+  if (window.lucide) try{ lucide.createIcons(); }catch(e){}
+  loadChats();
+</script>
+{% endblock %}

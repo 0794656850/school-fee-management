@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}School Profile - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}School Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+  <h3 class="text-lg font-semibold mb-1">School Information</h3>
+  <p class="text-sm text-gray-600 mb-2">Enter once. Used across the app and included on printed documents.</p>
+  <div class="mb-4 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">
+    <i data-lucide="hash"></i>
+    <span>School Code:</span>
+    <code class="font-semibold">{{ session.get('school_code') }}</code>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">School Name</label>
+        <input type="text" name="APP_NAME" value="{{ values.APP_NAME }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., Greenfield Academy" required>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Brand Name (optional)</label>
+        <input type="text" name="BRAND_NAME" value="{{ values.BRAND_NAME }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Shown in sidebar/header">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Portal Title</label>
+        <input type="text" name="PORTAL_TITLE" value="{{ values.PORTAL_TITLE or 'Fee Management portal' }}" class="w-full border rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Phone</label>
+        <input type="text" name="SCHOOL_PHONE" value="{{ values.SCHOOL_PHONE }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., +254700000000">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Email</label>
+        <input type="email" name="SCHOOL_EMAIL" value="{{ values.SCHOOL_EMAIL }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., info@school.ac.ke">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Website</label>
+        <input type="text" name="SCHOOL_WEBSITE" value="{{ values.SCHOOL_WEBSITE }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="https://www.school.ac.ke">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-600 mb-1">Address / Location</label>
+      <textarea name="SCHOOL_ADDRESS" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., P.O. Box 12345-00100, Nairobi">{{ values.SCHOOL_ADDRESS }}</textarea>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">School Logo</label>
+        <input type="file" name="SCHOOL_LOGO" accept="image/*" class="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
+        <p class="text-xs text-gray-500 mt-1">PNG/JPG/GIF/WebP. Appears in sidebar, header, and printables.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        {% if values.SCHOOL_LOGO_URL %}
+          <img src="{{ url_for('static', filename=values.SCHOOL_LOGO_URL) }}" alt="Logo preview" class="h-12 w-12 rounded-md border"/>
+          <div class="text-xs text-gray-500">Current logo</div>
+        {% else %}
+          <div class="text-xs text-gray-400">No logo uploaded</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Late Penalty Kind</label>
+        <select name="LATE_PENALTY_KIND" class="w-full border rounded-lg px-3 py-2 text-sm">
+          <option value="">None</option>
+          <option value="percent" {% if values.LATE_PENALTY_KIND=='percent' %}selected{% endif %}>Percent (%)</option>
+          <option value="flat" {% if values.LATE_PENALTY_KIND=='flat' %}selected{% endif %}>Flat (KES)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Late Penalty Value</label>
+        <input type="number" step="0.01" name="LATE_PENALTY_VALUE" value="{{ values.LATE_PENALTY_VALUE or '' }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., 5 (for 5%) or 200" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Grace Period (days)</label>
+        <input type="number" name="LATE_PENALTY_GRACE_DAYS" value="{{ values.LATE_PENALTY_GRACE_DAYS or '' }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., 3" />
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <a href="{{ url_for('admin.dashboard') }}" class="px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</a>
+      <button class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+        <i data-lucide="save"></i>
+        <span>Save Profile</span>
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
