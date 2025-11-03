@@ -173,3 +173,39 @@ No license specified. If you intend to open-source, add a suitable license file.
 - Filter by class, search term, and minimum balance.
 - Click "Log Action" to record calls/SMS/emails/visits, promises-to-pay, and follow-up dates.
 - Export the current defaulters list as CSV.
+
+---
+
+## Security & Secrets
+- Do not commit real secrets. Keep secrets in environment variables or `.env` (which is gitignored).
+- Recommended production secrets:
+  - `SECRET_KEY` (Flask session/signing key)
+  - `LICENSE_SECRET` (license signing/verification)
+  - Database credentials or `SQLALCHEMY_DATABASE_URI`
+  - Daraja (`DARAJA_*`) if using STK Push
+  - Gmail OAuth (`credentials.json`, `GMAIL_*`) if using reminders
+  - `EMAIL_INBOUND_SECRET` if using inbound email approvals
+- GitHub secret scanning is enabled via `.github/workflows/secret-scan.yml` (gitleaks).
+
+## Media via Git LFS
+- Large media in `static/media/` is tracked with Git LFS via `.gitattributes`.
+- Install once: `git lfs install`.
+- Add the promo video at `static/media/Stop_Guessing_Fees__Lovato_Tech_Made_Easy.mp4` and commit normally.
+- See `static/media/README.md` for step-by-step instructions.
+
+## AI Providers (Options)
+- Vertex AI (recommended): set `VERTEX_PROJECT_ID`, optional `VERTEX_LOCATION`, and `GOOGLE_APPLICATION_CREDENTIALS` to a service account JSON.
+- Gemini API key (no service account): set `GOOGLE_API_KEY` and use `/gemini/chat` or configure UI to use Gemini.
+- OpenAI/Azure (optional): `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` are supported in the AI utility if you extend usage.
+- Build/search the local code index with `scripts/ai_index.py` and query with `scripts/ai_ask.py`.
+
+## CI/CD
+- Secret scan on pushes/PRs: `.github/workflows/secret-scan.yml` (gitleaks).
+- Deployment examples in `deploy/README_GitHub_Actions.md` and `deploy/README_Docker_VPS.md`.
+
+## Production Checklist
+- Set `SECRET_KEY`, `LICENSE_SECRET`, DB credentials/URI; disable `OAUTHLIB_INSECURE_TRANSPORT` in prod.
+- Use HTTPS; set `PREFERRED_URL_SCHEME=https` and ensure secure cookies.
+- Configure Daraja for `production` and update callback URL.
+- Configure Gmail OAuth redirect URIs for your domain; place client JSON securely.
+- Change default passwords in Admin → Settings.
