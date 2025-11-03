@@ -143,16 +143,16 @@ Drop your screenshots into `docs/screenshots/` using the filenames below and the
 
 | View | Image |
 | --- | --- |
-| Dashboard | ![Dashboard](docs/screenshots/dashboard.png) |
-| Students | ![Students](docs/screenshots/students.png) |
-| Add Payment | ![Payments](docs/screenshots/payments.png) |
-| Analytics | ![Analytics](docs/screenshots/analytics.png) |
-| Credit Ops | ![Credit Ops](docs/screenshots/credit-ops.png) |
-| Terms | ![Terms](docs/screenshots/terms.png) |
-| Invoices | ![Invoices](docs/screenshots/invoices.png) |
-| School Profile | ![School Profile](docs/screenshots/school-profile.png) |
-| Admin Security | ![Admin Security](docs/screenshots/admin-security.png) |
-| AI Assistant | ![AI Assistant](docs/screenshots/ai-assistant.png) |
+| Dashboard | <picture><source srcset="docs/screenshots/dashboard.png"><img alt="Dashboard" src="docs/screenshots/dashboard.svg" width="320"></picture> |
+| Students | <picture><source srcset="docs/screenshots/students.png"><img alt="Students" src="docs/screenshots/students.svg" width="320"></picture> |
+| Add Payment | <picture><source srcset="docs/screenshots/payments.png"><img alt="Payments" src="docs/screenshots/payments.svg" width="320"></picture> |
+| Analytics | <picture><source srcset="docs/screenshots/analytics.png"><img alt="Analytics" src="docs/screenshots/analytics.svg" width="320"></picture> |
+| Credit Ops | <picture><source srcset="docs/screenshots/credit-ops.png"><img alt="Credit Ops" src="docs/screenshots/credit-ops.svg" width="320"></picture> |
+| Terms | <picture><source srcset="docs/screenshots/terms.png"><img alt="Terms" src="docs/screenshots/terms.svg" width="320"></picture> |
+| Invoices | <picture><source srcset="docs/screenshots/invoices.png"><img alt="Invoices" src="docs/screenshots/invoices.svg" width="320"></picture> |
+| School Profile | <picture><source srcset="docs/screenshots/school-profile.png"><img alt="School Profile" src="docs/screenshots/school-profile.svg" width="320"></picture> |
+| Admin Security | <picture><source srcset="docs/screenshots/admin-security.png"><img alt="Admin Security" src="docs/screenshots/admin-security.svg" width="320"></picture> |
+| AI Assistant | <picture><source srcset="docs/screenshots/ai-assistant.png"><img alt="AI Assistant" src="docs/screenshots/ai-assistant.svg" width="320"></picture> |
 
 ## Development Tips
 - Schema safety: the app runs idempotent "ensure_*" migrations at startup to add missing columns/tables.
