@@ -31,6 +31,25 @@
              class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
     </div>
 
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Email (for reminders)</label>
+      <input type="email" name="email" value="{{ student.email or student.parent_email }}"
+             class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phone (Student)</label>
+        <input type="text" name="phone" value="{{ student.phone }}"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Guardian Phone</label>
+        <input type="text" name="parent_phone" value="{{ student.parent_phone }}"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+    </div>
+
     <div class="flex justify-between">
       <a href="{{ url_for('students') }}" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Cancel</a>
       <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Update</button>

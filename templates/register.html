@@ -8,10 +8,19 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  <!-- Overlay transitions removed to keep clean slide only -->
   <style>
-    :root { --brand-600:#4f46e5; --bg-app:linear-gradient(135deg,#eef2ff,#f8fafc); --surface:rgba(255,255,255,.88); --text:#0f172a; --border:#e5e7eb; }
+    :root { --brand-600:#4f46e5; --bg-app:#ffffff; --surface:rgba(255,255,255,.88); --text:#0f172a; --border:#e5e7eb; }
     body { font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text); }
-    .glass { background: var(--surface); backdrop-filter: blur(16px); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
+    .glass { background: #ffffff; box-shadow: 0 20px 50px rgba(79,70,229,.15); }
+    /* Entry + exit transitions (mirror login) */
+    .card-enter { opacity: 0; transform: translateY(16px) scale(.985); }
+    .card-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: transform .55s cubic-bezier(.2,.8,.2,1), opacity .55s ease; }
+    .card-slide-in-right { opacity: 0; transform: translateX(28px); }
+    .card-slide-in-right.card-enter-active { opacity: 1; transform: translateX(0); }
+    .slide-out-right { transform: translateX(48px) scale(.985); opacity: 0; transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .42s ease; }
+    .btn-primary { background: linear-gradient(90deg,#0f4460,#6b4b4b,#f97316); background-size: 200% 100%; transition: background-position .5s ease, transform .2s ease; }
+    .btn-primary:hover { background-position: 100% 0; transform: translateY(-1px); }
   </style>
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -23,14 +32,14 @@
   <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
   <div class="max-w-3xl w-full">
     <div class="text-center mb-6">
-      <a href="{{ url_for('auth.login') }}" class="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
+      <a id="toLogin" href="{{ url_for('auth.login') }}" class="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
         <i data-lucide="arrow-left"></i>
         Back to Login
       </a>
       <h1 class="text-2xl font-bold mt-2">Create a New School Profile</h1>
       <p class="text-sm text-gray-600">After registration, you will go straight into the system.</p>
     </div>
-    <div class="glass rounded-2xl p-6 border border-gray-100">
+    <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter card-slide-in-right">
       <form method="post" action="{{ url_for('auth.register_school') }}" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700">School Name</label>
@@ -80,13 +89,18 @@
           <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
           <input name="confirm_password" type="password" placeholder="Confirm password" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
         </div>
-        <button class="mt-2 w-full py-2.5 rounded-xl text-white font-semibold transition" style="background:linear-gradient(90deg,#0f4460,#6b4b4b,#f97316)">Register School</button>
+        <button class="mt-2 w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary">Register School</button>
       </form>
     </div>
     <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 LOVATO.TECH - Smart School Fee Management Platform</div>
   </div>
   <script>
     lucide.createIcons();
+    // Card entry animation (slide in from right for a sense of flow)
+    const card = document.getElementById('authCard');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => card.classList.add('card-enter-active'));
+    });
     const flash = window.__flash__ || [];
     const box = document.getElementById('flash');
     const styles = { success: 'bg-green-50 text-green-700 border-green-200', error: 'bg-red-50 text-red-700 border-red-200', info: 'bg-blue-50 text-blue-700 border-blue-200', warning: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
@@ -96,6 +110,20 @@
       div.textContent = msg;
       box.appendChild(div);
     });
+    // Animated back to login
+    const back = document.getElementById('toLogin');
+    if (back) {
+      back.addEventListener('click', (e) => {
+        e.preventDefault();
+        const href = back.getAttribute('href');
+        card.classList.add('slide-out-right');
+        const done = () => { window.location.assign(href); };
+        let fired = false;
+        card.addEventListener('transitionend', () => { if (!fired) { fired = true; done(); } }, { once: true });
+        setTimeout(() => { if (!fired) done(); }, 480);
+      });
+    }
   </script>
+  <!-- Overlay transitions removed -->
 </body>
 </html>

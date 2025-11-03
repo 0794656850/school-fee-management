@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Fee Reminders - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}Send Fee Reminders{% endblock %}
 {% block content %}
@@ -14,7 +14,7 @@
           </span>
           <h3 class="text-xl font-semibold tracking-tight">Fee Reminder Center</h3>
         </div>
-        <p class="mt-2 text-white/90 text-sm">Reach out to guardians and students with a polished WhatsApp message. Use dynamic placeholders to personalize at scale.</p>
+        <p class="mt-2 text-white/90 text-sm">Reach out to guardians and students with a polished email. Use dynamic placeholders to personalize at scale.</p>
       </div>
       <div class="hidden sm:flex items-center gap-4">
         <div class="text-right">
@@ -28,20 +28,43 @@
         </div>
         <div class="h-8 w-px bg-white/30"></div>
         <div class="text-right">
-          <div class="text-xs text-white/80">WhatsApp</div>
+          <div class="text-xs text-white/80">Email</div>
           <div class="text-lg font-bold">
-            {% set with_phone = students|selectattr('phone')|list %}
-            {{ with_phone|length }} ready
+            {% set with_email = students|selectattr('email')|list %}
+            {{ with_email|length }} ready
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  {% if (plan_status and plan_status.plan_code=='FREE') %}
+    <div class="p-6">
+      {% include '_upgrade_banner.html' %}
+    </div>
+  {% endif %}
+
   <!-- Content -->
   <div class="p-6 space-y-6">
+      <div class="flex items-center justify-end gap-2">
+        {% if gmail_connected %}
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-sm text-green-700">
+            <i data-lucide="check-circle"></i>
+            Gmail Connected
+          </span>
+        {% else %}
+          <a href="/gmail/authorize" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-sm text-indigo-700">
+            <i data-lucide="key"></i>
+            Authorize Gmail
+          </a>
+        {% endif %}
+        <button id="testEmailBtn" type="button" class="premium-only inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm" title="Upgrade to Pro to access advanced email tools">
+          <i data-lucide="mail"></i>
+          Send Test Email
+        </button>
+      </div>
     <!-- Filters: Class and Minimum Balance -->
-    <form method="get" class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+    <form method="get" class="flex flex-col lg:flex-row gap-3 items-start lg:items-end">
       <div>
         <label class="block text-xs text-gray-600 mb-1">Class</label>
         <select name="class" class="rounded-lg border-gray-300 text-sm min-w-[200px]">
@@ -55,6 +78,16 @@
         <label class="block text-xs text-gray-600 mb-1">Minimum Balance (KES)</label>
         <input type="number" name="min_balance" step="0.01" min="0" value="{{ min_balance or 0 }}" class="rounded-lg border-gray-300 text-sm w-40">
       </div>
+      <div class="flex-1 min-w-[240px]">
+        <label class="block text-xs text-gray-600 mb-1">Search</label>
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400"></i>
+          <input type="text" name="q" value="{{ q or '' }}" placeholder="Search name, ID, admission no, email" class="w-full pl-9 rounded-lg border-gray-300 text-sm" />
+          {% if q %}
+          <a href="{{ url_for('reminders.reminders_home') }}?class={{ selected_class or '' }}&min_balance={{ min_balance or 0 }}" class="absolute right-3 top-2.5 text-xs text-gray-500 hover:text-gray-700">Clear</a>
+          {% endif %}
+        </div>
+      </div>
       <div>
         <button class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
           <i data-lucide="filter"></i>
@@ -62,12 +95,7 @@
         </button>
       </div>
     </form>
-    {% if not whatsapp_enabled %}
-      <div class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 flex items-start gap-3">
-        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-        <div class="text-sm">WhatsApp is not configured. Set WHATSAPP_* in environment to enable sending.</div>
-      </div>
-    {% endif %}
+    
 
     <!-- Message Designer -->
     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -80,7 +108,9 @@
           <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{school_name}</span>
         </div>
       </div>
-      {{ default_message_template or 'Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.' }}
+      <textarea id="messageTemplate" rows="4"
+                class="w-full mt-1 rounded-lg border border-gray-300 bg-white p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                placeholder="Type the message template here...">{{ default_message_template or 'Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.' }}</textarea>
       <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
         <div>Use placeholders above to personalize messages.</div>
         <div id="charCount">0 characters</div>
@@ -89,12 +119,12 @@
 
     <!-- Bulk Action -->
     <form id="sendAllForm" action="{{ url_for('reminders.send_all_reminders') }}" method="post" class="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-3">
-      <div class="text-sm text-gray-600">Send to all contacts with a phone number using the message above.</div>
+      <div class="text-sm text-gray-600">Send to all contacts with an email using the message above.</div>
       <div class="flex items-center gap-2">
         <input type="hidden" name="message" id="sendAllMessage" />
         <button type="submit" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
-          <i data-lucide="send" class="w-4 h-4"></i>
-          <span>Send All via WhatsApp</span>
+          <i data-lucide="mail" class="w-4 h-4"></i>
+          <span>Send All Via Email</span>
         </button>
       </div>
     </form>
@@ -109,7 +139,7 @@
             <th class="px-4 py-3 text-left">Student</th>
             <th class="px-4 py-3 text-left">Class</th>
             <th class="px-4 py-3 text-left">Balance</th>
-            <th class="px-4 py-3 text-left">Phone</th>
+            <th class="px-4 py-3 text-left">Email</th>
             <th class="px-4 py-3 text-center">Action</th>
           </tr>
           </thead>
@@ -139,20 +169,20 @@
                 <span class="text-rose-600">KES {{ "{:,.2f}".format(s.balance or 0) }}</span>
               </td>
               <td class="px-4 py-3">
-                {% if s.phone %}
-                  <span class="inline-flex items-center gap-1 text-gray-700"><i data-lucide="phone" class="w-4 h-4"></i>{{ s.phone }}</span>
+                {% if s.email %}
+                  <span class="inline-flex items-center gap-1 text-gray-700"><i data-lucide="mail" class="w-4 h-4"></i>{{ s.email }}</span>
                 {% else %}
                   <span class="text-gray-400">N/A</span>
                 {% endif %}
               </td>
               <td class="px-4 py-3 text-center">
-                {% if s.balance > 0 and s.phone %}
-                  <button type="button"
-                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                          onclick="openSendModal({{ s.id }}, '{{ s.name|replace("'","\\'") }}', '{{ s.class_name|default('')|replace("'","\\'") }}', {{ (s.balance or 0)|float }}, '{{ s.phone|default('')|replace("'","\\'") }}')">
+                {% if s.balance > 0 and s.email %}
+                  <a href="{{ url_for('reminders.send_email_reminder', student_id=s.id) }}"
+                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                     onclick="return openSendModal({{ s.id }}, '{{ s.name|replace("'","\\'") }}', '{{ s.class_name|default('')|replace("'","\\'") }}', {{ (s.balance or 0)|float }}, '{{ s.email|default('')|replace("'","\\'") }}')">
                     <i data-lucide="send" class="w-4 h-4"></i>
                     <span>Send</span>
-                  </button>
+                  </a>
                 {% else %}
                   <span class="text-gray-400 text-xs">No action</span>
                 {% endif %}
@@ -175,7 +205,7 @@
   <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeSendModal()"></div>
   <div class="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100">
     <div class="flex items-center justify-between mb-4">
-      <h4 class="text-base font-semibold">Send WhatsApp Reminder</h4>
+      <h4 class="text-base font-semibold">Send Email Reminder</h4>
       <button class="text-gray-400 hover:text-gray-600" type="button" onclick="closeSendModal()"><i data-lucide="x"></i></button>
     </div>
     <div>
@@ -188,7 +218,7 @@
         <button type="button" class="px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50" onclick="closeSendModal()">Cancel</button>
         <button type="submit" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
           <i data-lucide="send"></i>
-          <span>Send WhatsApp</span>
+          <span>Send Email</span>
         </button>
       </div>
     </form>
@@ -197,7 +227,7 @@
 
 <script>
   function fmt(num) { try { return Number(num).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); } catch { return num; } }
-  function openSendModal(id, name, className, balance, phone) {
+  function openSendModal(id, name, className, balance, email) {
     const tpl = document.getElementById('messageTemplate').value || '';
     const msg = tpl
       .replaceAll('{name}', name)
@@ -206,10 +236,12 @@
     document.getElementById('preview').textContent = msg;
     document.getElementById('sendMessage').value = msg;
     const form = document.getElementById('sendForm');
-    form.action = `{{ url_for('reminders.send_sms_reminder', student_id=0) }}`.replace('/0', `/${id}`);
+    form.action = `{{ url_for('reminders.send_email_reminder', student_id=0) }}`.replace('/0', `/${id}`);
     const modal = document.getElementById('sendModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    // Prevent default navigation when used on an <a> fallback
+    return false;
   }
   function closeSendModal() {
     const modal = document.getElementById('sendModal');
@@ -229,7 +261,19 @@
   });
   // Icons
   if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+    // Test email helper
+  document.getElementById('testEmailBtn')?.addEventListener('click', async () => {
+    const to = prompt('Send test email to: (leave blank to use SCHOOL_EMAIL/MAIL_SENDER)') || undefined;
+    try {
+      const r = await fetch('/reminders/test_email', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to})});
+      const j = await r.json();
+      if (j.ok) alert('Test email sent via: ' + j.via);
+      else alert('Test failed: ' + (j.error || 'Unknown error'));
+    } catch (e) { alert('Test failed.'); }
+  });
   
 </script>
 {% endblock %}
+
+
 

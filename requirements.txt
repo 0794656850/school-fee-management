@@ -11,4 +11,12 @@ requests
 sentence-transformers
 scikit-learn
 numpy
-openai>=1.0.0
+google-cloud-aiplatform>=1.51.0
+google-api-python-client
+google-auth
+google-auth-oauthlib
+flask-limiter
+transformers
+torch
+sentencepiece
+safetensors

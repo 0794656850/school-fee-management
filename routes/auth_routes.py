@@ -10,6 +10,7 @@ from utils.users import (
     get_user_by_username,
     get_user_school_role,
 )
+from extensions import limiter
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -21,6 +22,7 @@ def register():
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit('5 per minute')
 def login():
     """Login now accepts School Name/Code and auto-creates schools if missing.
 
@@ -66,6 +68,7 @@ def login():
 
         username = (request.form.get('username') or '').strip()
         password = (request.form.get('password') or '').strip()
+        remember = True if request.form.get('remember') in ('on','1','true','yes') else False
         next_url = request.args.get('next') or request.form.get('next')
 
         # First try: user directory (multi-user) if present
@@ -87,6 +90,11 @@ def login():
                         session['user_id'] = int(user['id'])
                         session['username'] = user['username']
                         session['role'] = role
+                        try:
+                            # Respect "Remember me" to persist session cookie
+                            session.permanent = remember
+                        except Exception:
+                            pass
                         # Record school's first admin login timestamp if not already set
                         try:
                             cur = db.cursor()
@@ -111,9 +119,6 @@ def login():
                             pass
                         flash('Welcome back!', 'success')
                         db.close()
-                        if created_school:
-                            flash('First-time setup: please change your default username/password.', 'info')
-                            return redirect(url_for('admin.access_settings'))
                         return redirect(next_url or url_for('dashboard'))
         except Exception:
             try:
@@ -138,6 +143,10 @@ def login():
             session['user_logged_in'] = True
             session['username'] = (username or cfg_user)
             session['role'] = 'owner'
+            try:
+                session.permanent = remember
+            except Exception:
+                pass
             flash('Welcome back!', 'success')
             # Silent upgrade: if stored password is plain, replace with hash per-school
             try:
@@ -155,9 +164,6 @@ def login():
                 _db.close()
             except Exception:
                 pass
-            if created_school:
-                flash('First-time setup: please change your default username/password.', 'info')
-                return redirect(url_for('admin.access_settings'))
             return redirect(next_url or url_for('dashboard'))
         flash('Invalid credentials.', 'error')
         return redirect(url_for('auth.login', next=next_url))

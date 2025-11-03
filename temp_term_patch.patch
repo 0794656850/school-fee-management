@@ -1,5 +1,10 @@
 *** Begin Patch
-*** Update File: routes/term_routes.py
+*** Update File: app.py
 @@
- term_bp = Blueprint("terms", __name__, url_prefix="/terms")
+-            try:
+-            ensure_students_email_columns(_c)
+-        except Exception:
++            try:
++                ensure_students_email_columns(_c)
++        except Exception:
 *** End Patch

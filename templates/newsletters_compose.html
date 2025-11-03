@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Compose Newsletter - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Compose Newsletter / Memo{% endblock %}
+{% block content %}
+
+<div class="rounded-2xl shadow-sm border border-gray-100 overflow-hidden bg-white">
+  <div class="bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 text-white px-6 py-6">
+    <div class="flex items-center gap-3">
+      <span class="inline-flex p-2.5 rounded-xl bg-white/20 ring-1 ring-white/30 shadow">
+        <i data-lucide="pen-square" class="w-5 h-5 text-white"></i>
+      </span>
+      <div>
+        <h3 class="text-xl font-semibold tracking-tight">Compose</h3>
+        <p class="mt-1 text-white/90 text-sm">Create content, choose recipients, and send via Gmail.</p>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" class="p-6 space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Category</label>
+        <select name="category" class="rounded-lg border-gray-300 text-sm w-full">
+          <option value="newsletter" {% if (category or 'newsletter')=='newsletter' %}selected{% endif %}>Newsletter</option>
+          <option value="memo" {% if category=='memo' %}selected{% endif %}>Memo</option>
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-xs text-gray-600 mb-1">Title</label>
+        <input name="title" value="{{ title or '' }}" class="rounded-lg border-gray-300 text-sm w-full" placeholder="e.g., Opening Day Updates" required />
+      </div>
+      <div class="md:col-span-3">
+        <label class="block text-xs text-gray-600 mb-1">Email Subject</label>
+        <input name="subject" value="{{ subject or '' }}" class="rounded-lg border-gray-300 text-sm w-full" placeholder="Defaults to Title if empty" />
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <label class="block text-xs text-gray-600">Audience</label>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label class="inline-flex items-center gap-2 p-3 rounded-lg border border-gray-200">
+          <input type="radio" name="audience_type" value="all" {% if (audience_type or 'all')=='all' %}checked{% endif %}>
+          <span class="text-sm">All students with email</span>
+        </label>
+        <label class="inline-flex items-center gap-2 p-3 rounded-lg border border-gray-200">
+          <input type="radio" name="audience_type" value="class" {% if audience_type=='class' %}checked{% endif %}>
+          <span class="text-sm">Specific class</span>
+        </label>
+        <label class="inline-flex items-center gap-2 p-3 rounded-lg border border-gray-200">
+          <input type="radio" name="audience_type" value="emails" {% if audience_type=='emails' %}checked{% endif %}>
+          <span class="text-sm">Custom email list</span>
+        </label>
+      </div>
+      <input name="audience_value" value="{{ audience_value or '' }}" class="rounded-lg border-gray-300 text-sm w-full" placeholder="If 'Specific class', enter class name. If 'Custom list', enter emails separated by comma/spaces." />
+    </div>
+
+    <div>
+      <label class="block text-xs text-gray-600 mb-2">Content</label>
+      <div id="editor" contenteditable="true" class="min-h-[240px] rounded-lg border border-gray-300 p-3 text-sm bg-white" style="outline: none;">{% if html %}{{ html|safe }}{% else %}<p>Write your content here...</p>{% endif %}</div>
+      <input type="hidden" name="html" id="htmlInput" />
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg" onclick="document.getElementById('htmlInput').value = document.getElementById('editor').innerHTML;">
+        <i data-lucide="save"></i>
+        <span>Save Draft</span>
+      </button>
+      <button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white" onclick="document.getElementById('htmlInput').value = document.getElementById('editor').innerHTML; document.getElementById('sendFlag').value='1';">
+        <i data-lucide="send"></i>
+        <span>Save & Send Now</span>
+      </button>
+      <input type="hidden" name="send_now" id="sendFlag" value="0" />
+    </div>
+  </form>
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => { if (window.lucide) lucide.createIcons(); });
+</script>
+
+{% endblock %}
+

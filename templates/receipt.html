@@ -20,7 +20,7 @@
     body {
       margin: 0; padding: 20px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
       color: var(--text);
-      background: radial-gradient(120% 120% at 10% 0%, #eef2ff 0%, #f8fafc 40%, #e0f7fa 100%);
+      background: #ffffff;
     }
     .receipt {
       max-width: 560px;
@@ -34,17 +34,8 @@
       position: relative;
       isolation: isolate;
     }
-    /* Soft watermark */
-    .receipt::after {
-      content: "";
-      position: absolute;
-      inset: auto -20% -20% auto;
-      width: 240px; height: 240px;
-      background: radial-gradient(closest-side, rgba(79,70,229,.08), transparent 65%);
-      filter: blur(6px);
-      pointer-events: none;
-      z-index: 0;
-    }
+    /* Remove decorative watermark for a clean look */
+    .receipt::after { display: none; }
     .hdr {
       position: relative;
       background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
@@ -160,7 +151,7 @@
         try {
           var link = {{ payment_link|tojson }};
           var payload = link || ({{ brand|tojson }} + ' payment');
-          new QRCode(document.getElementById('qr'), { text: payload, width: 120, height: 120 });
+          new QRCode(document.getElementById('qr'), { text: payload, width: 160, height: 160 });
         } catch (e) { /* ignore */ }
       </script>
       {% endif %}
@@ -174,7 +165,7 @@
       <script>
         try {
           var v = {{ verify_url|tojson }};
-          new QRCode(document.getElementById('qr-verify'), { text: v, width: 120, height: 120 });
+          new QRCode(document.getElementById('qr-verify'), { text: v, width: 160, height: 160 });
         } catch (e) { /* ignore */ }
       </script>
       {% endif %}

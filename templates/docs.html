@@ -1,61 +1,173 @@
 {% extends 'base.html' %}
 
-{% block title %}Documentation · {{ APP_TITLE }}{% endblock %}
+{% block title %}Media Hub · {{ APP_TITLE }}{% endblock %}
 
 {% block content %}
 <section class="p-6">
-  <div class="max-w-5xl mx-auto space-y-6">
+  <div class="max-w-6xl mx-auto space-y-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Documentation</h1>
+      <h1 class="text-2xl font-bold">Intro Video</h1>
+      <div class="text-sm text-gray-500">Upload videos/images below • MP4/WEBM/MOV/PNG/JPG</div>
     </div>
 
-    {% if video_path %}
-      <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 class="text-lg font-semibold mb-3">Intro Video: {{ video_title }}</h2>
-        <video controls style="width: 100%; max-height: 520px; border-radius: 0.75rem;"
-               src="{{ url_for('static', filename=video_path) }}">
-          Your browser does not support the video tag.
-        </video>
-        <p class="text-xs text-gray-500 mt-2">File location: <code>static/{{ video_path }}</code></p>
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="p-4 border-b flex items-center justify-between">
+        <div class="font-semibold">Featured Video</div>
+        <div id="featuredMeta" class="text-xs text-gray-500"></div>
       </div>
-    {% else %}
-      <div class="rounded-xl border border-amber-300 bg-amber-50 p-4">
-        <div class="font-semibold mb-1">Intro Video Not Found</div>
-        <p class="text-sm text-gray-700">Place your video file at
-          <code>static/media/Stop Guessing Fees_ Lovato_Tech Made Easy.mp4</code>
-          (or .webm/.mov). Then refresh this page to play it here.</p>
+      <div class="p-4">
+        {% if featured_url %}
+          <video id="featuredPlayer" controls style="width:100%; max-height: 560px; border-radius: 0.75rem;" src="{{ featured_url }}"></video>
+          <div class="text-xs text-gray-500 mt-2">Source: <code>static/media/{{ featured_name }}</code></div>
+        {% else %}
+          <div class="h-64 flex items-center justify-center text-gray-500 bg-gray-50 rounded-xl border border-dashed">No featured video yet. Set one from the library below.</div>
+        {% endif %}
       </div>
-    {% endif %}
+    </div>
 
-    <div class="grid md:grid-cols-2 gap-6">
-      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 class="text-lg font-semibold mb-2">Quick Start</h3>
-        <ol class="list-decimal ml-5 space-y-1 text-sm text-gray-700">
-          <li>Login at <code>/auth/login</code>. New schools bootstrap automatically.</li>
-          <li>Update school profile and branding at <a class="text-blue-600" href="{{ url_for('admin.school_profile') }}">Admin → School Profile</a>.</li>
-          <li>Add or import students at <a class="text-blue-600" href="{{ url_for('students') }}">Students</a>.</li>
-          <li>Configure the current year/term and generate invoices under <a class="text-blue-600" href="{{ url_for('terms.manage_terms') }}">Terms</a>.</li>
-          <li>Record payments on the Payments screen or via M-Pesa STK (Admin → Billing).</li>
-        </ol>
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="p-4 border-b flex items-center justify-between">
+        <div class="font-semibold">Upload Media</div>
+        <input id="fileInput" type="file" accept="video/mp4,video/webm,video/quicktime,image/png,image/jpeg,image/gif" multiple class="hidden" />
+        <button id="browseBtn" class="px-3 py-1.5 text-sm rounded-lg bg-gray-900 text-white">Browse…</button>
       </div>
-      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 class="text-lg font-semibold mb-2">Integrations</h3>
-        <ul class="list-disc ml-5 space-y-1 text-sm text-gray-700">
-          <li><strong>M-Pesa (Daraja)</strong>: configure at <a class="text-blue-600" href="{{ url_for('admin.mpesa_config') }}">Admin → M-Pesa</a>. Set callback to <code>/mpesa/callback</code>.</li>
-          <li><strong>WhatsApp</strong>: set tokens/template at <a class="text-blue-600" href="{{ url_for('admin.access_settings') }}">Admin → Settings</a>.</li>
-          <li><strong>AI Assistant</strong>: set <code>OPENAI_API_KEY</code>, build index with <code>scripts/ai_index.py</code>, then open <a class="text-blue-600" href="{{ url_for('ai.ai_home') }}">AI</a>.</li>
-        </ul>
-      </div>
-      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:col-span-2">
-        <h3 class="text-lg font-semibold mb-2">Helpful Links</h3>
-        <div class="grid md:grid-cols-3 gap-4 text-sm">
-          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('analytics') }}">Analytics Overview</a>
-          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('terms.invoices_list') }}">Invoices</a>
-          <a class="p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50" href="{{ url_for('credit.credit_home') }}">Credit Operations</a>
+      <div id="dropzone" class="p-8 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl text-center cursor-pointer">
+        <div class="text-gray-600">Drag & drop your media here, or click Browse</div>
+        <div class="text-xs text-gray-500 mt-1">Up to 200 MB per file</div>
+        <div id="progressWrap" class="hidden mt-4">
+          <div class="w-full h-2 bg-gray-200 rounded">
+            <div id="progressBar" class="h-2 bg-indigo-600 rounded" style="width:0%"></div>
+          </div>
+          <div id="progressLabel" class="text-xs text-gray-500 mt-1">0%</div>
         </div>
       </div>
     </div>
+
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="p-4 border-b flex items-center justify-between">
+        <div class="font-semibold">Library</div>
+        <button id="refreshLib" class="text-sm px-3 py-1.5 rounded-lg border">Refresh</button>
+      </div>
+      <div id="library" class="p-4 grid gap-4 md:grid-cols-3 lg:grid-cols-4"></div>
+    </div>
   </div>
 </section>
+
+<script>
+  const dz = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const browseBtn = document.getElementById('browseBtn');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  const progressLabel = document.getElementById('progressLabel');
+  const lib = document.getElementById('library');
+  const refreshLib = document.getElementById('refreshLib');
+
+  function resetProgress(){
+    progressWrap.classList.add('hidden');
+    progressBar.style.width = '0%';
+    progressLabel.textContent = '0%';
+  }
+
+  function setProgress(p){
+    progressWrap.classList.remove('hidden');
+    const pct = Math.max(0, Math.min(100, Math.round(p)));
+    progressBar.style.width = pct + '%';
+    progressLabel.textContent = pct + '%';
+  }
+
+  async function listMedia(){
+    const r = await fetch('/docs/media');
+    const j = await r.json();
+    if (!j.ok) return;
+    renderLib(j.media || []);
+  }
+
+  function renderLib(items){
+    lib.innerHTML = '';
+    for (const m of items){
+      const card = document.createElement('div');
+      card.className = 'border rounded-xl overflow-hidden bg-white shadow-sm flex flex-col';
+      const wrap = document.createElement('div');
+      wrap.className = 'aspect-video bg-gray-50 flex items-center justify-center overflow-hidden';
+      if (m.type === 'image'){
+        const img = document.createElement('img');
+        img.src = m.url; img.alt = m.name; img.className = 'w-full h-full object-cover';
+        wrap.appendChild(img);
+      } else {
+        const vid = document.createElement('video');
+        vid.src = m.url; vid.controls = false; vid.muted = true; vid.className = 'w-full h-full object-cover';
+        wrap.appendChild(vid);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'p-3 text-sm flex items-center justify-between gap-2';
+      const name = document.createElement('div');
+      name.className = 'truncate max-w-[60%]';
+      name.textContent = m.name;
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-2';
+      const openBtn = document.createElement('a');
+      openBtn.href = m.url; openBtn.target = '_blank'; openBtn.className = 'px-2 py-1 text-xs rounded border';
+      openBtn.textContent = 'Open';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'px-2 py-1 text-xs rounded border text-rose-700';
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = async () => {
+        if (!confirm('Delete ' + m.name + '?')) return;
+        await fetch('/docs/media/' + encodeURIComponent(m.name), { method: 'DELETE' });
+        listMedia();
+      };
+      actions.appendChild(openBtn);
+      if (m.type === 'video'){
+        const featBtn = document.createElement('button');
+        featBtn.className = 'px-2 py-1 text-xs rounded border bg-indigo-50 text-indigo-700';
+        featBtn.textContent = 'Set Featured';
+        featBtn.onclick = async () => {
+          await fetch('/docs/feature', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: m.name })});
+          // Reload page to refresh featured player
+          location.reload();
+        };
+        actions.appendChild(featBtn);
+      }
+      actions.appendChild(delBtn);
+      meta.appendChild(name);
+      meta.appendChild(actions);
+      card.appendChild(wrap);
+      card.appendChild(meta);
+      lib.appendChild(card);
+    }
+  }
+
+  async function uploadFiles(files){
+    if (!files || files.length === 0) return;
+    const fd = new FormData();
+    for (const f of files){ fd.append('files', f); }
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/docs/upload');
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) setProgress((e.loaded/e.total)*100); };
+      xhr.onload = () => {
+        resetProgress();
+        if (xhr.status >= 200 && xhr.status < 300){ resolve(JSON.parse(xhr.responseText)); listMedia(); }
+        else { reject(new Error('Upload failed')); }
+      };
+      xhr.onerror = () => { resetProgress(); reject(new Error('Upload error')); };
+      setProgress(5);
+      xhr.send(fd);
+    });
+  }
+
+  // Drag & drop
+  dz.addEventListener('click', () => fileInput.click());
+  browseBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async (e) => { await uploadFiles(e.target.files); fileInput.value=''; });
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('bg-indigo-50','border-indigo-300'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('bg-indigo-50','border-indigo-300'));
+  dz.addEventListener('drop', async (e) => { e.preventDefault(); dz.classList.remove('bg-indigo-50','border-indigo-300'); await uploadFiles(e.dataTransfer.files); });
+
+  refreshLib.addEventListener('click', listMedia);
+  listMedia();
+  if (window.lucide) try{ lucide.createIcons(); }catch(e){}
+</script>
 {% endblock %}
 

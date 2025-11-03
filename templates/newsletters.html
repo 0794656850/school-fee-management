@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Newsletters - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Newsletters & Memos{% endblock %}
+{% block content %}
+
+<div class="rounded-2xl shadow-sm border border-gray-100 overflow-hidden bg-white">
+  <div class="bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 text-white px-6 py-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex p-2.5 rounded-xl bg-white/20 ring-1 ring-white/30 shadow">
+          <i data-lucide="megaphone" class="w-5 h-5 text-white"></i>
+        </span>
+        <div>
+          <h3 class="text-xl font-semibold tracking-tight">Communications Center</h3>
+          <p class="mt-1 text-white/90 text-sm">Create and send newsletters or memos directly from the system.</p>
+        </div>
+      </div>
+      <a href="{{ url_for('newsletters.compose') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-indigo-700 hover:bg-indigo-50 shadow">
+        <i data-lucide="plus"></i>
+        <span>Compose</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="p-6">
+    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600">
+            <tr>
+              <th class="px-4 py-3 text-left">#</th>
+              <th class="px-4 py-3 text-left">Category</th>
+              <th class="px-4 py-3 text-left">Title</th>
+              <th class="px-4 py-3 text-left">Audience</th>
+              <th class="px-4 py-3 text-left">Created</th>
+              <th class="px-4 py-3 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for n in newsletters %}
+            <tr>
+              <td class="px-4 py-3 text-gray-500">{{ n.id }}</td>
+              <td class="px-4 py-3"><span class="inline-flex px-2 py-1 rounded-md text-xs bg-indigo-50 text-indigo-700 border border-indigo-100">{{ n.category|title }}</span></td>
+              <td class="px-4 py-3 font-medium text-gray-900">{{ n.title }}</td>
+              <td class="px-4 py-3 text-gray-700">
+                {% if n.audience_type == 'all' %}All
+                {% elif n.audience_type == 'class' %}Class: {{ n.audience_value }}
+                {% elif n.audience_type == 'emails' %}Custom list
+                {% else %}{{ n.audience_type }}{% endif %}
+              </td>
+              <td class="px-4 py-3 text-gray-600">{{ n.created_at }}</td>
+              <td class="px-4 py-3 text-center">
+                <a class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-sm" href="{{ url_for('newsletters.send_now', newsletter_id=n.id) }}">
+                  <i data-lucide="send" class="w-4 h-4"></i>
+                  <span>Send</span>
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-gray-500 py-6">No newsletters yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+

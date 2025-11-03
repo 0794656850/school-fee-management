@@ -7,19 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
-  <style>
-    :root {
-      --brand-600: #4f46e5;
-      --bg-app: linear-gradient(135deg, #eef2ff, #f8fafc);
-      --surface: rgba(255,255,255,0.88);
-      --text: #0f172a;
-      --border: #e5e7eb;
-    }
-    body { font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text); }
-    .glass { background: var(--surface); backdrop-filter: blur(16px); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
-    .ring-brand { box-shadow: 0 0 0 6px rgba(79,70,229,.06); }
-  </style>
+  <!-- Overlay transitions removed to keep clean slide only; styles centralized in theme.css -->
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     <script>
@@ -33,30 +23,53 @@
     <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
 
     <div class="max-w-xl w-full">
-      <div class="text-center mb-8">
-        <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" class="h-28 w-28 mx-auto rounded-2xl ring-1 ring-blue-100 ring-brand shadow" alt="{{ BRAND_NAME }} Logo"/>
-        <h1 class="text-3xl font-extrabold mt-4 tracking-tight text-slate-800">{{ BRAND_NAME }}</h1>
-        <p class="text-sm text-slate-600 mt-1">Smart, modern fee management for schools</p>
-      </div>
-      <!-- Single modern login card -->
-      <div class="glass rounded-2xl p-6 border border-gray-100">
+            <div class="text-center mb-8">
+        <div class="flex items-center justify-center gap-4">
+          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" class="h-16 w-16 md:h-20 md:w-20 rounded-2xl ring-2 ring-blue-200/70 ring-offset-1 shadow-md" alt="{{ BRAND_NAME }} Logo"/>
+          <div class="leading-tight text-left select-none">
+            <div class="font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600">
+              {% for word in (BRAND_NAME or '').split() %}
+                <div class="leading-6 text-2xl">{{ word }}</div>
+              {% endfor %}
+            </div>
+            <div class="mt-1 text-xs text-gray-600 tracking-wide flex items-center gap-1.5">
+              <i data-lucide="graduation-cap" class="w-4 h-4 text-blue-600"></i>
+              <span class="font-medium">{{ PORTAL_TITLE }}</span>
+            </div>
+          </div>
+        </div>
+      </div><!-- Single modern login card -->
+      <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter">
         <div class="text-center mb-4">
           <h2 class="text-xl font-bold">School Profile Login</h2>
           <p class="text-sm text-gray-500">Sign in to access your dashboard</p>
         </div>
-        <form method="post" action="{{ url_for('auth.login', next=next_url) }}" class="space-y-4">
+        <form method="post" action="{{ url_for('auth.login', next=next_url) }}" class="space-y-4" autocomplete="on">
           <input type="hidden" name="next" value="{{ next_url }}" />
           <div>
             <label class="block text-sm font-medium text-gray-700">School name or code</label>
-            <input name="school_name" placeholder="e.g., Greenfield Academy or greenfield-academy"
+            <input id="school" name="school_name" placeholder="e.g., Greenfield Academy or greenfield-academy"
                    class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Password</label>
-            <input required name="password" type="password" placeholder="Enter your password"
-                   class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <div class="relative">
+              <input required name="password" id="pwd" type="password" placeholder="Enter your password"
+                     class="w-full mt-1 pr-10 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <button type="button" id="togglePwd" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-600 hover:text-indigo-700">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <div id="capsHint" class="hidden text-xs text-amber-600 mt-1">Caps Lock is on</div>
           </div>
-          <button class="w-full py-2.5 rounded-xl text-white font-semibold transition" style="background:linear-gradient(90deg,#0f4460,#6b4b4b,#f97316)">Login to Dashboard</button>
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="remember" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <span>Remember me on this device</span>
+            </label>
+            <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="text-sm text-indigo-700 hover:underline flex items-center gap-1"><i data-lucide='life-buoy' class="w-4 h-4"></i> Help</a>
+          </div>
+          <button class="w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary">Login to Dashboard</button>
           <div class="text-center text-sm text-gray-600">
             <div>Forgot your password?</div>
             <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline"><i data-lucide='message-circle'></i> Contact Admin via WhatsApp</a>
@@ -64,13 +77,19 @@
         </form>
         <div class="text-center mt-6 text-sm">
           <span class="text-gray-600">New here?</span>
-          <a href="{{ url_for('auth.register') }}" class="ml-1 font-medium text-indigo-700 hover:underline">Create a new profile</a>
+          <a id="toRegister" href="{{ url_for('auth.register') }}" class="ml-1 font-medium text-indigo-700 hover:underline" data-animate-nav>Create a new profile</a>
         </div>
       </div>
       <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 LOVATO.TECH - Smart School Fee Management Platform</div>
     </div>
     <script>
       lucide.createIcons();
+      // Card entry animation
+      const card = document.getElementById('authCard');
+      requestAnimationFrame(() => {
+        // allow initial styles to paint
+        requestAnimationFrame(() => card.classList.add('card-enter-active'));
+      });
       const flash = window.__flash__ || [];
       const box = document.getElementById('flash');
       const styles = { success: 'bg-green-50 text-green-700 border-green-200', error: 'bg-red-50 text-red-700 border-red-200', info: 'bg-blue-50 text-blue-700 border-blue-200', warning: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
@@ -80,7 +99,57 @@
         div.textContent = msg;
         box.appendChild(div);
       });
-    </script>
-  </body>
+      // Autofill remembered school and remember checkbox
+      try {
+        const s = document.getElementById('school');
+        const r = document.querySelector('input[name="remember"]');
+        const lastSchool = localStorage.getItem('last_school');
+        const lastRemember = localStorage.getItem('remember_me');
+        if (lastSchool) s.value = lastSchool;
+        if (lastRemember) r.checked = lastRemember === '1';
+        s.focus();
+        // Persist on change/submit
+        s.addEventListener('change', ()=> localStorage.setItem('last_school', s.value || ''));
+        r.addEventListener('change', ()=> localStorage.setItem('remember_me', r.checked ? '1' : '0'));
+      } catch(e){}
+
+      // Password show/hide
+      const pwd = document.getElementById('pwd');
+      const toggle = document.getElementById('togglePwd');
+      toggle.addEventListener('click', () => {
+        const t = pwd.getAttribute('type') === 'password' ? 'text' : 'password';
+        pwd.setAttribute('type', t);
+        toggle.innerHTML = '';
+        const icon = document.createElement('i');
+        icon.setAttribute('data-lucide', t === 'password' ? 'eye' : 'eye-off');
+        toggle.appendChild(icon);
+        try { lucide.createIcons(); } catch(e){}
+      });
+      // Caps Lock hint
+      const caps = document.getElementById('capsHint');
+      pwd.addEventListener('keyup', (e) => {
+        const on = e.getModifierState && e.getModifierState('CapsLock');
+        if (on) caps.classList.remove('hidden'); else caps.classList.add('hidden');
+      });
+      // Animated navigation to Register
+      const goRegister = document.getElementById('toRegister');
+      if (goRegister) {
+        goRegister.addEventListener('click', (e) => {
+          e.preventDefault();
+          const href = goRegister.getAttribute('href');
+          if (!href) { window.location.href = '#'; return; }
+          // slide out then navigate
+          card.classList.add('slide-out-left');
+          const done = () => { window.location.assign(href); };
+          let fired = false;
+          card.addEventListener('transitionend', () => { if (!fired) { fired = true; done(); } }, { once: true });
+          // Fallback in case transitionend doesn't fire
+          setTimeout(() => { if (!fired) done(); }, 480);
+        });
+      }
+  </script>
+  <!-- Overlay transitions removed -->
+</body>
 </html>
+
 

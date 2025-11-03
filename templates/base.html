@@ -1,9 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}{{ APP_TITLE }}{% endblock %}</title>
+  <meta name="theme-color" content="{{ BRAND_COLOR or '#2563eb' }}" />
+  <link rel="manifest" href="/static/manifest.webmanifest" />
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,32 +20,49 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   
-
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
   <style>
+    /* Disable animations/transitions across the app (except login/signup pages which don't use base.html) */
+    .no-anim *, .no-anim *::before, .no-anim *::after { transition: none !important; animation: none !important; }
+    .no-anim .sidebar a:hover, .no-anim .kpi:hover, .no-anim .btn-brand:hover { transform: none !important; }
+    .no-anim .sidebar { transition: none !important; }
+    .no-anim .sidebar a { transition: none !important; }
     /* Premium, universal theme */
     :root {
-      /* Brand */
-      --brand-600: #4f46e5; /* indigo-600 */
-      --brand-700: #4338ca;
-      --brand-50:  #eef2ff;
-      --brand-100: #e0e7ff;
-      --brand-200: #c7d2fe;
-      --brand-grad-from: #4338ca;
-      --brand-grad-to: #06b6d4;
+      /* Brand (restore original blue/purple accents) */
+      --brand-600: #2563eb; /* blue-600 */
+      --brand-700: #1d4ed8; /* blue-700 */
+      --brand-50:  #eff6ff; /* blue-50 */
+      --brand-100: #dbeafe; /* blue-100 */
+      --brand-200: #bfdbfe; /* blue-200 */
+      --brand-grad-from: #2563eb; /* blue-600 */
+      --brand-grad-to: #7c3aed;   /* violet-600 */
       /* Accents + states */
-      --accent-500: #06b6d4; /* cyan-500 */
+      --accent-500: #2563eb; /* blue-600 */
       --success-500: #10b981; /* emerald-500 */
-      --warn-500: #f59e0b; /* amber-500 */
+      --warn-500: #f59e0b;   /* amber-500 */
       --danger-500: #ef4444; /* red-500 */
       /* Surfaces + text */
-      --bg-app: linear-gradient(135deg, #f8fafc 0%, #eef2ff 40%, #e0f7fa 100%);
+      --bg-app: #ffffff;
       --surface: rgba(255,255,255,0.88);
       --surface-strong: rgba(255,255,255,0.95);
       --text: #0f172a; /* slate-900 */
       --text-muted: #475569; /* slate-600 */
       --border: #e2e8f0; /* slate-200 */
-      --ring: rgba(79,70,229,.35);
+      --ring: rgba(37,99,235,.35); /* blue ring */
     }
+    /* Dark theme */
+    [data-theme='dark'] {
+      --bg-app: #0b1220;
+      --surface: rgba(17,24,39,0.9);
+      --surface-strong: rgba(17,24,39,0.95);
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --border: #1f2937;
+      --ring: rgba(20,184,166,.35);
+    }
+
+    /* Moved styles to static/css/theme.css */
 
     
 
@@ -56,26 +75,15 @@
     }
 
     /* Global surface helpers */
-    main > section { background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%); }
+    main > section { background: #ffffff; }
 
     .sidebar {
-      backdrop-filter: blur(16px);
-      background: linear-gradient(180deg, rgba(238,242,255,.85), rgba(255,255,255,.85));
+      background-color: #ffffff;
       box-shadow: 4px 0 20px rgba(0, 0, 0, 0.05);
       transition: all 0.3s ease;
       border-right: 1px solid var(--border);
       position: relative;
       overflow: hidden;
-    }
-    .sidebar::before {
-      content: "";
-      position: absolute;
-      inset: -20% -40% auto auto;
-      height: 180px;
-      width: 180px;
-      background: radial-gradient(closest-side, rgba(79,70,229,.12), transparent 70%);
-      filter: blur(8px);
-      pointer-events: none;
     }
 
     .sidebar a { color: var(--text-muted); transition: all 0.25s ease; }
@@ -85,19 +93,18 @@
     .sidebar a.group h1:first-of-type { display: none; }
 
     .active-link {
-      background: linear-gradient(90deg, rgba(79,70,229,.16), rgba(6,182,212,.10));
+      background: linear-gradient(90deg, rgba(37,99,235,.12), rgba(79,70,229,.10));
       color: var(--brand-700);
       font-weight: 600;
-      border: 1px solid rgba(79,70,229,.18);
+      border: 1px solid rgba(37,99,235,.18);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
     }
 
-    main { background: #f9fafb; }
+    main { background: #ffffff; }
     
 
     header {
-      backdrop-filter: blur(12px);
-      background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
+      background-color: #ffffff;
       border-bottom: 1px solid var(--border);
     }
     
@@ -108,45 +115,6 @@
     i[data-lucide] { color: var(--text-muted); }
 
     /* KPI cards */
-    .kpi {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 1rem;
-      box-shadow: 0 4px 16px rgba(15,23,42,.06);
-      transition: transform .25s ease, box-shadow .25s ease;
-    }
-    .kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(15,23,42,.08); }
-    .kpi__icon {
-      background: linear-gradient(135deg, var(--brand-grad-from), var(--brand-grad-to));
-      color: #fff; border-radius: .875rem; padding: .75rem; box-shadow: 0 6px 16px rgba(79,70,229,.25);
-    }
-    .kpi--success .kpi__icon { background: linear-gradient(135deg, #10b981, #34d399); box-shadow: 0 6px 16px rgba(16,185,129,.25); }
-    .kpi--danger  .kpi__icon { background: linear-gradient(135deg, #ef4444, #fb7185); box-shadow: 0 6px 16px rgba(239,68,68,.25); }
-    .kpi--warn    .kpi__icon { background: linear-gradient(135deg, #f59e0b, #fbbf24); box-shadow: 0 6px 16px rgba(245,158,11,.25); }
-
-    /* Footer signature */
-    .app-footer {
-      backdrop-filter: blur(10px);
-      background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(238,242,255,.9));
-      border-top: 1px solid var(--border);
-    }
-    .signature-badge {
-      background: radial-gradient(120% 120% at 10% 10%, rgba(79,70,229,.16), rgba(6,182,212,.12) 40%, transparent 70%);
-      border: 1px solid rgba(79,70,229,.2);
-      box-shadow: 0 8px 20px rgba(6,182,212,.15);
-    }
-  
-    /* Brand button */
-    .btn-brand {
-      background: linear-gradient(135deg, var(--brand-grad-from), var(--brand-grad-to));
-      color: #fff;
-      box-shadow: 0 6px 18px rgba(6,182,212,.25);
-      transition: transform .2s ease, filter .2s ease;
-    }
-    .btn-brand:hover { filter: saturate(1.05) brightness(1.03); transform: translateY(-2px); }
-
-    /* Selection */
-    ::selection { background: rgba(79,70,229,.18); color: #111827; }
   </style>
 
   <!-- App Icon / Favicon -->
@@ -154,23 +122,27 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename=FAVICON) }}">
 </head>
 
-<body class="flex h-screen overflow-hidden">
+<body class="flex h-screen overflow-hidden no-anim" data-plan="{{ (plan_status.plan_code if plan_status else 'FREE') }}">
+  <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-white focus:border focus:border-gray-200 focus:shadow">Skip to content</a>
 
   <!-- Sidebar -->
   <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
     <div class="p-6 border-b border-gray-100 flex items-center justify-between">
-      <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 group">
-        <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }} Logo" class="h-9 w-9 rounded-md shadow-sm ring-1 ring-blue-100 group-hover:scale-105 transition"/>
-        <div class="leading-tight">
-          <div class="flex items-center gap-2">
-            <span class="text-xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600">{{ BRAND_NAME }}</span>
+            <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 group" aria-label="Go to dashboard">
+        <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }} Logo" class="h-10 w-10 rounded-xl shadow-md ring-2 ring-blue-200/70 ring-offset-1 ring-offset-white group-hover:scale-105 transition-transform"/>
+        <div class="leading-tight select-none">
+          <div class="font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600">
+            {% for word in (BRAND_NAME or '').split() %}
+              <div class="leading-5 text-lg">{{ word }}</div>
+            {% endfor %}
           </div>
-          <div class="mt-0.5 text-[11px] text-gray-600 tracking-wide flex items-center gap-1">
+          <div class="mt-1 text-[11px] text-gray-600 tracking-wide flex items-center gap-1.5">
             <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-blue-600"></i>
             <span class="font-medium">{{ PORTAL_TITLE }}</span>
           </div>
         </div>
       </a>
+
       <button id="toggleSidebar" class="md:hidden p-1 text-gray-600 hover:text-blue-600">
         <i data-lucide="menu"></i>
       </button>
@@ -228,6 +200,16 @@
         <i data-lucide="bell"></i> <span>Reminders</span>
       </a>
 
+      <a href="{{ url_for('newsletters.index') }}"
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/newsletters' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="megaphone"></i> <span>Newsletters</span>
+      </a>
+
+      <a href="{{ url_for('recovery.dashboard') }}"
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/recovery' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="phone-call"></i> <span>Recovery</span>
+      </a>
+
       <a href="{{ url_for('docs') }}"
          class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/docs' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
         <i data-lucide="book-open"></i> <span>Documentation</span>
@@ -243,6 +225,11 @@
         <i data-lucide="shield"></i> <span>Access &amp; Security</span>
       </a>
 
+      <a href="{{ url_for('monetization.index') }}"
+         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/admin/monetization' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
+        <i data-lucide="briefcase"></i> <span>Monetization</span>
+      </a>
+
       
 
       
@@ -255,12 +242,12 @@
   </aside>
 
   <!-- Main Content -->
-  <main class="flex-1 flex flex-col overflow-y-auto">
+  <main id="main" class="flex-1 flex flex-col overflow-y-auto">
 
     <!-- Header -->
     <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <button onclick="history.back()" class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back">
+        <button onclick="neoBack()" class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back">
           <i data-lucide="arrow-left"></i>
           <span class="text-sm">Back</span>
         </button>
@@ -284,6 +271,7 @@
         <a href="{{ url_for('reminders.reminders_home') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Reminders">
           <i data-lucide="bell"></i>
         </a>
+        <button id="themeToggle" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Toggle theme"><i data-lucide="moon"></i></button>
         <a href="{{ url_for('auth.logout') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Sign out">
           <i data-lucide="log-out"></i>
         </a>
@@ -359,6 +347,46 @@
     // Initialize icons
     lucide.createIcons();
 
+    // --- Auto-fit helper for KPI values ---
+    // Shrinks font-size of elements with .fit-text so content never overflows.
+    (function(){
+      function fitOne(el){
+        if (!el) return;
+        // Reset to computed size first so we can shrink predictably
+        el.style.fontSize = '';
+        const style = getComputedStyle(el);
+        const max = parseFloat(style.fontSize) || 30; // starting size from CSS/tailwind
+        // Keep a higher floor so amounts never look too small
+        const min = 16; // px minimum to maintain medium readability
+        let size = max;
+        // Ensure the element has a width basis
+        el.style.maxWidth = '100%';
+        el.style.whiteSpace = 'nowrap';
+        let guard = 0;
+        // Shrink until it fits its own box
+        while (el.scrollWidth > el.clientWidth && size > min && guard < 60){
+          size -= 1;
+          el.style.fontSize = size + 'px';
+          guard++;
+        }
+        // Ensure no ellipsis clipping after fitting
+        el.style.overflow = 'visible';
+        el.style.textOverflow = 'clip';
+      }
+      function fitAll(){
+        document.querySelectorAll('.fit-text').forEach(fitOne);
+      }
+      window.fitKpis = fitAll;
+      // Run on load and on resize
+      window.addEventListener('load', fitAll);
+      window.addEventListener('resize', () => { clearTimeout(window.__fitT); window.__fitT = setTimeout(fitAll, 80); });
+      // Observe KPI containers for content changes
+      try {
+        const mo = new MutationObserver(() => { clearTimeout(window.__fitM); window.__fitM = setTimeout(fitAll, 40); });
+        mo.observe(document.body, { subtree: true, characterData: true, childList: true });
+      } catch(_) {}
+    })();
+
     // Sidebar Toggle (Mobile)
     const sidebar = document.querySelector('.sidebar');
     const toggleBtn = document.getElementById('toggleSidebar');
@@ -371,6 +399,23 @@
     // Example modal trigger placeholder
     function openAddPaymentModal() {
       window.location.href = "{{ url_for('payments') }}";
+    }
+
+    // Robust Back button handler
+    function neoBack() {
+      try {
+        if (window.history && window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        const ref = document.referrer || '';
+        if (ref && new URL(ref, window.location.origin).origin === window.location.origin) {
+          window.location.href = ref;
+          return;
+        }
+      } catch (e) {}
+      // Fallback to Students list, else Dashboard
+      try { window.location.href = "{{ url_for('students') }}"; } catch(e) { window.location.href = "{{ url_for('dashboard') }}"; }
     }
 
     // Flash close + auto-dismiss
@@ -424,12 +469,38 @@
           .then(d => {
             if (!d) return;
             text.textContent = `${d.year} • Term ${d.term}`;
+            // Normalize any stray control characters to a readable separator
+            try { text.textContent = (text.textContent || '').replace(/[\u0000-\u001F]+/g, ' - '); } catch (_) {}
             chip.style.display = 'inline-flex';
             try { lucide.createIcons(); } catch (_) {}
           })
           .catch(() => {});
       }
       setInterval(tick, 10000);
+    })();
+
+    // Additional cleanup for mojibake in flash messages and current term chip
+    (function(){
+      try {
+        const container = document.getElementById('flash-container');
+        if (container) {
+          container.querySelectorAll('.flash-item').forEach(item => {
+            item.childNodes.forEach(n => {
+              if (n.nodeType === Node.TEXT_NODE) {
+                n.nodeValue = n.nodeValue.replace(/^�o\.\s*/, '');
+              }
+            });
+          });
+        }
+      } catch(e){}
+      try {
+        const text = document.getElementById('currentTermText');
+        if (text) {
+          const fix = ()=>{ text.textContent = (text.textContent||'').replace(/\s*[^0-9]+\s*Term/, ' — Term'); };
+          fix();
+          setInterval(fix, 3000);
+        }
+      } catch(e){}
     })();
 
     // ----- Global Search -----
@@ -485,7 +556,39 @@
       });
     }
   
-  </script>
+    // Theme: load preference early
+  (function(){
+    try {
+      const pref = localStorage.getItem("theme") || "light";
+      if (pref === "dark") document.documentElement.setAttribute("data-theme","dark");
+    } catch(e){}
+  })();
+
+  // Theme toggle
+  (function(){
+    const btn = document.getElementById("themeToggle");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      const next = cur === "dark" ? "light" : "dark";
+      if (next === "dark") document.documentElement.setAttribute("data-theme","dark"); else document.documentElement.removeAttribute("data-theme");
+      try { localStorage.setItem("theme", next); } catch(e){}
+      try { lucide.createIcons(); } catch(_){}
+    });
+  })();
+
+  // Register service worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
+    });
+  }
+
+</script>
+
 </body>
 </html>
+
+
+
 

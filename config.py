@@ -25,7 +25,8 @@ class Config:
     # Default to a local MySQL for dev; override with env in Docker/Prod
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "SQLALCHEMY_DATABASE_URI",
-        "mysql+pymysql://root:9133orerO@localhost/school_fee_db",
+        # Safe placeholder for local dev; override via environment in real use
+        "mysql+pymysql://app:apppass@localhost/school_fee_db",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -62,6 +63,8 @@ class Config:
     LOGO_PRIMARY = os.environ.get("LOGO_PRIMARY", "css/lovato_logo.jpg")
     LOGO_SECONDARY = os.environ.get("LOGO_SECONDARY", "css/lovato_logo1.jpg")
     FAVICON = os.environ.get("FAVICON", LOGO_PRIMARY)
+    # Primary brand color (used for meta theme-color and theming)
+    BRAND_COLOR = os.environ.get("BRAND_COLOR", "#2563eb")
     # Support contact (used on login for password recovery)
     SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "+254794656850")
 
@@ -99,3 +102,21 @@ class Config:
     # --------------------------
     LOGIN_USERNAME = os.environ.get("APP_LOGIN_USERNAME", "user")
     LOGIN_PASSWORD = os.environ.get("APP_LOGIN_PASSWORD", "9133")
+
+    # --------------------------
+    # Email (Flask-Mail SMTP)
+    # --------------------------
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
+    try:
+        MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
+    except Exception:
+        MAIL_PORT = 587
+    _tls = os.environ.get("MAIL_USE_TLS", "1").strip().lower()
+    _ssl = os.environ.get("MAIL_USE_SSL", "0").strip().lower()
+    MAIL_USE_TLS = _tls not in ("0", "false", "no")
+    MAIL_USE_SSL = _ssl in ("1", "true", "yes")
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "")
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "") or None
+    # Custom convenience sender used in reminders fallback
+    MAIL_SENDER = os.environ.get("MAIL_SENDER", os.environ.get("MAIL_DEFAULT_SENDER", "")) or None

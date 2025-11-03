@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, Response, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, Response, session
 import json
 import mysql.connector
 from datetime import datetime
@@ -23,12 +23,20 @@ from routes.term_routes import (
 # Extend term routes (bulk flat fees)
 import routes.term_flat_routes  # noqa: F401 - registers extra routes on term_bp
 from utils.notify import normalize_phone
-from utils.whatsapp import whatsapp_is_configured, send_whatsapp_text, send_whatsapp_template
+from utils.gmail_api import send_email as gmail_send_email, send_email_html as gmail_send_email_html
 from routes.mpesa_routes import mpesa_bp
+from routes.gmail_oauth_routes import gmail_oauth_bp
+from routes.monetization import monetization_bp
+from routes.newsletter_routes import newsletter_bp, ensure_newsletters_table
+from utils.pro import is_pro_enabled, upgrade_url
+from extensions import db, migrate
+from billing import billing_bp
+from routes.defaulter_routes import recovery_bp
 from utils.settings import get_setting, set_school_setting
 from utils.users import ensure_user_tables
 # Audit trail removed
 from routes.ai_routes import ai_bp
+from routes.audit_routes import audit_bp
 from utils.audit import ensure_audit_table, log_event
 from utils.ledger import ensure_ledger_table, add_entry
 from utils.tenant import (
@@ -39,14 +47,116 @@ from utils.tenant import (
     bootstrap_new_school,
     ensure_unique_indices_per_school,
 )
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 # Load configuration from Config (falls back to sensible defaults inside Config)
 app.config.from_object(Config)
 
+# Initialize SQLAlchemy (for billing models) if available
+try:
+    from extensions import db as _db  # type: ignore
+    try:
+        _db.init_app(app)
+        # Create billing tables if missing (limited to models imported below)
+        try:
+            with app.app_context():
+                from billing import LicenseRequest, LicenseKey  # noqa: F401
+                _db.create_all()
+        except Exception:
+            pass
+    except Exception:
+        pass
+except Exception:
+    pass
+
+# Set modern security headers on every response (best effort, non-breaking)
+@app.after_request
+def _set_security_headers(resp):
+    try:
+        # Basic hardening
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        # CSP kept permissive because of inline styles/scripts and CDN usage
+        # Tighten this once inline CSS/JS is externalized.
+        csp = (
+            "default-src 'self'; "
+            "img-src 'self' data: blob: https:; "
+            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; "
+            "connect-src 'self' data: blob:; "
+            "frame-ancestors 'self'"
+        )
+        resp.headers.setdefault("Content-Security-Policy", csp)
+        # HSTS only when cookies marked secure (implies HTTPS)
+        if app.config.get("SESSION_COOKIE_SECURE", False):
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    except Exception:
+        # Do not block response if header setting fails
+        pass
+    return resp
+
+# Allow HTTP OAuth redirect for local Gmail auth
+# oauthlib enforces HTTPS by default; for localhost development we
+# enable insecure transport only when an HTTP redirect is intended.
+try:
+    _gmail_uri = os.environ.get("GMAIL_REDIRECT_URI", "").strip()
+    _prefer_http = (
+        _gmail_uri.startswith("http://")
+        or ("127.0.0.1" in _gmail_uri)
+        or ("localhost" in _gmail_uri)
+        or app.config.get("PREFERRED_URL_SCHEME", "http") == "http"
+    )
+    if _prefer_http and not os.environ.get("OAUTHLIB_INSECURE_TRANSPORT"):
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+except Exception:
+    # Non‑fatal; if this fails, user can set env manually
+    pass
+
+# Initialize optional extensions
+try:
+    from extensions import limiter, mail  # type: ignore
+    try:
+        limiter.init_app(app)  # no-op if fallback limiter
+    except Exception:
+        pass
+    try:
+        # Initialize Flask-Mail for SMTP fallback (safe even if unconfigured)
+        mail.init_app(app)
+    except Exception:
+        pass
+except Exception:
+    # If extensions import fails, continue startup
+    pass
+
 # Ensure secret key is set (Config provides default). Keeping compatibility if env overrides.
 app.secret_key = app.config.get("SECRET_KEY", os.environ.get("SECRET_KEY", "secret123"))
+
+# Assign a per-request correlation id for audit and tracing
+try:
+    import uuid
+    from flask import g
+
+    @app.before_request
+    def _assign_request_id():
+        try:
+            g.request_id = uuid.uuid4().hex[:16]
+        except Exception:
+            pass
+except Exception:
+    pass
+
+# Initialize database + migrations (for SQLAlchemy models like billing)
+try:
+    db.init_app(app)
+    migrate.init_app(app, db)
+except Exception:
+    # Continue even if SQLAlchemy isn't fully configured
+    pass
 
 # Register blueprints
 app.register_blueprint(reminder_bp)
@@ -56,6 +166,12 @@ app.register_blueprint(credit_bp)
 app.register_blueprint(term_bp)
 app.register_blueprint(mpesa_bp)
 app.register_blueprint(ai_bp)
+app.register_blueprint(audit_bp)
+app.register_blueprint(gmail_oauth_bp)
+app.register_blueprint(recovery_bp)
+app.register_blueprint(monetization_bp)
+app.register_blueprint(billing_bp)
+app.register_blueprint(newsletter_bp)
 
 
 # Inject branding/config variables into all templates for universal theming
@@ -123,6 +239,27 @@ def inject_branding():
     except Exception:
         late_grace = 0
 
+    # Feature gating helpers (available in templates as callables)
+    def _feat_on(code: str) -> bool:
+        try:
+            from utils.monetization import feature_enabled as _feature_enabled
+            sid2 = session.get("school_id") if session else None
+            if not sid2:
+                return False
+            return bool(_feature_enabled(int(sid2), str(code)))
+        except Exception:
+            return False
+
+    def _plan_info():
+        try:
+            from utils.monetization import plan_status as _plan_status
+            sid2 = session.get("school_id") if session else None
+            if not sid2:
+                return {"active": False, "expired": True, "plan_code": "FREE"}
+            return _plan_status(int(sid2))
+        except Exception:
+            return {"active": False, "expired": True, "plan_code": "FREE"}
+
     return {
         "BRAND_NAME": brand,
         "PORTAL_TITLE": portal_title,
@@ -130,6 +267,7 @@ def inject_branding():
         "LOGO_PRIMARY": logo_primary,
         "LOGO_SECONDARY": logo_secondary,
         "FAVICON": app.config.get("FAVICON", logo_primary),
+        "BRAND_COLOR": app.config.get("BRAND_COLOR", "#059669"),
         "CURRENT_YEAR": cy,
         "CURRENT_TERM": ct,
         "PRO_PRICE_KES": app.config.get("PRO_PRICE_KES", 1500),
@@ -147,6 +285,9 @@ def inject_branding():
         "LATE_PENALTY_GRACE_DAYS": late_grace,
         # Raw uploaded logo path if present
         "SCHOOL_LOGO_URL": school_logo_url or "",
+        # Monetization helpers
+        "feature_enabled": _feat_on,
+        "plan_status": _plan_info(),
     }
 
 # ---------- AUTH GUARD ----------
@@ -157,6 +298,7 @@ def require_login_for_app():
     allowed_prefixes = (
         "/static/",
         "/mpesa/callback",
+        "/gmail/",  # OAuth start
     )
     allowed_exact = {
         "/auth/login",
@@ -164,6 +306,7 @@ def require_login_for_app():
         "/auth/register_school",
         "/admin/login",
         "/choose_school",
+        "/oauth2callback",  # OAuth redirect
     }
     # Allow admin blueprint to self-guard; we just don't block its login
     if any(path.startswith(p) for p in allowed_prefixes) or path in allowed_exact:
@@ -220,15 +363,17 @@ def get_db_connection():
     return mysql.connector.connect(host=host, user=user, password=password, database=database)
 
 
-# Ensure compatibility columns/tables exist on boot (without audit)
-_c = None
-try:
-    _c = get_db_connection()
+def _bootstrap_db_safely():
+    """Attempt DB schema bootstrap without blocking app startup."""
+    try:
+        db = get_db_connection()
+    except Exception:
+        return
     try:
         # Ensure multi-tenant scaffolding exists
-        ensure_schools_table(_c)
+        ensure_schools_table(db)
         ensure_school_id_columns(
-            _c,
+            db,
             (
                 "students",
                 "payments",
@@ -239,31 +384,46 @@ try:
                 "term_fees",
             ),
         )
-        ensure_students_credit_column(_c)
-        ensure_credit_ops_table(_c)
-        ensure_credit_transfers_table(_c)
+        ensure_students_credit_column(db)
+        ensure_credit_ops_table(db)
+        ensure_credit_transfers_table(db)
         # Academic term scaffolding
-        ensure_academic_terms_table(_c)
-        ensure_payments_term_columns(_c)
+        ensure_academic_terms_table(db)
+        ensure_payments_term_columns(db)
         # User tables for multi-user (premium-ready)
         try:
-            ensure_user_tables(_c)
+            ensure_user_tables(db)
         except Exception:
             pass
-        ensure_student_enrollments_table(_c)
-        ensure_term_fees_table(_c)
+        ensure_student_enrollments_table(db)
+        ensure_term_fees_table(db)
         # Strengthen per-school uniqueness where safe
         try:
-            ensure_unique_indices_per_school(_c)
+            ensure_unique_indices_per_school(db)
+        except Exception:
+            pass
+        # Ensure newsletters storage
+        try:
+            ensure_newsletters_table(db)
         except Exception:
             pass
     except Exception:
         pass
-finally:
-    try:
-        _c and _c.close()
-    except Exception:
-        pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+_BOOTSTRAP_DONE = False
+
+@app.before_request
+def _run_bootstrap_once():
+    global _BOOTSTRAP_DONE
+    if not _BOOTSTRAP_DONE:
+        _BOOTSTRAP_DONE = True
+        _bootstrap_db_safely()
 
 # ---------- SCHOOL SELECTION ----------
 @app.route("/choose_school", methods=["GET", "POST"])
@@ -610,6 +770,8 @@ def add_student():
         admission_no = request.form.get("admission_no", "").strip()
         class_name = request.form["class_name"].strip()
         phone = request.form.get("phone", "").strip()
+        # Email for reminders; save to whichever column exists (email or parent_email)
+        email_val = (request.form.get("email") or "").strip()
         total_fees = float(request.form.get("total_fees", 0))
 
         db = get_db_connection()
@@ -623,6 +785,11 @@ def add_student():
         # Detect optional phone column
         cursor.execute("SHOW COLUMNS FROM students LIKE 'phone'")
         has_phone_col = bool(cursor.fetchone())
+        # Detect possible email columns
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'email'")
+        has_email_col = bool(cursor.fetchone())
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+        has_parent_email_col = bool(cursor.fetchone())
 
         # --- DUPLICATE CHECK (Admission No only) ---
         if admission_no:
@@ -639,26 +806,41 @@ def add_student():
                 flash(f"Admission Number '{admission_no}' already exists in the system.", "warning")
                 return redirect(url_for("students"))
 
-        # Insert
-        params = None
-        if has_balance:
-            if has_phone_col:
-                sql = "INSERT INTO students (name, admission_no, class_name, phone, balance, credit, school_id) VALUES (%s, %s, %s, %s, %s, 0, %s)"
-                params = (name, admission_no, class_name, phone, total_fees, session.get("school_id"))
-            else:
-                sql = "INSERT INTO students (name, admission_no, class_name, balance, credit, school_id) VALUES (%s, %s, %s, %s, 0, %s)"
-                params = (name, admission_no, class_name, total_fees, session.get("school_id"))
-        elif has_fee_balance:
-            if has_phone_col:
-                sql = "INSERT INTO students (name, admission_no, class_name, phone, fee_balance, credit, school_id) VALUES (%s, %s, %s, %s, %s, 0, %s)"
-                params = (name, admission_no, class_name, phone, total_fees, session.get("school_id"))
-            else:
-                sql = "INSERT INTO students (name, admission_no, class_name, fee_balance, credit, school_id) VALUES (%s, %s, %s, %s, 0, %s)"
-                params = (name, admission_no, class_name, total_fees, session.get("school_id"))
-        else:
+        # Insert (build dynamically to include optional phone/email columns)
+        if not (has_balance or has_fee_balance):
             db.close()
             flash("No valid balance column found in 'students' table!", "error")
             return redirect(url_for("students"))
+
+        cols = ["name", "admission_no", "class_name"]
+        params_list = [name, admission_no or None, class_name]
+        if has_phone_col:
+            cols.append("phone")
+            params_list.append(phone or None)
+        # Prefer 'email' if present; else 'parent_email' if present
+        email_col = None
+        if has_email_col:
+            email_col = "email"
+        elif has_parent_email_col:
+            email_col = "parent_email"
+        if email_col:
+            cols.append(email_col)
+            params_list.append(email_val or None)
+        # Balance column
+        if has_balance:
+            cols.append("balance")
+        else:
+            cols.append("fee_balance")
+        params_list.append(total_fees)
+        # Credit and school
+        cols.append("credit")
+        cols.append("school_id")
+        params_list.append(0)
+        params_list.append(session.get("school_id"))
+
+        placeholders = ", ".join(["%s"] * len(params_list))
+        sql = f"INSERT INTO students ({', '.join(cols)}) VALUES ({placeholders})"
+        params = tuple(params_list)
 
         try:
             cursor.execute(sql, params)
@@ -675,7 +857,7 @@ def add_student():
                 pass
             db.commit()
             # audit removed
-            flash(f"âœ… Student '{name}' added successfully!", "success")
+            flash(f"✅ Student '{name}' added successfully!", "success")
         except Exception as e:
             db.rollback()
             flash(f"Error adding student: {e}", "error")
@@ -685,6 +867,187 @@ def add_student():
         return redirect(url_for("students"))
 
     return render_template("add_student.html")
+
+
+# ---------- IMPORT STUDENTS (CSV) ----------
+@app.route("/import_students", methods=["GET", "POST"])
+def import_students():
+    """Bulk import students from a CSV file.
+
+    Expected columns (header row recommended):
+      - name, admission_no, class_name, phone, email, total_fees
+
+    Rules:
+      - Duplicate check uses admission_no within the same school (if provided).
+      - total_fees maps to opening balance for the current year enrollment and to student balance/fee_balance.
+      - Phone and email columns are optional in DB; they are used if columns exist.
+    """
+    if request.method == "GET":
+        return render_template("import_students.html")
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Please choose a CSV file to upload.", "warning")
+        return redirect(url_for("import_students"))
+
+    filename = secure_filename(file.filename)
+    try:
+        raw = file.stream.read().decode("utf-8-sig")
+    except Exception:
+        try:
+            raw = file.stream.read().decode("latin-1")
+        except Exception:
+            flash("Could not read CSV file. Ensure it is UTF-8 encoded.", "error")
+            return redirect(url_for("import_students"))
+
+    # Parse CSV
+    f = StringIO(raw)
+    reader = csv.DictReader(f)
+
+    # If no header present, fall back to simple reader and map columns by index
+    used_dict_reader = True
+    if not reader.fieldnames or len([c for c in reader.fieldnames if c]) <= 1:
+        used_dict_reader = False
+        f.seek(0)
+        reader = csv.reader(f)
+
+    db = get_db_connection()
+    cur = db.cursor(dictionary=True)
+
+    # Detect schema columns
+    cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+    has_balance = bool(cur.fetchone())
+    cur.execute("SHOW COLUMNS FROM students LIKE 'fee_balance'")
+    has_fee_balance = bool(cur.fetchone())
+    cur.execute("SHOW COLUMNS FROM students LIKE 'phone'")
+    has_phone_col = bool(cur.fetchone())
+    cur.execute("SHOW COLUMNS FROM students LIKE 'email'")
+    has_email_col = bool(cur.fetchone())
+    cur.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+    has_parent_email_col = bool(cur.fetchone())
+
+    if not (has_balance or has_fee_balance):
+        db.close()
+        flash("No valid balance column found in 'students' table!", "error")
+        return redirect(url_for("students"))
+
+    imported, duplicates, errors = 0, 0, 0
+    detail_errors = []
+
+    try:
+        ensure_student_enrollments_table(db)
+        cy, _ct = get_or_seed_current_term(db)
+    except Exception:
+        cy = None
+
+    try:
+        for row in reader:
+            try:
+                if used_dict_reader:
+                    name = (row.get("name") or "").strip()
+                    admission_no = (row.get("admission_no") or row.get("admission") or "").strip()
+                    class_name = (row.get("class_name") or row.get("class") or "").strip()
+                    phone = (row.get("phone") or "").strip()
+                    email_val = (row.get("email") or row.get("parent_email") or "").strip()
+                    tf_raw = (row.get("total_fees") or row.get("fees") or row.get("balance") or "0").strip()
+                else:
+                    # Positional mapping: [name, admission_no, class_name, phone, email, total_fees]
+                    cols = list(row)
+                    name = (cols[0] if len(cols) > 0 else "").strip()
+                    admission_no = (cols[1] if len(cols) > 1 else "").strip()
+                    class_name = (cols[2] if len(cols) > 2 else "").strip()
+                    phone = (cols[3] if len(cols) > 3 else "").strip()
+                    email_val = (cols[4] if len(cols) > 4 else "").strip()
+                    tf_raw = (cols[5] if len(cols) > 5 else "0").strip()
+
+                if not name or not class_name:
+                    errors += 1
+                    detail_errors.append("Missing required name or class_name")
+                    continue
+
+                try:
+                    total_fees = float(tf_raw.replace(",", "")) if tf_raw else 0.0
+                except Exception:
+                    total_fees = 0.0
+
+                # Normalize phone if util available
+                try:
+                    phone = normalize_phone(phone) if phone else phone
+                except Exception:
+                    pass
+
+                # Duplicate check by admission_no (if provided)
+                if admission_no:
+                    cur.execute(
+                        "SELECT id FROM students WHERE LOWER(admission_no)=LOWER(%s) AND school_id=%s",
+                        (admission_no, session.get("school_id")),
+                    )
+                    if cur.fetchone():
+                        duplicates += 1
+                        continue
+
+                # Build insert
+                cols = ["name", "admission_no", "class_name"]
+                params = [name, admission_no or None, class_name]
+                if has_phone_col:
+                    cols.append("phone")
+                    params.append(phone or None)
+                email_col = None
+                if has_email_col:
+                    email_col = "email"
+                elif has_parent_email_col:
+                    email_col = "parent_email"
+                if email_col:
+                    cols.append(email_col)
+                    params.append(email_val or None)
+                # Balance column
+                cols.append("balance" if has_balance else "fee_balance")
+                params.append(total_fees)
+                # Credit and school id
+                cols += ["credit", "school_id"]
+                params += [0, session.get("school_id")]
+
+                placeholders = ", ".join(["%s"] * len(params))
+                sql = f"INSERT INTO students ({', '.join(cols)}) VALUES ({placeholders})"
+                cur.execute(sql, tuple(params))
+                sid = cur.lastrowid
+
+                # Enrollment with opening balance
+                try:
+                    if cy is not None:
+                        cur2 = db.cursor()
+                        cur2.execute(
+                            "INSERT IGNORE INTO student_enrollments (student_id, year, class_name, opening_balance, status, school_id) VALUES (%s,%s,%s,%s,%s,%s)",
+                            (sid, cy, class_name, total_fees, "active", session.get("school_id")),
+                        )
+                except Exception:
+                    pass
+
+                imported += 1
+            except Exception as e:
+                errors += 1
+                detail_errors.append(str(e))
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        db.close()
+        flash(f"Import failed: {e}", "error")
+        return redirect(url_for("import_students"))
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    # Summary
+    msg = f"Imported {imported} student(s)."
+    if duplicates:
+        msg += f" Skipped {duplicates} duplicate(s)."
+    if errors:
+        msg += f" {errors} error(s) occurred."
+    flash(msg, "success" if imported and not errors else ("warning" if imported else "error"))
+    return redirect(url_for("students"))
 
 
 # ---------- EDIT STUDENT ----------
@@ -716,6 +1079,7 @@ def edit_student(student_id):
         class_name = request.form.get("class_name", student.get("class_name", "")).strip()
         balance_val = float(request.form.get("balance", student.get("balance") or student.get("fee_balance") or 0))
         phone_val = (request.form.get("phone") or student.get("phone") or "").strip()
+        email_val = (request.form.get("email") or student.get("email") or student.get("parent_email") or "").strip()
 
         # Enforce unique admission_no if changed and provided
         if admission_no and admission_no.lower() != (student.get("admission_no") or "").lower():
@@ -729,6 +1093,12 @@ def edit_student(student_id):
                 flash("Admission Number already exists.", "warning")
                 return redirect(url_for("edit_student", student_id=student_id))
 
+        # Detect optional email columns for update
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'email'")
+        has_email_col = bool(cursor.fetchone())
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+        has_parent_email_col = bool(cursor.fetchone())
+
         # Build dynamic update
         sets = ["name = %s", "admission_no = %s", "class_name = %s"]
         params = [name, admission_no or None, class_name]
@@ -741,6 +1111,13 @@ def edit_student(student_id):
         if has_phone_col:
             sets.append("phone = %s")
             params.append(phone_val or None)
+        # Update the appropriate email column if present
+        if has_email_col:
+            sets.append("email = %s")
+            params.append(email_val or None)
+        elif has_parent_email_col:
+            sets.append("parent_email = %s")
+            params.append(email_val or None)
         params.append(student_id)
         params.append(session.get("school_id"))
 
@@ -978,7 +1355,7 @@ def student_detail(student_id):
         flash("Student not found.", "error")
         return redirect(url_for("students"))
 
-    # âœ… Pass datetime to template
+    # ✅ Pass datetime to template
     return render_template(
         "view_student.html",
         student=student,
@@ -1038,20 +1415,36 @@ def payments():
         cursor.execute(f"SELECT {column}, credit FROM students WHERE id = %s AND school_id=%s", (student_id, session.get("school_id")))
         student = cursor.fetchone()
 
-        # Fetch student's contact info for notifications
+        # Fetch student's contact info for notifications (email-first)
         cursor.execute("SHOW COLUMNS FROM students LIKE 'phone'")
         _has_phone_col = bool(cursor.fetchone())
+        # Detect email column preference: 'email' then 'parent_email'
+        _email_col = None
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'email'")
+        if bool(cursor.fetchone()):
+            _email_col = 'email'
+        else:
+            cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+            if bool(cursor.fetchone()):
+                _email_col = 'parent_email'
+
         student_name = None
         student_phone = None
+        student_email = None
+        # Retrieve core name and available contact columns
+        select_cols = ["name", "class_name"]
         if _has_phone_col:
-            cursor.execute("SELECT name, phone FROM students WHERE id = %s AND school_id=%s", (student_id, session.get("school_id")))
-            row = cursor.fetchone() or {}
-            student_name = row.get("name")
+            select_cols.append("phone")
+        if _email_col:
+            select_cols.append(_email_col)
+        cols_sql = ", ".join(select_cols)
+        cursor.execute(f"SELECT {cols_sql} FROM students WHERE id = %s AND school_id=%s", (student_id, session.get("school_id")))
+        row = cursor.fetchone() or {}
+        student_name = row.get("name")
+        if _has_phone_col:
             student_phone = row.get("phone")
-        else:
-            cursor.execute("SELECT name FROM students WHERE id = %s AND school_id=%s", (student_id, session.get("school_id")))
-            row = cursor.fetchone() or {}
-            student_name = row.get("name")
+        if _email_col:
+            student_email = row.get(_email_col)
 
         if not student:
             db.close()
@@ -1208,42 +1601,92 @@ def payments():
             pass
         # audit removed
 
-        # Send receipt via WhatsApp (if configured)
-        to_number = normalize_phone(student_phone) if student_phone else None
-        if to_number:
-            brand = app.config.get("APP_NAME", "Your School")
-            pretty_ref = reference or "N/A"
-            message_body = (
-                f"{brand}: Payment received!\n"
-                f"Hi {student_name}, thank you for your payment of KES {amount:,.2f} via {method} (Ref: {pretty_ref}).\n"
-                f"Your new balance is KES {new_balance:,.2f}. Credit on account: KES {new_credit:,.2f}."
-            )
-            wa_ok, _ = whatsapp_is_configured()
-            sent_ok = False
-            if wa_ok:
-                template = app.config.get("WHATSAPP_TEMPLATE_NAME") or ""
-                lang = app.config.get("WHATSAPP_TEMPLATE_LANG", "en_US")
-                if template:
-                    ok, err = send_whatsapp_template(
-                        to_number,
-                        template_name=template,
-                        language=lang,
-                        body_parameters=[student_name, f"{amount:,.2f}", f"{new_balance:,.2f}", method, pretty_ref],
+        # Send a modern HTML receipt via Email when available
+        brand = (
+            get_setting("BRAND_NAME")
+            or get_setting("SCHOOL_NAME")
+            or app.config.get("APP_NAME", "Your School")
+        )
+        pretty_ref = reference or "N/A"
+        email_subject = f"Payment receipt for {student_name} – KES {amount:,.2f}"
+        email_sent = False
+        if student_email:
+            # Build receipt link for verification and quick access
+            try:
+                receipt_url = url_for('payment_receipt', payment_id=payment_id, _external=True)
+            except Exception:
+                receipt_url = ""
+            # Render an email-friendly HTML receipt
+            try:
+                email_html = render_template(
+                    "email_receipt.html",
+                    brand=brand,
+                    student_name=student_name,
+                    class_name=row.get("class_name") if isinstance(row, dict) else None,
+                    amount=amount,
+                    method=method,
+                    reference=pretty_ref,
+                    new_balance=new_balance,
+                    new_credit=new_credit,
+                    receipt_url=receipt_url,
+                    payment_id=payment_id,
+                    year=cy,
+                    term=ct,
+                )
+            except Exception:
+                # Graceful fallback to a plain text summary
+                email_html = None
+            try:
+                # Ensure a clean, user-friendly subject line (ASCII-only for safety)
+                email_subject = f"Payment receipt for {student_name} - KES {amount:,.2f}"
+                if email_html:
+                    email_sent = gmail_send_email_html(student_email, email_subject, email_html)
+                else:
+                    email_body = (
+                        f"{brand}: Payment received.\n"
+                        f"Hi {student_name}, thank you for your payment of KES {amount:,.2f} via {method} (Ref: {pretty_ref}).\n"
+                        f"Your new balance is KES {new_balance:,.2f}. Credit on account: KES {new_credit:,.2f}.\n"
+                        + (f"View receipt: {receipt_url}" if receipt_url else "")
                     )
-                else:
-                    ok, err = send_whatsapp_text(to_number, message_body)
-                if not ok:
-                    flash(f"Payment recorded, but WhatsApp send failed: {err}", "warning")
-                else:
-                    sent_ok = True
-            if not sent_ok:
-                flash("Payment recorded. Configure WhatsApp to send receipts.", "info")
+                    email_sent = gmail_send_email(student_email, email_subject, email_body)
+            except Exception:
+                email_sent = False
+            if not email_sent:
+                # Fallback to Flask-Mail (SMTP) only if configured
+                try:
+                    smtp_server = (app.config.get('MAIL_SERVER') or '').strip()
+                    smtp_user = (app.config.get('MAIL_USERNAME') or '').strip()
+                    smtp_pass = (app.config.get('MAIL_PASSWORD') or '').strip()
+                    if smtp_server and smtp_user and smtp_pass:
+                        from flask_mail import Message
+                        from extensions import mail
+                        sender = (
+                            app.config.get('MAIL_SENDER')
+                            or app.config.get('MAIL_DEFAULT_SENDER')
+                            or (get_setting('SCHOOL_EMAIL') or None)
+                            or app.config.get('MAIL_USERNAME')
+                            or None
+                        )
+                        if email_html:
+                            m = Message(subject=email_subject, sender=sender, recipients=[student_email], html=email_html)
+                        else:
+                            m = Message(subject=email_subject, sender=sender, recipients=[student_email], body=email_body)
+                        mail.send(m)
+                        email_sent = True
+                    else:
+                        email_sent = False
+                except Exception:
+                    email_sent = False
+        if not student_email:
+            flash("Payment recorded. Add an email to send receipts.", "info")
+        elif not email_sent:
+            flash("Payment recorded, but sending email receipt failed.", "warning")
         db.close()
 
         flash(f"Payment of KES {amount:,.2f} recorded! Remaining balance: KES {new_balance:,.2f}, Credit: KES {new_credit:,.2f}", "success")
         return redirect(url_for("payments"))
 
-    # âœ… NEW: read preselected student from query param
+    # ✅ NEW: read preselected student from query param
     selected_student_id = request.args.get("student_id", type=int)
 
     cursor.execute(
@@ -1539,6 +1982,9 @@ def payment_receipt_pdf(payment_id: int):
 @app.route("/analytics")
 def analytics():
     """Render analytics dashboard."""
+    if not is_pro_enabled(app):
+        flash("Analytics are available in Pro. Please upgrade.", "warning")
+        return redirect(url_for("monetization.index"))
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
 
@@ -1590,6 +2036,12 @@ def analytics_data():
       - mom: {current_month_total, prev_month_total, percent_change}
       - meta: {active_classes}
     """
+    if not is_pro_enabled(app):
+        try:
+            return jsonify({"ok": False, "error": "Pro required", "upgrade": url_for("monetization.index")}), 403
+        except Exception:
+            return jsonify({"ok": False, "error": "Pro required", "upgrade": upgrade_url(app)}), 403
+
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
 
@@ -1795,34 +2247,115 @@ def analytics_data():
 # ---------- DOCUMENTATION ----------
 @app.route("/docs")
 def docs():
-    """In-app documentation hub with optional promo/how-to video.
-
-    Looks for a local video file under static/media with the title provided by the user.
-    Supported extensions: .mp4, .webm, .mov. If present, renders a <video> player.
-    """
-    base_name = "Stop Guessing Fees_ Lovato_Tech Made Easy"
-    exts = [".mp4", ".webm", ".mov"]
-    video_rel = None
+    """Media hub for documentation with featured video support."""
+    # Ensure media folder exists
+    media_root = os.path.join(app.root_path, "static", "media")
     try:
-        static_root = os.path.join(app.root_path, "static", "media")
-        if not os.path.isdir(static_root):
-            try:
-                os.makedirs(static_root, exist_ok=True)
-            except Exception:
-                pass
-        for ext in exts:
-            candidate = os.path.join(static_root, base_name + ext)
-            if os.path.exists(candidate):
-                video_rel = f"media/{base_name}{ext}"
-                break
+        os.makedirs(media_root, exist_ok=True)
     except Exception:
-        video_rel = None
+        pass
 
-    return render_template(
-        "docs.html",
-        video_path=video_rel,
-        video_title=base_name,
-    )
+    # Resolve featured video from settings
+    featured_name = (get_setting("FEATURED_VIDEO_NAME") or "").strip()
+    featured_url = None
+    if featured_name:
+        candidate = os.path.join(media_root, featured_name)
+        if os.path.exists(candidate):
+            featured_url = url_for("static", filename=f"media/{featured_name}")
+
+    return render_template("docs.html", featured_url=featured_url, featured_name=featured_name)
+
+
+@app.route("/docs/media")
+def docs_media():
+    """List media files under static/media for the library grid."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    try:
+        os.makedirs(media_root, exist_ok=True)
+    except Exception:
+        pass
+    items = []
+    allowed = {".mp4", ".webm", ".mov", ".png", ".jpg", ".jpeg", ".gif"}
+    try:
+        for name in sorted(os.listdir(media_root)):
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in allowed:
+                continue
+            mtype = "video" if ext in {".mp4", ".webm", ".mov"} else "image"
+            items.append({
+                "name": name,
+                "type": mtype,
+                "url": url_for("static", filename=f"media/{name}"),
+            })
+    except Exception:
+        items = []
+    return jsonify({"ok": True, "media": items})
+
+
+@app.route("/docs/upload", methods=["POST"])
+def docs_upload():
+    """Upload one or more media files to static/media."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    try:
+        os.makedirs(media_root, exist_ok=True)
+    except Exception:
+        pass
+    files = request.files.getlist("files") if request.files else []
+    if not files:
+        return jsonify({"ok": False, "error": "No files"}), 400
+    allowed = {".mp4", ".webm", ".mov", ".png", ".jpg", ".jpeg", ".gif"}
+    saved = []
+    for f in files:
+        try:
+            name = secure_filename(f.filename or "")
+            if not name:
+                continue
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in allowed:
+                continue
+            path = os.path.join(media_root, name)
+            f.save(path)
+            saved.append(name)
+        except Exception:
+            continue
+    return jsonify({"ok": True, "saved": saved})
+
+
+@app.route("/docs/media/<name>", methods=["DELETE"])
+def docs_media_delete(name: str):
+    """Delete a media file by name from static/media."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    safe_name = secure_filename(name or "")
+    if not safe_name:
+        return jsonify({"ok": False, "error": "Invalid name"}), 400
+    path = os.path.join(media_root, safe_name)
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/docs/feature", methods=["POST"])
+def docs_feature():
+    """Set the featured video by file name in settings."""
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+    except Exception:
+        name = ""
+    name = secure_filename(name)
+    if not name:
+        return jsonify({"ok": False, "error": "Invalid name"}), 400
+    media_root = os.path.join(app.root_path, "static", "media")
+    if not os.path.exists(os.path.join(media_root, name)):
+        return jsonify({"ok": False, "error": "File not found"}), 404
+    try:
+        set_school_setting("FEATURED_VIDEO_NAME", name)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---------- RUN ----------

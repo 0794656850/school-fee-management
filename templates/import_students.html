@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Import Students - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Import Students (CSV){% endblock %}
+{% block content %}
+
+<div class="max-w-3xl">
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <h3 class="text-base font-semibold mb-1">Bulk Import</h3>
+    <p class="text-sm text-gray-600 mb-4">Upload a CSV file to add multiple students at once.</p>
+
+    <div class="mb-4 text-sm bg-blue-50 border border-blue-100 text-blue-800 rounded-lg p-3">
+      <p class="font-medium">Expected columns (header row recommended):</p>
+      <p><code>name, admission_no, class_name, phone, email, total_fees</code></p>
+      <ul class="list-disc pl-6 mt-1 text-blue-900/80">
+        <li><strong>name</strong> and <strong>class_name</strong> are required per row.</li>
+        <li><strong>admission_no</strong> is used to detect duplicates within your school.</li>
+        <li><strong>total_fees</strong> becomes the opening balance and current balance.</li>
+        <li>Phone/email columns are used only if available in your schema.</li>
+      </ul>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">CSV File</label>
+        <input required type="file" name="file" accept=".csv" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm bg-white" />
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Import</button>
+        <a href="{{ url_for('students') }}" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="mt-6 text-xs text-gray-500">
+    <p>Tip: Save your spreadsheet as CSV (UTF-8). Large imports may take a few seconds.</p>
+  </div>
+</div>
+
+{% endblock %}
+

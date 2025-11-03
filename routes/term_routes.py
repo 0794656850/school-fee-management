@@ -6,7 +6,11 @@ from urllib.parse import urlparse
 from datetime import date, datetime
 import os
 from utils.pro import is_pro_enabled, upgrade_url
+from utils.gmail_api import send_email_html as gmail_send_email_html
 from utils.classes import promote_class_name
+from utils.settings import get_setting, set_school_setting
+from routes.newsletter_routes import ensure_newsletters_table
+from utils.ai import ai_is_configured, chat_anything
 
 term_bp = Blueprint("terms", __name__, url_prefix="/terms")
 
@@ -140,6 +144,267 @@ def ensure_student_enrollments_table(conn) -> None:
     conn.commit()
 
 
+def _resolve_email_column(cursor) -> str | None:
+    try:
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'email'")
+        if cursor.fetchone():
+            return "email"
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+        if cursor.fetchone():
+            return "parent_email"
+    except Exception:
+        pass
+    return None
+
+
+def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]:
+    """Send premium term memo emails to all students for the specified year/term.
+
+    Returns (sent_count, skipped_count).
+    """
+    try:
+        cur = db.cursor(dictionary=True)
+        email_col = _resolve_email_column(cur)
+        if not email_col:
+            return (0, 0)
+        sid = session.get("school_id") if session else None
+        # Join invoices for total due per student
+        if sid:
+            cur.execute(
+                f"""
+                SELECT s.id, s.name, s.class_name, s.{email_col} AS email, i.total
+                FROM students s
+                LEFT JOIN invoices i ON i.student_id = s.id AND i.year=%s AND i.term=%s
+                WHERE s.school_id=%s
+                ORDER BY s.name ASC
+                """,
+                (year, term, sid),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT s.id, s.name, s.class_name, s.{email_col} AS email, i.total
+                FROM students s
+                LEFT JOIN invoices i ON i.student_id = s.id AND i.year=%s AND i.term=%s
+                ORDER BY s.name ASC
+                """,
+                (year, term),
+            )
+        students = cur.fetchall() or []
+
+        school_name = (get_setting("SCHOOL_NAME") or "School")
+        subject = f"{school_name} Term {term} Memo - {year}"
+        sent = 0
+        skipped = 0
+        # Render per-student HTML and send
+        for s in students:
+            to_addr = (s.get("email") or "").strip() if s else ""
+            if not to_addr:
+                skipped += 1
+                continue
+            try:
+                # Try include fee structure from invoice items if available
+                items = []
+                try:
+                    cur_i = db.cursor(dictionary=True)
+                    cur_i.execute(
+                        """
+                        SELECT it.description, it.amount
+                        FROM invoices inv
+                        JOIN invoice_items it ON it.invoice_id = inv.id
+                        WHERE inv.student_id=%s AND inv.year=%s AND inv.term=%s
+                        ORDER BY it.id ASC
+                        """,
+                        (s.get("id"), year, term),
+                    )
+                    items = cur_i.fetchall() or []
+                except Exception:
+                    items = []
+                html_body = render_template(
+                    "email_term_memo.html",
+                    brand=school_name,
+                    student_name=s.get("name"),
+                    class_name=s.get("class_name"),
+                    year=year,
+                    term=term,
+                    due_date=str(due_date) if due_date else None,
+                    amount_due=float(s.get("total") or 0.0),
+                    fee_items=items,
+                )
+                ok = gmail_send_email_html(to_addr, subject, html_body)
+            except Exception:
+                ok = False
+            if ok:
+                sent += 1
+            else:
+                skipped += 1
+        return (sent, skipped)
+    except Exception:
+        return (0, 0)
+
+
+def _auto_compose_term_comms(db, year: int, term: int) -> None:
+    """Create premium-ready draft newsletter and memo when a term is set/opened.
+
+    - Writes two rows into `newsletters` (category 'newsletter' and 'memo').
+    - Uses AI when configured to generate modern, parent-friendly HTML blocks.
+    - Idempotent per school/year/term by checking for existing titles.
+    """
+    try:
+        ensure_newsletters_table(db)
+    except Exception:
+        # If table missing and cannot be created, skip silently
+        return
+
+    try:
+        cur = db.cursor(dictionary=True)
+        sid = session.get("school_id") if session else None
+
+        # Gather context for copy generation
+        school = (get_setting("SCHOOL_NAME") or "School").strip()
+        # Try to read configured dates for the term
+        start_date, end_date = None, None
+        try:
+            if sid:
+                cur.execute(
+                    "SELECT start_date, end_date FROM academic_terms WHERE year=%s AND term=%s AND (school_id=%s OR school_id IS NULL) ORDER BY school_id DESC LIMIT 1",
+                    (year, term, sid),
+                )
+            else:
+                cur.execute(
+                    "SELECT start_date, end_date FROM academic_terms WHERE year=%s AND term=%s ORDER BY id DESC LIMIT 1",
+                    (year, term),
+                )
+            r = cur.fetchone() or {}
+            start_date = r.get("start_date")
+            end_date = r.get("end_date")
+        except Exception:
+            start_date, end_date = None, None
+
+        # Unique-ish titles per term
+        n_title = f"{school}: Term {term} {year} — Welcome & Key Updates"
+        m_title = f"{school}: Term {term} {year} — Fees Memo"
+
+        # Skip if they already exist for this school/term
+        try:
+            if sid:
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM newsletters WHERE school_id=%s AND title IN (%s,%s)",
+                    (sid, n_title, m_title),
+                )
+            else:
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM newsletters WHERE title IN (%s,%s)",
+                    (n_title, m_title),
+                )
+            c = (cur.fetchone() or {}).get("c", 0)
+            if int(c or 0) >= 2:
+                return
+        except Exception:
+            # If COUNT fails (older MySQL), fall back to opportunistic inserts
+            pass
+
+        # Prepare modern HTML blocks (AI if available, else templated)
+        dates_line = None
+        if start_date or end_date:
+            try:
+                s = str(start_date) if start_date else "TBA"
+                e = str(end_date) if end_date else "TBA"
+                dates_line = f"<p class=\"text-gray-700\"><strong>Term Window:</strong> {s} — {e}</p>"
+            except Exception:
+                dates_line = None
+
+        base_style = (
+            "<style>body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}" 
+            ".card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:12px 0}" 
+            ".cta{display:inline-block;background:#4f46e5;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none}</style>"
+        )
+
+        if ai_is_configured():
+            # Compose with AI for premium tone
+            prompt_ctx = (
+                f"You are an assistant for a school fee portal. School: {school}. "
+                f"Create HTML sections with short headings and friendly copy. "
+                f"Term: {term} {year}. Start date: {start_date or 'TBA'}. End date: {end_date or 'TBA'}. "
+                "Include: welcome note, important dates, fees reminder, payment options, contact & support. "
+                "Keep paragraphs short. Avoid external images; use basic HTML only."
+            )
+            nl_html = chat_anything([
+                {"role": "system", "content": "Write clean, semantic HTML only. No <html> or <body> tags."},
+                {"role": "user", "content": prompt_ctx},
+            ])
+            memo_ctx = (
+                f"Draft a concise HTML memo for parents about Term {term} {year} at {school}. "
+                "Sections: Total fees due (leave as a friendly reminder, no amounts), how to pay, key dates, office hours. "
+                "Tone: warm, clear, professional."
+            )
+            memo_html = chat_anything([
+                {"role": "system", "content": "Return only HTML fragments; no scripts, no external images."},
+                {"role": "user", "content": memo_ctx},
+            ])
+        else:
+            # Fallback handcrafted blocks
+            nl_html = (
+                f"{base_style}<div class='card'><h2>Welcome to Term {term} • {year}</h2>"
+                f"<p>Dear Parents/Guardians, welcome back to {school}. We’re excited to begin a new term together.</p>"
+                f"{dates_line or ''}</div>"
+                "<div class='card'><h3>What’s Inside This Term</h3><ul>"
+                "<li>Academic focus and classroom routines</li>"
+                "<li>Co-curricular highlights and events</li>"
+                "<li>Student wellbeing and support</li>"
+                "</ul></div>"
+                "<div class='card'><h3>Fees & Payments</h3><p>Please clear outstanding balances promptly to support operations."
+                " You can pay via the usual channels (cash office, bank, or mobile money) and keep your receipt for records.</p>"
+                "<a class='cta' href='#'>View Payment Options</a></div>"
+                "<div class='card'><h3>We’re Here to Help</h3><p>For any assistance, contact the office. Thank you for your continued support.</p></div>"
+            )
+            memo_html = (
+                f"{base_style}<div class='card'><h2>Term {term} {year} — Parent Memo</h2>"
+                f"{dates_line or ''}"
+                "<p>Please ensure fees are settled promptly. Payment options remain unchanged.</p>"
+                "<ul><li>Office hours: Mon–Fri, 8:00am–5:00pm</li>"
+                "<li>Keep payment references for reconciliation</li>"
+                "<li>Reach out if you need clarifications</li></ul>"
+                "</div>"
+            )
+
+        # Insert drafts
+        cur_i = db.cursor()
+        sid_val = session.get("school_id") if session else None
+        try:
+            if sid_val:
+                cur_i.execute(
+                    "INSERT IGNORE INTO newsletters (school_id, category, title, subject, html, audience_type, audience_value, created_by)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (sid_val, "newsletter", n_title, f"{school} • Term {term} {year} Updates", nl_html, "all", None, None),
+                )
+                cur_i.execute(
+                    "INSERT IGNORE INTO newsletters (school_id, category, title, subject, html, audience_type, audience_value, created_by)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (sid_val, "memo", m_title, f"{school} • Term {term} {year} Memo", memo_html, "all", None, None),
+                )
+            else:
+                cur_i.execute(
+                    "INSERT IGNORE INTO newsletters (category, title, subject, html, audience_type, audience_value, created_by)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    ("newsletter", n_title, f"{school} • Term {term} {year} Updates", nl_html, "all", None, None),
+                )
+                cur_i.execute(
+                    "INSERT IGNORE INTO newsletters (category, title, subject, html, audience_type, audience_value, created_by)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    ("memo", m_title, f"{school} • Term {term} {year} Memo", memo_html, "all", None, None),
+                )
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    except Exception:
+        # Never break term flows due to auto-compose errors
+        return
+
+
 def infer_kenya_term_for_date(d: date) -> int:
     # Typical Kenyan school terms (approx ranges):
     # Term 1: Janâ€“Apr, Term 2: Mayâ€“Aug, Term 3: Sepâ€“Nov/Dec
@@ -160,6 +425,55 @@ def get_or_seed_current_term(conn) -> tuple[int, int]:
     ensure_academic_terms_table(conn)
     cur = conn.cursor(dictionary=True)
     sid = session.get("school_id") if session else None
+
+    # 1) Respect per-school override if explicitly set by user in settings
+    try:
+        if sid:
+            y_cfg = get_setting("CURRENT_YEAR")
+            t_cfg = get_setting("CURRENT_TERM")
+            if y_cfg and t_cfg:
+                y_val = int(y_cfg)
+                t_val = int(t_cfg)
+                if t_val in (1, 2, 3):
+                    # Best-effort: mark matching academic_terms row as current for consistency
+                    try:
+                        cur2 = conn.cursor()
+                        try:
+                            cur2.execute("UPDATE academic_terms SET is_current=0 WHERE school_id=%s", (sid,))
+                        except Exception:
+                            cur2.execute("UPDATE academic_terms SET is_current=0")
+                        try:
+                            cur2.execute(
+                                "UPDATE academic_terms SET is_current=1 WHERE year=%s AND term=%s AND school_id=%s",
+                                (y_val, t_val, sid),
+                            )
+                        except Exception:
+                            cur2.execute(
+                                "UPDATE academic_terms SET is_current=1 WHERE year=%s AND term=%s",
+                                (y_val, t_val),
+                            )
+                        # If row doesn't exist, upsert a minimal placeholder
+                        if cur2.rowcount == 0:
+                            try:
+                                cur2.execute(
+                                    "INSERT INTO academic_terms (year, term, label, is_current, school_id) VALUES (%s,%s,%s,1,%s)",
+                                    (y_val, t_val, f"Term {t_val}", sid),
+                                )
+                            except Exception:
+                                cur2.execute(
+                                    "INSERT IGNORE INTO academic_terms (year, term, is_current) VALUES (%s,%s,1)",
+                                    (y_val, t_val),
+                                )
+                        conn.commit()
+                    except Exception:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                    return y_val, t_val
+    except Exception:
+        # Ignore settings parsing issues and continue with DB-based resolution
+        pass
     if sid:
         # Count terms for this school; seed if none
         try:
@@ -257,6 +571,22 @@ def get_or_seed_current_term(conn) -> tuple[int, int]:
 
     # Fallback: infer by month
     return today.year, infer_kenya_term_for_date(today)
+
+
+@term_bp.route("/current")
+def current_term_api():
+    """Return the current academic year/term as JSON for UI badges."""
+    try:
+        db = _db()
+        try:
+            y, t = get_or_seed_current_term(db)
+            return jsonify({"year": int(y), "term": int(t), "ok": True})
+        finally:
+            db.close()
+    except Exception:
+        # Fallback to date-based inference to avoid breaking the UI
+        today = date.today()
+        return jsonify({"year": today.year, "term": infer_kenya_term_for_date(today), "ok": False})
 
 
 @term_bp.route("/")
@@ -502,6 +832,18 @@ def set_current():
                     (year, term),
                 )
         db.commit()
+        # Persist explicit user selection to per-school settings (used as authoritative source)
+        try:
+            set_school_setting("CURRENT_YEAR", str(year))
+            set_school_setting("CURRENT_TERM", str(term))
+        except Exception:
+            # Non-fatal; DB marks still apply
+            pass
+        # Compose premium drafts for newsletter + memo
+        try:
+            _auto_compose_term_comms(db, year, term)
+        except Exception:
+            pass
         flash(f"Set current term to {year} - Term {term}.", "success")
     except Exception as e:
         db.rollback()
@@ -511,14 +853,8 @@ def set_current():
     return redirect(url_for("terms.manage_terms"))
 
 
-@term_bp.route("/current")
-def current_term_api():
-    db = _db()
-    try:
-        y, t = get_or_seed_current_term(db)
-    finally:
-        db.close()
-    return jsonify({"year": y, "term": t})
+    # Note: Duplicate '/current' route definition removed below to avoid
+    # endpoint collision (terms.current_term_api).
 
 
 @term_bp.route("/open", methods=["POST"])
@@ -542,17 +878,51 @@ def open_term_route():
         if open_cnt > 0:
             flash("Another term is already OPEN. Close it first.", "warning")
             return redirect(url_for("terms.manage_terms"))
-        # Flip status and timestamp
+        # Flip status and timestamp and mark as current. Allow transition from any status.
         if sid:
-            cur.execute("UPDATE academic_terms SET status='OPEN', opens_at=NOW() WHERE year=%s AND term=%s AND school_id=%s AND status='DRAFT'", (year, term, sid))
+            # Clear current for this school and set target as OPEN + current
+            try:
+                cur.execute("UPDATE academic_terms SET is_current=0 WHERE school_id=%s", (sid,))
+            except Exception:
+                cur.execute("UPDATE academic_terms SET is_current=0")
+            cur.execute(
+                "UPDATE academic_terms SET status='OPEN', opens_at=NOW(), is_current=1 WHERE year=%s AND term=%s AND school_id=%s",
+                (year, term, sid),
+            )
+            if cur.rowcount == 0:
+                # Upsert if missing
+                try:
+                    cur.execute(
+                        "INSERT INTO academic_terms (year, term, label, start_date, end_date, status, opens_at, is_current, school_id) VALUES (%s,%s,%s,NULL,NULL,'OPEN',NOW(),1,%s)",
+                        (year, term, f"Term {term}", sid),
+                    )
+                except Exception:
+                    cur.execute(
+                        "INSERT IGNORE INTO academic_terms (year, term, status, opens_at, is_current) VALUES (%s,%s,'OPEN',NOW(),1)",
+                        (year, term),
+                    )
         else:
-            cur.execute("UPDATE academic_terms SET status='OPEN', opens_at=NOW() WHERE year=%s AND term=%s AND status='DRAFT'", (year, term))
+            cur.execute("UPDATE academic_terms SET is_current=0")
+            cur.execute(
+                "UPDATE academic_terms SET status='OPEN', opens_at=NOW(), is_current=1 WHERE year=%s AND term=%s",
+                (year, term),
+            )
+            if cur.rowcount == 0:
+                cur.execute(
+                    "INSERT IGNORE INTO academic_terms (year, term, status, opens_at, is_current) VALUES (%s,%s,'OPEN',NOW(),1)",
+                    (year, term),
+                )
         db.commit()
         # Audit
         try:
             from utils.audit import ensure_audit_table, log_event
             ensure_audit_table(db)
             log_event(db, sid, None, 'open_term', 'term', None, {'year': year, 'term': term})
+        except Exception:
+            pass
+        # Auto-compose communications drafts for the opened term
+        try:
+            _auto_compose_term_comms(db, year, term)
         except Exception:
             pass
         flash("Term opened.", "success")
@@ -588,11 +958,11 @@ def close_term_route():
         if not row:
             flash("Only an OPEN term can be closed.", "warning")
             return redirect(url_for("terms.manage_terms"))
-        # Close term
+        # Close term and clear is_current if it was current
         if sid:
-            cur.execute("UPDATE academic_terms SET status='CLOSED', closes_at=NOW() WHERE id=%s AND school_id=%s", (row.get('id'), sid))
+            cur.execute("UPDATE academic_terms SET status='CLOSED', closes_at=NOW(), is_current=IF(is_current=1,0,is_current) WHERE id=%s AND school_id=%s", (row.get('id'), sid))
         else:
-            cur.execute("UPDATE academic_terms SET status='CLOSED', closes_at=NOW() WHERE id=%s", (row.get('id'),))
+            cur.execute("UPDATE academic_terms SET status='CLOSED', closes_at=NOW(), is_current=IF(is_current=1,0,is_current) WHERE id=%s", (row.get('id'),))
         db.commit()
         # Audit
         try:
@@ -616,6 +986,7 @@ def close_term_route():
 
 def ensure_term_fees_table(conn) -> None:
     cur = conn.cursor()
+    # Base table
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS term_fees (
@@ -624,6 +995,12 @@ def ensure_term_fees_table(conn) -> None:
             year INT NOT NULL,
             term TINYINT NOT NULL,
             fee_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            -- Extended fields to support real-world adjustments/discounts
+            initial_fee DECIMAL(12,2) NULL,
+            adjusted_fee DECIMAL(12,2) NULL,
+            discount DECIMAL(12,2) NULL,
+            final_fee DECIMAL(12,2) NULL,
+            school_id INT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uq_student_year_term (student_id, year, term),
@@ -632,6 +1009,25 @@ def ensure_term_fees_table(conn) -> None:
         """
     )
     conn.commit()
+
+    # Make sure new columns exist on legacy databases
+    def _ensure_col(name: str, ddl: str):
+        try:
+            cur.execute(f"SHOW COLUMNS FROM term_fees LIKE '{name}'")
+            if not cur.fetchone():
+                cur.execute(f"ALTER TABLE term_fees ADD COLUMN {ddl}")
+                conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+    _ensure_col("initial_fee", "initial_fee DECIMAL(12,2) NULL AFTER fee_amount")
+    _ensure_col("adjusted_fee", "adjusted_fee DECIMAL(12,2) NULL AFTER initial_fee")
+    _ensure_col("discount", "discount DECIMAL(12,2) NULL AFTER adjusted_fee")
+    _ensure_col("final_fee", "final_fee DECIMAL(12,2) NULL AFTER discount")
+    _ensure_col("school_id", "school_id INT NULL AFTER final_fee")
 
 
 @term_bp.route("/fees")
@@ -723,11 +1119,11 @@ def manage_term_fees():
             for r in (cur.fetchall() or []):
                 discount_map[r["student_id"]] = {"kind": r.get("kind"), "value": float(r.get("value") or 0)}
 
-        # Legacy flat term fees (fallback)
+        # Legacy flat term fees (fallback). Prefer stored final_fee when present
         if student_ids:
             ph = ",".join(["%s"] * len(student_ids))
             cur.execute(
-                f"SELECT student_id, fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({ph})",
+                f"SELECT student_id, COALESCE(final_fee, fee_amount) AS fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({ph})",
                 (qy, qt, *student_ids),
             )
             legacy_map = {r["student_id"]: float(r.get("fee_amount") or 0) for r in (cur.fetchall() or [])}
@@ -803,24 +1199,62 @@ def set_term_fee():
         has_balance = bool(cur.fetchone())
         bal_col = "balance" if has_balance else "fee_balance"
 
+        # Fetch existing to determine whether this is an initial set or an adjustment
         cur.execute(
-            "SELECT fee_amount FROM term_fees WHERE student_id=%s AND year=%s AND term=%s",
+            "SELECT fee_amount, initial_fee, adjusted_fee, discount, final_fee FROM term_fees WHERE student_id=%s AND year=%s AND term=%s",
             (student_id, year, term),
         )
-        prev = cur.fetchone()
-        prev_amt = float(prev["fee_amount"]) if prev and prev.get("fee_amount") is not None else 0.0
-        delta = float(fee_amount) - prev_amt
+        prev = cur.fetchone() or {}
+        prev_final = float(
+            prev.get("final_fee") if prev.get("final_fee") is not None else prev.get("fee_amount") or 0.0
+        )
 
+        # Determine new state:
+        # - If a record exists, treat input as an adjustment (adjusted_fee)
+        # - Otherwise, set as initial_fee
+        new_initial = None
+        new_adjusted = None
+        if prev:
+            new_adjusted = float(fee_amount)
+        else:
+            new_initial = float(fee_amount)
+
+        # Resolve any discount from term_fees row; if using Pro discounts table,
+        # the invoice generator will still apply those. Here, we only consider the
+        # per-row discount column for legacy flat logic.
+        row_discount = float(prev.get("discount") or 0.0)
+
+        # Compute effective fee (adjusted if present, else initial)
+        effective_fee = (
+            new_adjusted if new_adjusted is not None else
+            (prev.get("adjusted_fee") if prev.get("adjusted_fee") is not None else None)
+        )
+        if effective_fee is None:
+            effective_fee = (
+                new_initial if new_initial is not None else
+                (prev.get("initial_fee") if prev.get("initial_fee") is not None else 0.0)
+            )
+
+        # Final fee after discount (clamped at zero)
+        if row_discount and effective_fee is not None and row_discount > effective_fee:
+            # Warn if discount exceeds fee
+            flash("Discount exceeds adjusted/initial fee; final set to 0.", "warning")
+        new_final = max(float(effective_fee) - float(row_discount or 0.0), 0.0)
+
+        # For backward compatibility, mirror into fee_amount column
         if prev:
             cur.execute(
-                "UPDATE term_fees SET fee_amount=%s WHERE student_id=%s AND year=%s AND term=%s",
-                (fee_amount, student_id, year, term),
+                "UPDATE term_fees SET fee_amount=%s, final_fee=%s, adjusted_fee=%s WHERE student_id=%s AND year=%s AND term=%s",
+                (new_final, new_final, new_adjusted, student_id, year, term),
             )
         else:
             cur.execute(
-                "INSERT INTO term_fees (student_id, year, term, fee_amount) VALUES (%s,%s,%s,%s)",
-                (student_id, year, term, fee_amount),
+                "INSERT INTO term_fees (student_id, year, term, fee_amount, initial_fee, final_fee) VALUES (%s,%s,%s,%s,%s,%s)",
+                (student_id, year, term, new_final, new_initial, new_final),
             )
+
+        # Balance delta is based on change in FINAL amount
+        delta = float(new_final) - float(prev_final)
 
         if abs(delta) > 0:
             cur.execute(
@@ -828,21 +1262,334 @@ def set_term_fee():
                 (delta, student_id, session.get("school_id") if session else None),
             )
 
+        # Auto-apply any existing student credit to the new term balance
+        # so overpayments from previous terms reduce the opening debt.
+        try:
+            cur.execute("SELECT COALESCE(credit,0) AS credit, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE id=%s AND school_id=%s",
+                        (student_id, session.get("school_id")))
+            row = cur.fetchone() or {"credit": 0, "bal": 0}
+            avail = float(row.get("credit") or 0)
+            bal_now = float(row.get("bal") or 0)
+            apply = min(avail, max(bal_now, 0))
+            if apply > 0:
+                # Reduce balance and credit
+                cur.execute(f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
+                            (apply, apply, student_id, session.get("school_id")))
+                # Record as a visible payment with method 'Credit Transfer'
+                try:
+                    pcur = db.cursor()
+                    pcur.execute(
+                        "INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id) VALUES (%s,%s,%s,%s,NOW(),%s,%s,%s)",
+                        (student_id, apply, 'Credit Transfer', 'Auto-apply starting term credit', year, term, session.get("school_id")),
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            # Non-fatal if schema differs
+            pass
+
         db.commit()
         if prev:
-            flash(f"Updated term fee. Delta applied to balance: KES {delta:,.2f}", "success")
+            flash(f"Adjusted fee saved. Final: KES {new_final:,.2f}. Balance delta: KES {delta:,.2f}", "success")
         else:
-            flash(f"Set term fee and applied to balance: KES {fee_amount:,.2f}", "success")
+            flash(f"Initial fee saved. Final: KES {new_final:,.2f}. Applied to balance.", "success")
     except Exception as e:
         try:
             db.rollback()
         except Exception:
             pass
         flash(f"Error saving term fee: {e}", "error")
+        # After saving, attempt to email term fee structure automatically
+        try:
+            _conn_email = _db()
+            cur = _conn_email.cursor(dictionary=True)
+            # Resolve recipient email column
+            email_col = _resolve_email_column(cur)
+            if email_col:
+                # Fetch student profile including class and email
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute(
+                        f"SELECT id, name, class_name, {email_col} AS email FROM students WHERE id=%s AND school_id=%s",
+                        (student_id, sid),
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT id, name, class_name, {email_col} AS email FROM students WHERE id=%s",
+                        (student_id,),
+                    )
+                srow = cur.fetchone() or None
+                to_addr = (srow.get("email") or "").strip() if srow else ""
+                if to_addr:
+                    # Build fee structure: prefer itemized components; fallback to final flat fee
+                    items = []
+                    total_due = 0.0
+                    try:
+                        cur.execute(
+                            """
+                            SELECT fc.name AS description, si.amount
+                            FROM student_term_fee_items si
+                            JOIN fee_components fc ON fc.id = si.component_id
+                            WHERE si.student_id=%s AND si.year=%s AND si.term=%s
+                            ORDER BY fc.name ASC
+                            """,
+                            (student_id, year, term),
+                        )
+                        items = cur.fetchall() or []
+                        total_due = float(sum([float(i.get("amount") or 0) for i in items]))
+                    except Exception:
+                        items = []
+                    if not items:
+                        # Fallback to legacy flat fee
+                        total_due = float(new_final or 0.0)
+                        items = [{"description": "Term Fee", "amount": total_due}]
+                    # Try to fetch due date from invoice if present
+                    due_str = None
+                    try:
+                        cur.execute(
+                            "SELECT due_date FROM invoices WHERE student_id=%s AND year=%s AND term=%s",
+                            (student_id, year, term),
+                        )
+                        inv = cur.fetchone()
+                        if inv and inv.get("due_date"):
+                            due_str = str(inv.get("due_date"))
+                    except Exception:
+                        pass
+                    subject = f"{(get_setting('SCHOOL_NAME') or 'School')} Term {term} Memo - {year}"
+                    html_body = render_template(
+                        "email_term_memo.html",
+                        brand=(get_setting("SCHOOL_NAME") or "School"),
+                        student_name=srow.get("name") if srow else "Student",
+                        class_name=srow.get("class_name") if srow else None,
+                        year=year,
+                        term=term,
+                        due_date=due_str,
+                        amount_due=total_due,
+                        fee_items=items,
+                    )
+                    try:
+                        gmail_send_email_html(to_addr, subject, html_body)
+                    except Exception:
+                        pass
+            try:
+                _conn_email.close()
+            except Exception:
+                pass
+        except Exception:
+            # Ignore email errors to keep UX smooth
+            pass
     finally:
         db.close()
 
     return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+
+@term_bp.route("/memo/<int:student_id>/<int:year>/<int:term>.pdf")
+def term_memo_pdf(student_id: int, year: int, term: int):
+    """Generate a modern PDF memo for a student's term fee, including structure.
+
+    Produces a branded PDF similar to the HTML email, with an itemized
+    fee structure when available, and a total due card.
+    """
+    db = _db()
+    try:
+        cur = db.cursor(dictionary=True)
+        sid = session.get("school_id") if session else None
+        # Student profile
+        if sid:
+            cur.execute(
+                "SELECT id, name, class_name FROM students WHERE id=%s AND school_id=%s",
+                (student_id, sid),
+            )
+        else:
+            cur.execute("SELECT id, name, class_name FROM students WHERE id=%s", (student_id,))
+        srow = cur.fetchone()
+        if not srow:
+            flash("Student not found.", "error")
+            return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+        # Try to fetch itemized components
+        items = []
+        try:
+            cur.execute(
+                """
+                SELECT fc.name AS description, si.amount
+                FROM student_term_fee_items si
+                JOIN fee_components fc ON fc.id = si.component_id
+                WHERE si.student_id=%s AND si.year=%s AND si.term=%s
+                ORDER BY fc.name ASC
+                """,
+                (student_id, year, term),
+            )
+            items = cur.fetchall() or []
+        except Exception:
+            items = []
+        # Total due and fallback
+        total_due = 0.0
+        if items:
+            total_due = float(sum([float(i.get("amount") or 0) for i in items]))
+        else:
+            try:
+                cur.execute(
+                    "SELECT COALESCE(final_fee, fee_amount) AS fee FROM term_fees WHERE student_id=%s AND year=%s AND term=%s",
+                    (student_id, year, term),
+                )
+                row = cur.fetchone() or {"fee": 0}
+                total_due = float(row.get("fee") or 0)
+                items = [{"description": "Term Fee", "amount": total_due}]
+            except Exception:
+                total_due = 0.0
+                items = []
+
+        # Due date from invoice if available
+        due_str = None
+        try:
+            cur.execute(
+                "SELECT due_date FROM invoices WHERE student_id=%s AND year=%s AND term=%s",
+                (student_id, year, term),
+            )
+            inv = cur.fetchone()
+            if inv and inv.get("due_date"):
+                due_str = str(inv.get("due_date"))
+        except Exception:
+            pass
+
+        # School branding
+        school_name = (
+            get_setting("SCHOOL_NAME")
+            or get_setting("APP_NAME")
+            or current_app.config.get("APP_NAME")
+            or current_app.config.get("BRAND_NAME")
+            or get_setting("BRAND_NAME")
+            or "School"
+        )
+        school_address = get_setting("SCHOOL_ADDRESS") or ""
+        school_phone = get_setting("SCHOOL_PHONE") or ""
+        school_email = get_setting("SCHOOL_EMAIL") or ""
+
+        # Build PDF
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib import colors
+        from reportlab.pdfgen import canvas
+
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        x_margin = 18 * mm
+        content_gap = 7 * mm
+
+        brand_indigo = colors.HexColor("#4338ca")
+        brand_cyan = colors.HexColor("#06b6d4")
+        light_bg = colors.HexColor("#eef2ff")
+        soft_border = colors.HexColor("#e2e8f0")
+
+        # Header bar
+        header_h = 32 * mm
+        c.setFillColor(brand_indigo)
+        c.rect(0, height - header_h, width, header_h, fill=1, stroke=0)
+
+        # Header text and badge
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(x_margin, height - 12 * mm, str(school_name))
+        c.setFont("Helvetica", 10)
+        sub = " ".join(filter(None, [school_address, school_phone, school_email]))
+        c.setFillColor(colors.whitesmoke)
+        c.drawString(x_margin, height - 17 * mm, sub)
+        # Badge
+        badge_w, badge_h = 30 * mm, 10 * mm
+        badge_x = width - x_margin - badge_w
+        badge_y = height - 15 * mm - (badge_h / 2)
+        c.setFillColor(colors.white)
+        c.roundRect(badge_x, badge_y, badge_w, badge_h, 3 * mm, fill=1, stroke=0)
+        c.setFillColor(brand_indigo)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(badge_x + badge_w / 2, badge_y + 3.5 * mm, "TERM MEMO")
+
+        # Content origin
+        y = height - header_h - 14 * mm
+
+        # Amount card
+        card_h = 18 * mm
+        card_y = y - card_h
+        c.setFillColor(light_bg)
+        c.setStrokeColor(soft_border)
+        c.roundRect(x_margin, card_y, width - 2 * x_margin, card_h, 4 * mm, fill=1, stroke=0)
+        c.setFont("Helvetica", 10)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawCentredString(width / 2, card_y + card_h - 6.5 * mm, "Total Due This Term")
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.setFont("Helvetica-Bold", 20)
+        c.drawCentredString(width / 2, card_y + 6 * mm, f"KES {float(total_due):,.2f}")
+        y = card_y - content_gap
+
+        # Key-value rows function
+        def draw_kv(label: str, value: str):
+            nonlocal y
+            c.setFont("Helvetica", 10)
+            c.setFillColor(colors.HexColor("#64748b"))
+            c.drawString(x_margin, y, label)
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica-Bold", 11)
+            c.drawRightString(width - x_margin, y, value)
+            y -= 7 * mm
+
+        draw_kv("Student", str(srow.get("name") or ""))
+        draw_kv("Class", str(srow.get("class_name") or "N/A"))
+        draw_kv("Year / Term", f"{year} / {term}")
+        if due_str:
+            draw_kv("Due Date", str(due_str))
+
+        # Separator
+        c.setStrokeColor(colors.lightgrey)
+        c.setDash(1, 2)
+        c.line(x_margin, y, width - x_margin, y)
+        c.setDash()
+        y -= 6 * mm
+
+        # Fee structure table
+        c.setFont("Helvetica-Bold", 12)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.drawString(x_margin, y, "Fee Structure")
+        y -= 7 * mm
+        c.setFont("Helvetica", 10)
+        for it in items:
+            if y < 30 * mm:
+                c.showPage()
+                y = height - 20 * mm
+                c.setFont("Helvetica", 10)
+            desc = str(it.get("description") or "Item")
+            amt = float(it.get("amount") or 0)
+            c.setFillColor(colors.HexColor("#0f172a"))
+            c.drawString(x_margin, y, desc)
+            c.drawRightString(width - x_margin, y, f"KES {amt:,.2f}")
+            y -= 6 * mm
+
+        # Footer note
+        y = max(y, 24 * mm)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(width / 2, y, "Kindly review and arrange payment by the due date.")
+
+        c.showPage()
+        c.save()
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=term_memo_{student_id}_{year}_T{term}.pdf",
+            },
+        )
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 # ------------------- Premium: Components, Defaults, Discounts, Invoices -------------------
@@ -954,12 +1701,31 @@ def ensure_invoices_tables(conn) -> None:
 
 @term_bp.route("/invoices")
 def invoices_list():
-    if not is_pro_enabled():
-        flash("Invoices are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
+    # Premium guard: require non-FREE plan
+    try:
+        from utils.monetization import plan_status as _plan_status
+        sid = session.get("school_id") if session else None
+        status = _plan_status(int(sid)) if sid else {"plan_code": "FREE"}
+    except Exception:
+        status = {"plan_code": "FREE"}
+    if status.get("plan_code") == "FREE":
+        flash("Upgrade to Pro to access invoices.", "warning")
+        return redirect(url_for("monetization.index"))
     db = _db()
     try:
         ensure_invoices_tables(db)
+        # Auto-refresh: keep invoices in sync on page load.
+        try:
+            y_auto, t_auto = get_or_seed_current_term(db)
+            year_auto = request.args.get("year", type=int) or y_auto
+            term_auto = request.args.get("term", type=int) or t_auto
+            _generate_or_update_invoices(db, year_auto, term_auto)
+        except Exception as _e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            flash(f"Invoice auto-refresh skipped: {_e}", "warning")
         # Resolve year/term defaults
         y, t = get_or_seed_current_term(db)
         year = request.args.get("year", type=int) or y
@@ -979,6 +1745,11 @@ def invoices_list():
             """
         )
         params = [year, term]
+        # Scope to current school when available
+        sid = session.get("school_id") if session else None
+        if sid:
+            base_sql += " AND s.school_id = %s"
+            params.append(sid)
         if q:
             like = f"%{q}%"
             base_sql += " AND (s.name LIKE %s OR s.class_name LIKE %s OR CAST(i.id AS CHAR) LIKE %s)"
@@ -994,9 +1765,6 @@ def invoices_list():
 
 @term_bp.route("/invoices/<int:invoice_id>")
 def invoice_view(invoice_id: int):
-    if not is_pro_enabled():
-        flash("Invoices are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
     db = _db()
     try:
         ensure_invoices_tables(db)
@@ -1011,6 +1779,18 @@ def invoice_view(invoice_id: int):
             (invoice_id,),
         )
         invoice = cur.fetchone()
+        # Enforce school scoping if applicable
+        sid = session.get("school_id") if session else None
+        if invoice and sid:
+            try:
+                cur.execute(
+                    "SELECT 1 FROM students WHERE id=%s AND school_id=%s",
+                    (invoice.get("student_id"), sid),
+                )
+                if not cur.fetchone():
+                    invoice = None
+            except Exception:
+                pass
         if not invoice:
             flash("Invoice not found.", "error")
             return redirect(url_for("terms.invoices_list"))
@@ -1184,6 +1964,61 @@ def set_student_items():
         try: db.rollback()
         except Exception: pass
         flash(f"Error saving student items: {e}", "error")
+        # After saving, attempt to email term fee structure automatically
+        try:
+            _conn_email = _db()
+            c = _conn_email.cursor(dictionary=True)
+            email_col = _resolve_email_column(c)
+            if email_col:
+                sid = session.get("school_id") if session else None
+                if sid:
+                    c.execute(
+                        f"SELECT id, name, class_name, {email_col} AS email FROM students WHERE id=%s AND school_id=%s",
+                        (student_id, sid),
+                    )
+                else:
+                    c.execute(
+                        f"SELECT id, name, class_name, {email_col} AS email FROM students WHERE id=%s",
+                        (student_id,),
+                    )
+                srow = c.fetchone() or None
+                to_addr = (srow.get("email") or "").strip() if srow else ""
+                if to_addr:
+                    # Fetch the just-saved items
+                    c.execute(
+                        """
+                        SELECT fc.name AS description, si.amount
+                        FROM student_term_fee_items si
+                        JOIN fee_components fc ON fc.id = si.component_id
+                        WHERE si.student_id=%s AND si.year=%s AND si.term=%s
+                        ORDER BY fc.name ASC
+                        """,
+                        (student_id, year, term),
+                    )
+                    items = c.fetchall() or []
+                    total_due = float(sum([float(i.get("amount") or 0) for i in items]))
+                    subject = f"{(get_setting('SCHOOL_NAME') or 'School')} Term {term} Memo - {year}"
+                    html_body = render_template(
+                        "email_term_memo.html",
+                        brand=(get_setting("SCHOOL_NAME") or "School"),
+                        student_name=srow.get("name") if srow else "Student",
+                        class_name=srow.get("class_name") if srow else None,
+                        year=year,
+                        term=term,
+                        due_date=None,
+                        amount_due=total_due,
+                        fee_items=items,
+                    )
+                    try:
+                        gmail_send_email_html(to_addr, subject, html_body)
+                    except Exception:
+                        pass
+            try:
+                _conn_email.close()
+            except Exception:
+                pass
+        except Exception:
+            pass
     finally:
         db.close()
     return redirect(url_for("terms.manage_term_fees", year=year, term=term))
@@ -1225,12 +2060,20 @@ def set_discount():
 
 @term_bp.route("/fees/generate_invoices", methods=["POST"])
 def generate_invoices():
-    if not is_pro_enabled():
-        flash("Invoice generation is a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
+    # Premium guard: require non-FREE plan
+    try:
+        from utils.monetization import plan_status as _plan_status
+        sid = session.get("school_id") if session else None
+        status = _plan_status(int(sid)) if sid else {"plan_code": "FREE"}
+    except Exception:
+        status = {"plan_code": "FREE"}
+    if status.get("plan_code") == "FREE":
+        flash("Upgrade to Pro to generate invoices.", "warning")
+        return redirect(url_for("monetization.index"))
     year = request.form.get("year", type=int)
     term = request.form.get("term", type=int)
     due_date_raw = request.form.get("due_date")
+    send_memo = (request.form.get("send_memo") in ("1", "true", "on"))
     # Normalize due_date: allow empty -> NULL, or ensure proper date object
     due_date = None
     if due_date_raw:
@@ -1245,120 +2088,16 @@ def generate_invoices():
         return redirect(url_for("terms.manage_term_fees", year=year, term=term))
     db = _db()
     try:
-        ensure_invoices_tables(db)
-        ensure_fee_components_table(db)
-        ensure_class_fee_defaults_table(db)
-        ensure_student_fee_items_table(db)
-        ensure_discounts_table(db)
-
-        cur = db.cursor(dictionary=True)
-        # Students
-        sid = session.get("school_id") if session else None
-        if sid:
-            cur.execute("SELECT id, name, class_name FROM students WHERE school_id=%s ORDER BY name ASC", (sid,))
-        else:
-            cur.execute("SELECT id, name, class_name FROM students ORDER BY name ASC")
-        students = cur.fetchall() or []
-        if not students:
-            flash("No students to invoice.", "warning")
-            return redirect(url_for("terms.manage_term_fees", year=year, term=term))
-
-        # Components
-        cur.execute("SELECT id, name, default_amount FROM fee_components ORDER BY name ASC")
-        comps = cur.fetchall() or []
-        comp_defaults = {c["id"]: float(c.get("default_amount") or 0) for c in comps}
-
-        # Class defaults
-        cur.execute("SELECT class_name, component_id, amount FROM class_fee_defaults WHERE year=%s AND term=%s", (year, term))
-        class_rows = cur.fetchall() or []
-        class_defaults = {}
-        for r in class_rows:
-            class_defaults.setdefault(r["class_name"], {})[r["component_id"]] = float(r.get("amount") or 0)
-
-        # Student item overrides
-        ids = [s["id"] for s in students]
-        items_map = {}
-        if ids:
-            ph = ",".join(["%s"] * len(ids))
-            cur.execute(
-                f"SELECT student_id, component_id, amount FROM student_term_fee_items WHERE year=%s AND term=%s AND student_id IN ({ph})",
-                (year, term, *ids),
-            )
-            for r in (cur.fetchall() or []):
-                items_map.setdefault(r["student_id"], {})[r["component_id"]] = float(r.get("amount") or 0)
-
-        # Discounts
-        discount_map = {}
-        if ids:
-            ph = ",".join(["%s"] * len(ids))
-            cur.execute(
-                f"SELECT student_id, kind, value FROM discounts WHERE year=%s AND term=%s AND student_id IN ({ph})",
-                (year, term, *ids),
-            )
-            for r in (cur.fetchall() or []):
-                discount_map[r["student_id"]] = {"kind": r.get("kind"), "value": float(r.get("value") or 0)}
-
-        cur_i = db.cursor()
-        created = 0
-        for s in students:
-            sid = s["id"]
-            klass = s.get("class_name")
-
-            # Compute per-component charge
-            total = 0.0
-            per_comp = []
-            for c in comps:
-                cid = c["id"]
-                amt = comp_defaults.get(cid, 0.0)
-                if klass and klass in class_defaults and cid in class_defaults[klass]:
-                    amt = class_defaults[klass][cid]
-                if sid in items_map and cid in items_map[sid]:
-                    amt = items_map[sid][cid]
-                if amt and amt > 0:
-                    per_comp.append((cid, c.get("name"), amt))
-                    total += amt
-
-            disc = discount_map.get(sid)
-            discount_val = 0.0
-            if disc:
-                if disc.get("kind") == "percent":
-                    discount_val = round(total * (disc.get("value", 0.0) / 100.0), 2)
-                else:
-                    discount_val = float(disc.get("value") or 0.0)
-            grand = max(total - discount_val, 0.0)
-
-            # Upsert invoice
-            cur_i.execute(
-                "INSERT INTO invoices (student_id, year, term, due_date, status, total) VALUES (%s,%s,%s,%s,%s,%s)"
-                " ON DUPLICATE KEY UPDATE due_date=VALUES(due_date), total=VALUES(total)",
-                (sid, year, term, due_date, 'draft', grand),
-            )
-            # Get invoice id (lastrowid works for insert; fetch id otherwise)
-            inv_id = cur_i.lastrowid
-            if not inv_id:
-                cur.execute("SELECT id FROM invoices WHERE student_id=%s AND year=%s AND term=%s", (sid, year, term))
-                rr = cur.fetchone()
-                inv_id = rr["id"] if rr else None
-            if not inv_id:
-                continue
-
-            # Reset items and insert
-            cur_i.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-            for cid, cname, amt in per_comp:
-                cur_i.execute(
-                    "INSERT INTO invoice_items (invoice_id, description, component_id, amount) VALUES (%s,%s,%s,%s)",
-                    (inv_id, cname, cid, amt),
-                )
-            if discount_val > 0:
-                desc = "Discount"
-                cur_i.execute(
-                    "INSERT INTO invoice_items (invoice_id, description, component_id, amount) VALUES (%s,%s,%s,%s)",
-                    (inv_id, desc, None, -discount_val),
-                )
-            created += 1
-
+        created = _generate_or_update_invoices(db, year, term, due_date)
         db.commit()
         flash(f"Generated/updated {created} invoices for {year} T{term}.", "success")
+        # Premium-only: optionally send memo emails
+        if send_memo:
+            sent, skipped = _send_term_memos(db, year, term, due_date)
+            if sent:
+                flash(f"Term memos emailed to {sent} students (skipped {skipped}).", "success")
+            else:
+                flash("No term memos sent (no emails found or email not configured).", "warning")
     except Exception as e:
         try: db.rollback()
         except Exception: pass
@@ -1366,6 +2105,164 @@ def generate_invoices():
     finally:
         db.close()
     return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+def _generate_or_update_invoices(db, year:int, term:int, due_date=None) -> int:
+    """Core invoice generation used by both the POST route and the list auto-refresh.
+
+    Falls back to legacy flat fees (table `term_fees`) when no itemized components
+    are defined for a student so invoices always have a total.
+    """
+    ensure_invoices_tables(db)
+    ensure_fee_components_table(db)
+    ensure_class_fee_defaults_table(db)
+    ensure_student_fee_items_table(db)
+    ensure_discounts_table(db)
+    ensure_term_fees_table(db)
+
+    # If due_date not provided, try academic term end date, else +14 days
+    if not due_date:
+        try:
+            curd = db.cursor(dictionary=True)
+            yx, tx = year, term
+            sid = session.get("school_id") if session else None
+            if sid:
+                curd.execute(
+                    "SELECT end_date FROM academic_terms WHERE year=%s AND term=%s AND (school_id=%s OR school_id IS NULL) ORDER BY school_id DESC LIMIT 1",
+                    (yx, tx, sid),
+                )
+            else:
+                curd.execute(
+                    "SELECT end_date FROM academic_terms WHERE year=%s AND term=%s ORDER BY id DESC LIMIT 1",
+                    (yx, tx),
+                )
+            r = curd.fetchone()
+            if r and r.get("end_date"):
+                due_date = r.get("end_date")
+            else:
+                from datetime import date as _d, timedelta as _td
+                due_date = _d.today() + _td(days=14)
+        except Exception:
+            pass
+
+    cur = db.cursor(dictionary=True)
+    sid = session.get("school_id") if session else None
+    if sid:
+        cur.execute("SELECT id, name, class_name FROM students WHERE school_id=%s ORDER BY name ASC", (sid,))
+    else:
+        cur.execute("SELECT id, name, class_name FROM students ORDER BY name ASC")
+    students = cur.fetchall() or []
+    if not students:
+        return 0
+
+    # Component catalog
+    cur.execute("SELECT id, name, default_amount FROM fee_components ORDER BY name ASC")
+    comps = cur.fetchall() or []
+    comp_defaults = {c["id"]: float(c.get("default_amount") or 0) for c in comps}
+
+    # Class defaults
+    cur.execute("SELECT class_name, component_id, amount FROM class_fee_defaults WHERE year=%s AND term=%s", (year, term))
+    class_rows = cur.fetchall() or []
+    class_defaults = {}
+    for r in class_rows:
+        class_defaults.setdefault(r["class_name"], {})[r["component_id"]] = float(r.get("amount") or 0)
+
+    # Student overrides
+    ids = [s["id"] for s in students]
+    items_map = {}
+    if ids:
+        ph = ",".join(["%s"] * len(ids))
+        cur.execute(
+            f"SELECT student_id, component_id, amount FROM student_term_fee_items WHERE year=%s AND term=%s AND student_id IN ({ph})",
+            (year, term, *ids),
+        )
+        for r in (cur.fetchall() or []):
+            items_map.setdefault(r["student_id"], {})[r["component_id"]] = float(r.get("amount") or 0)
+
+    # Discounts
+    discount_map = {}
+    if ids:
+        ph = ",".join(["%s"] * len(ids))
+        cur.execute(
+            f"SELECT student_id, kind, value FROM discounts WHERE year=%s AND term=%s AND student_id IN ({ph})",
+            (year, term, *ids),
+        )
+        for r in (cur.fetchall() or []):
+            discount_map[r["student_id"]] = {"kind": r.get("kind"), "value": float(r.get("value") or 0)}
+
+    # Legacy flat fees map for fallback
+    fee_flat = {}
+    if ids:
+        ph = ",".join(["%s"] * len(ids))
+        cur.execute(
+            f"SELECT student_id, COALESCE(final_fee, fee_amount) AS fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({ph})",
+            (year, term, *ids),
+        )
+        fee_flat = {r["student_id"]: float(r.get("fee_amount") or 0) for r in (cur.fetchall() or [])}
+
+    cur_i = db.cursor()
+    created = 0
+    for s in students:
+        sid_s = s["id"]
+        klass = s.get("class_name")
+
+        # Compute per-component charge
+        total = 0.0
+        per_comp = []
+        for c in comps:
+            cid = c["id"]
+            amt = comp_defaults.get(cid, 0.0)
+            if klass and klass in class_defaults and cid in class_defaults[klass]:
+                amt = class_defaults[klass][cid]
+            if sid_s in items_map and cid in items_map[sid_s]:
+                amt = items_map[sid_s][cid]
+            if amt and amt > 0:
+                per_comp.append((cid, c.get("name"), amt))
+                total += amt
+
+        # If nothing itemized, fall back to legacy flat fee for this student
+        if total == 0 and fee_flat.get(sid_s, 0) > 0:
+            total = fee_flat[sid_s]
+            per_comp = [(None, "Term Fee", total)]
+
+        # Apply discount if any
+        disc = discount_map.get(sid_s)
+        discount_val = 0.0
+        if disc:
+            if disc.get("kind") == "percent":
+                discount_val = round(total * (disc.get("value", 0.0) / 100.0), 2)
+            else:
+                discount_val = float(disc.get("value") or 0.0)
+        grand = max(total - discount_val, 0.0)
+
+        # Upsert invoice
+        cur_i.execute(
+            "INSERT INTO invoices (student_id, year, term, due_date, status, total) VALUES (%s,%s,%s,%s,%s,%s)"
+            " ON DUPLICATE KEY UPDATE due_date=VALUES(due_date), total=VALUES(total)",
+            (sid_s, year, term, due_date, 'draft', grand),
+        )
+        inv_id = cur_i.lastrowid
+        if not inv_id:
+            cur.execute("SELECT id FROM invoices WHERE student_id=%s AND year=%s AND term=%s", (sid_s, year, term))
+            rr = cur.fetchone()
+            inv_id = rr["id"] if rr else None
+        if not inv_id:
+            continue
+
+        # Reset items and insert
+        cur_i.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        for cid, cname, amt in per_comp:
+            cur_i.execute(
+                "INSERT INTO invoice_items (invoice_id, description, component_id, amount) VALUES (%s,%s,%s,%s)",
+                (inv_id, cname, cid, amt),
+            )
+        if discount_val > 0:
+            cur_i.execute(
+                "INSERT INTO invoice_items (invoice_id, description, component_id, amount) VALUES (%s,%s,%s,%s)",
+                (inv_id, 'Discount', None, -discount_val),
+            )
+        created += 1
+
+    return created
 
 @term_bp.route("/summary")
 def term_summary():
@@ -1443,7 +2340,7 @@ def term_summary():
         disc_map = {r["student_id"]: {"kind": r.get("kind"), "value": float(r.get("value") or 0)} for r in (cur.fetchall() or [])}
         # Legacy flat
         cur.execute(
-            f"SELECT student_id, fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({id_in_clause(ids)})",
+            f"SELECT student_id, COALESCE(final_fee, fee_amount) AS fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({id_in_clause(ids)})",
             (year, term, *ids),
         )
         legacy_map = {r["student_id"]: float(r.get("fee_amount") or 0) for r in (cur.fetchall() or [])}
@@ -1478,7 +2375,7 @@ def term_summary():
 
         # Fees of prior terms this year
         cur.execute(
-            f"SELECT student_id, COALESCE(SUM(fee_amount),0) AS fsum FROM term_fees WHERE year=%s AND term < %s AND student_id IN ({id_in_clause(ids)}) GROUP BY student_id",
+            f"SELECT student_id, COALESCE(SUM(COALESCE(final_fee, fee_amount)),0) AS fsum FROM term_fees WHERE year=%s AND term < %s AND student_id IN ({id_in_clause(ids)}) GROUP BY student_id",
             (year, term, *ids),
         )
         fees_prior_map = {r["student_id"]: float(r.get("fsum") or 0) for r in (cur.fetchall() or [])}

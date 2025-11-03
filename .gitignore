@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -29,6 +30,9 @@ Thumbs.db
 # Environment / secrets
 .env
 .env.*
+credentials.json
+token.json
+service_account.json
 
 # Flask instance data (per-machine)
 instance/
@@ -36,5 +40,19 @@ instance/
 # Project uploads and temp files
 static/uploads/
 tmp_*.txt
+tmp_*/
+temp_*
 *.log
+*.tmp
+*.bak
+*.patch
+*.err
 
+# Local temp artifacts
+app_head.tmp
+app_run.err
+tmp_style_extract.css
+tmp_show/
+templates/base.html+.out
+templates/base.html+.style
+routes/reminder_routes.bak

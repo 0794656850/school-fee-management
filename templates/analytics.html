@@ -3,10 +3,15 @@
 {% block page_title %}Analytics Overview{% endblock %}
 {% block content %}
 
+{% if (plan_status and plan_status.plan_code=='FREE') %}
+  {% include '_upgrade_banner.html' %}
+  <div class="h-4"></div>
+{% endif %}
+
 <!-- Toolbar -->
 <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
   <div class="flex items-center gap-3">
-    <button class="btn-brand px-3 py-2 rounded-lg text-sm flex items-center gap-2" id="exportCsv">
+    <button class="premium-only btn-brand px-3 py-2 rounded-lg text-sm flex items-center gap-2" id="exportCsv" title="Upgrade to Pro to export analytics">
       <i data-lucide="download"></i> Export CSV
     </button>
     <div class="hidden md:block text-gray-500 text-sm">Updated <span id="lastUpdated">—</span></div>
@@ -25,9 +30,9 @@
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
   <div class="kpi p-5">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <div class="text-xs uppercase tracking-wide text-gray-500">Total Collected</div>
-        <div class="text-2xl font-bold mt-1" id="kpi_collected">KES {{ "{:,.2f}".format(total_collected or 0) }}</div>
+        <div class="fit-text font-bold mt-1" id="kpi_collected">KES {{ "{:,.2f}".format(total_collected or 0) }}</div>
       </div>
       <div class="kpi__icon"><i data-lucide="wallet"></i></div>
     </div>
@@ -36,9 +41,9 @@
 
   <div class="kpi p-5 kpi--danger">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <div class="text-xs uppercase tracking-wide text-gray-500">Pending Balance</div>
-        <div class="text-2xl font-bold mt-1" id="kpi_pending">KES {{ "{:,.2f}".format(total_balance or 0) }}</div>
+        <div class="fit-text font-bold mt-1" id="kpi_pending">KES {{ "{:,.2f}".format(total_balance or 0) }}</div>
       </div>
       <div class="kpi__icon"><i data-lucide="alert-circle"></i></div>
     </div>
@@ -47,9 +52,9 @@
 
   <div class="kpi p-5 kpi--success">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <div class="text-xs uppercase tracking-wide text-gray-500">Total Credit</div>
-        <div class="text-2xl font-bold mt-1" id="kpi_credit">KES 0</div>
+        <div class="fit-text font-bold mt-1" id="kpi_credit">KES 0</div>
       </div>
       <div class="kpi__icon"><i data-lucide="gift"></i></div>
     </div>
@@ -58,9 +63,9 @@
 
   <div class="kpi p-5">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <div class="text-xs uppercase tracking-wide text-gray-500">Students</div>
-        <div class="text-2xl font-bold mt-1" id="kpi_students">{{ total_students }}</div>
+        <div class="fit-text font-bold mt-1" id="kpi_students">{{ total_students }}</div>
       </div>
       <div class="kpi__icon"><i data-lucide="users"></i></div>
     </div>
@@ -316,6 +321,7 @@ async function refreshSummary(){
   document.getElementById('kpi_collected').innerText = fmtKes(s.total_collected);
   document.getElementById('kpi_pending').innerText = fmtKes(s.total_balance);
   document.getElementById('kpi_credit').innerText = fmtKes(s.total_credit);
+  if (window.fitKpis) window.fitKpis();
   const collectionRate = (s.total_collected + s.total_balance) > 0 ? Math.round((s.total_collected/(s.total_collected+s.total_balance))*100) : 0;
   document.getElementById('kpi_collection_rate').innerText = collectionRate + '%';
   return s;
@@ -333,6 +339,7 @@ async function updateAnalytics(){
     const arpu = s.total_students > 0 ? (s.total_collected / s.total_students) : 0;
     document.getElementById('kpi_arpu').innerText = fmtKes(arpu.toFixed(0));
     document.getElementById('kpi_classes').innerText = data.meta?.active_classes ?? '—';
+    if (window.fitKpis) window.fitKpis();
 
     // MoM label
     const mom = data.mom || { percent_change: 0 };
@@ -366,6 +373,28 @@ document.getElementById('exportCsv').addEventListener('click', ()=>{ window.loca
 
 setInterval(updateAnalytics, 15000);
 document.addEventListener('DOMContentLoaded', updateAnalytics);
+</script>
+
+<script>
+// Post-process UI text to remove any mojibake remnants
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const momEl = document.getElementById('kpi_mom');
+    if (momEl) {
+      const num = parseFloat(momEl.innerText.replace(/[^0-9\.-]/g,''));
+      const signUp = !isNaN(num) && num >= 0;
+      momEl.innerText = `${signUp ? '↑' : '↓'} ${Math.abs(num || 0).toLocaleString()}%`;
+    }
+  } catch (e) {}
+  try {
+    const kc = document.getElementById('kpi_classes');
+    if (kc && (kc.innerText.trim() === '' || kc.innerText.includes('?'))) kc.innerText = '-';
+  } catch (e) {}
+  try {
+    const lu = document.getElementById('lastUpdated');
+    if (lu && (lu.innerText.trim() === '' || lu.innerText.includes('?'))) lu.innerText = '-';
+  } catch (e) {}
+});
 </script>
 
 {% endblock %}

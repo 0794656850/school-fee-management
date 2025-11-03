@@ -2,6 +2,7 @@ version: "3.9"
 services:
   db:
     image: mysql:8.0
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-school_fee_db}
@@ -11,10 +12,11 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
 
   web:
     build: .
+    restart: unless-stopped
     environment:
       SQLALCHEMY_DATABASE_URI: mysql+pymysql://${MYSQL_USER:-app}:${MYSQL_PASSWORD:-apppass}@db/${MYSQL_DATABASE:-school_fee_db}
       SECRET_KEY: ${SECRET_KEY:-change-me}
@@ -23,8 +25,7 @@ services:
     depends_on:
       - db
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
 
 volumes:
   db_data:
-

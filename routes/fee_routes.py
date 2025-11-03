@@ -27,8 +27,9 @@ def add_payment():
 
         db.session.add(new_payment)
         db.session.commit()
-        flash("✅ Payment recorded successfully!", "success")
+        flash("Payment recorded successfully!", "success")
         return redirect(url_for('students.view_students'))
 
     students = Student.query.all()
     return render_template('add_payment.html', students=students)
+

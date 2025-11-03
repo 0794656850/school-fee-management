@@ -59,62 +59,30 @@ def format_context(snippets: List[Dict]) -> str:
     return "\n\n".join(out)
 
 
-def call_openai(prompt: str, model: str = None) -> str:
+def call_vertex(prompt: str, model: str | None = None) -> str:
     # Lazy import to avoid hard dependency if not used
-    try:
-        from openai import OpenAI
-        import openai
-    except Exception as e:
-        raise RuntimeError("openai package not installed. Add 'openai' to requirements.txt") from e
+    from google.oauth2 import service_account
+    import vertexai
+    from vertexai.generative_models import GenerativeModel
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not set in environment.")
-    max_retries = int(os.getenv("OPENAI_MAX_RETRIES", "5"))
-    timeout = float(os.getenv("OPENAI_TIMEOUT", "60"))
-    backoff_base = float(os.getenv("OPENAI_BACKOFF_BASE", "0.5"))
-    client = OpenAI(api_key=api_key, max_retries=max_retries, timeout=timeout)
-    model = model or os.getenv("OPENAI_MODEL", os.getenv("AI_MODEL", "gpt-4o-mini"))
-
-    last_err = None
-    for attempt in range(max_retries + 1):
+    sa = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or str(Path("service_account.json").resolve())
+    creds = None
+    if os.path.exists(sa):
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            last_err = e
-            if attempt < max_retries:
-                import time as _t, random as _r
-                # Respect Retry-After on 429 if available
-                delay = 0.5 * (2 ** attempt) + _r.uniform(0, 0.5)
-                try:
-                    # Handle OpenAI v1 exceptions with response headers
-                    if isinstance(e, getattr(openai, "RateLimitError", tuple())) or (
-                        hasattr(e, "status_code") and getattr(e, "status_code", None) == 429
-                    ) or (
-                        hasattr(e, "response") and getattr(getattr(e, "response", None), "status_code", None) == 429
-                    ):
-                        resp = getattr(e, "response", None)
-                        headers = getattr(resp, "headers", {}) or {}
-                        ra = headers.get("Retry-After") or headers.get("retry-after")
-                        if ra:
-                            try:
-                                delay = max(backoff_base, float(ra))
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-                _t.sleep(delay)
-                continue
-            break
-    raise last_err if last_err else RuntimeError("OpenAI call failed")
+            creds = service_account.Credentials.from_service_account_file(sa)
+        except Exception:
+            creds = None
+
+    project = os.environ.get("VERTEX_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT") or ""
+    location = os.environ.get("VERTEX_LOCATION", "us-central1")
+    vertexai.init(project=project, location=location, credentials=creds)
+
+    model_name = model or os.getenv("VERTEX_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-1.5-flash"
+    if model_name.strip().lower() == "gemini-pro":
+        model_name = "gemini-1.5-flash"
+    gen = GenerativeModel(model_name)
+    resp = gen.generate_content(prompt)
+    return getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else "")
 
 
 def main():
@@ -123,7 +91,7 @@ def main():
     parser = argparse.ArgumentParser(description="Ask questions against the project knowledge base")
     parser.add_argument("question", type=str, nargs="+", help="Your question")
     parser.add_argument("--k", type=int, default=6, help="Top-k contexts")
-    parser.add_argument("--model", type=str, default=None, help="OpenAI model (default env AI_MODEL or gpt-4o-mini)")
+    parser.add_argument("--model", type=str, default=None, help="Vertex Gemini model (default env VERTEX_GEMINI_MODEL)")
     args = parser.parse_args()
 
     question = " ".join(args.question)
@@ -141,12 +109,12 @@ def main():
     )
 
     try:
-        answer = call_openai(prompt, model=args.model)
+        answer = call_vertex(prompt, model=args.model)
         print("\n=== Answer ===\n")
         print(answer)
     except Exception as e:
-        print("\n[warning] Could not call OpenAI:", str(e))
-        print("\nTop retrieved context (set OPENAI_API_KEY to enable answers):\n")
+        print("\n[warning] Could not call Vertex AI:", str(e))
+        print("\nTop retrieved context (configure Vertex credentials to enable answers):\n")
         print(context)
 
 

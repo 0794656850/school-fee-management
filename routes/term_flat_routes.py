@@ -3,7 +3,8 @@ from __future__ import annotations
 from flask import request, redirect, url_for, flash, session
 
 # Reuse existing term blueprint and DB helpers
-from routes.term_routes import term_bp, _db, ensure_term_fees_table
+from routes.term_routes import term_bp, _db, ensure_term_fees_table, ensure_discounts_table
+from routes.credit_routes import ensure_students_credit_column
 
 
 @term_bp.route("/fees/apply_flat", methods=["POST"])
@@ -29,6 +30,7 @@ def apply_flat_fee_all():
     db = _db()
     try:
         ensure_term_fees_table(db)
+        ensure_students_credit_column(db)
         cur = db.cursor(dictionary=True)
         # Determine balance column
         cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
@@ -49,40 +51,93 @@ def apply_flat_fee_all():
             flash("No students found to apply the flat fee.", "info")
             return redirect(url_for("terms.manage_term_fees", year=year, term=term))
 
-        # Fetch existing flat fees for those students
+        # Fetch existing flat fees for those students (prefer stored final_fee when present)
         ph = ",".join(["%s"] * len(ids))
         cur.execute(
-            f"SELECT student_id, fee_amount FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({ph})",
+            f"SELECT student_id, COALESCE(final_fee, fee_amount) AS fee_amount, initial_fee, adjusted_fee, discount, final_fee FROM term_fees WHERE year=%s AND term=%s AND student_id IN ({ph})",
             (year, term, *ids),
         )
-        prev_map = {r["student_id"]: float(r.get("fee_amount") or 0) for r in (cur.fetchall() or [])}
+        prev_rows = {r["student_id"]: r for r in (cur.fetchall() or [])}
+        is_adjustment = len(prev_rows) > 0
 
-        # Apply upserts and adjust balances
+        # Load per-student discounts for this term (Pro feature table). If not present for a student,
+        # we'll fallback to any per-row discount stored in term_fees.
+        ensure_discounts_table(db)
+        disc_map = {}
+        cur.execute(
+            f"SELECT student_id, kind, value FROM discounts WHERE year=%s AND term=%s AND student_id IN ({ph})",
+            (year, term, *ids),
+        )
+        for r in (cur.fetchall() or []):
+            disc_map[r["student_id"]] = {"kind": r.get("kind"), "value": float(r.get("value") or 0)}
+
+        # Current balances and credits to prevent negative balances; any over-reduction becomes credit
+        cur.execute(
+            f"SELECT id, COALESCE({bal_col},0) AS bal, COALESCE(credit,0) AS credit FROM students WHERE school_id=%s AND id IN ({ph})",
+            (session.get("school_id"), *ids),
+        )
+        bc_map = {r["id"]: {"bal": float(r.get("bal") or 0.0), "credit": float(r.get("credit") or 0.0)} for r in (cur.fetchall() or [])}
+
+        # Apply upserts and adjust balances, computing final fees per student
         cur2 = db.cursor()
         updated = 0
         total_delta = 0.0
+        any_discount_used = False
         for sid in ids:
-            prev_amt = prev_map.get(sid, 0.0)
-            delta = float(amount) - prev_amt
-            # Upsert into term_fees
+            prow = prev_rows.get(sid) or {}
+            prev_final = float(prow.get("final_fee") if prow.get("final_fee") is not None else prow.get("fee_amount") or 0.0)
+
+            drow = disc_map.get(sid)
+            disc_value = 0.0
+            if drow:
+                if drow.get("kind") == "percent":
+                    disc_value = round(float(amount) * (drow.get("value", 0.0) / 100.0), 2)
+                else:
+                    disc_value = float(drow.get("value") or 0.0)
+            else:
+                disc_value = float(prow.get("discount") or 0.0)
+
+            if disc_value > float(amount):
+                disc_value = float(amount)
+
+            new_final = max(float(amount) - disc_value, 0.0)
+            if disc_value > 0:
+                any_discount_used = True
+
+            # Upsert into term_fees; mirror new_final into fee_amount for backward compatibility
             cur2.execute(
-                "INSERT INTO term_fees (student_id, year, term, fee_amount, school_id) VALUES (%s,%s,%s,%s,%s)"
-                " ON DUPLICATE KEY UPDATE fee_amount=VALUES(fee_amount), school_id=VALUES(school_id)",
-                (sid, year, term, amount, session.get("school_id")),
+                "INSERT INTO term_fees (student_id, year, term, fee_amount, initial_fee, final_fee, school_id) VALUES (%s,%s,%s,%s,%s,%s,%s)"
+                " ON DUPLICATE KEY UPDATE fee_amount=VALUES(fee_amount), adjusted_fee=VALUES(initial_fee), final_fee=VALUES(final_fee), school_id=VALUES(school_id)",
+                (sid, year, term, new_final, amount, new_final, session.get("school_id")),
             )
-            # Adjust balance by delta
+
+            delta = new_final - prev_final
             if abs(delta) > 0:
-                cur2.execute(
-                    f"UPDATE students SET {bal_col} = COALESCE({bal_col},0) + %s WHERE id=%s AND school_id=%s",
-                    (delta, sid, session.get("school_id")),
-                )
-                total_delta += delta
+                bal = bc_map.get(sid, {}).get("bal", 0.0)
+                credit = bc_map.get(sid, {}).get("credit", 0.0)
+                new_bal = (bal or 0.0) + delta
+                if new_bal < 0:
+                    # Move over-reduction into credit and clamp balance at zero
+                    add_credit = abs(new_bal)
+                    cur2.execute(
+                        f"UPDATE students SET {bal_col} = 0, credit = COALESCE(credit,0) + %s WHERE id=%s AND school_id=%s",
+                        (add_credit, sid, session.get("school_id")),
+                    )
+                    # Update local map for any subsequent logic (though not strictly needed)
+                    bc_map[sid] = {"bal": 0.0, "credit": (credit or 0.0) + add_credit}
+                    total_delta += delta
+                else:
+                    cur2.execute(
+                        f"UPDATE students SET {bal_col} = %s WHERE id=%s AND school_id=%s",
+                        (new_bal, sid, session.get("school_id")),
+                    )
+                    bc_map[sid] = {"bal": new_bal, "credit": credit or 0.0}
+                    total_delta += delta
             updated += 1
         db.commit()
-        flash(
-            f"Applied flat fee KES {amount:,.2f} to {updated} student(s) for {year} T{term}. Balance delta total: KES {total_delta:,.2f}",
-            "success",
-        )
+        note = " Discounts applied where present." if any_discount_used else ""
+        kind = "adjusted" if is_adjustment else "initial"
+        flash(f"Applied {kind} flat KES {amount:,.2f} to {updated} student(s).{note} Total balance delta: KES {total_delta:,.2f}", "success")
     except Exception as e:
         try:
             db.rollback()

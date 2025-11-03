@@ -39,6 +39,17 @@
         <input type="text" name="SCHOOL_WEBSITE" value="{{ values.SCHOOL_WEBSITE }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="https://www.school.ac.ke">
       </div>
     </div>
+
+    {% if FEATURED_VIDEO_URL %}
+    <div class="mt-4">
+      <label class="block text-xs text-gray-600 mb-1">Intro Video</label>
+      <video controls class="w-full max-h-72 rounded-xl border">
+        <source src="{{ FEATURED_VIDEO_URL }}" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      <p class="text-xs text-gray-500 mt-1">Manage media under Documentation › Intro Video.</p>
+    </div>
+    {% endif %}
     <div>
       <label class="block text-xs text-gray-600 mb-1">Address / Location</label>
       <textarea name="SCHOOL_ADDRESS" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., P.O. Box 12345-00100, Nairobi">{{ values.SCHOOL_ADDRESS }}</textarea>

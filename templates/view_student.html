@@ -61,6 +61,13 @@
         <i data-lucide="arrow-left"></i> Back to Students
       </a>
 
+      <!-- Delete Student -->
+      <form action="{{ url_for('delete_student', student_id=student.id) }}" method="POST" onsubmit="return confirm('Delete this student and all related records? This cannot be undone.');">
+        <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
+          <i data-lucide="trash-2"></i> Delete
+        </button>
+      </form>
+
       <!-- 🖨️ Print Button -->
       <button onclick="window.print()"
               class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
@@ -228,6 +235,41 @@
     {% endif %}
   </div>
 
+  <!-- Credit Activities (Apply / Refund) -->
+  <div class="mt-8">
+    <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center gap-2">
+      <i data-lucide="activity"></i> Credit Activities
+    </h2>
+    {% if credit_ops and credit_ops|length > 0 %}
+      <table class="min-w-full border border-gray-200 text-sm rounded-lg overflow-hidden">
+        <thead class="bg-gray-50 text-gray-600">
+          <tr>
+            <th class="px-4 py-2 border-b text-left">#</th>
+            <th class="px-4 py-2 border-b text-left">Type</th>
+            <th class="px-4 py-2 border-b text-left">Amount (KES)</th>
+            <th class="px-4 py-2 border-b text-left">Method</th>
+            <th class="px-4 py-2 border-b text-left">Reference</th>
+            <th class="px-4 py-2 border-b text-left">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in credit_ops %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border-b">{{ loop.index }}</td>
+            <td class="px-4 py-2 border-b">{{ r.op_type|capitalize }}</td>
+            <td class="px-4 py-2 border-b text-blue-700">KES {{ "{:,.2f}".format(r.amount or 0) }}</td>
+            <td class="px-4 py-2 border-b">{{ r.method or 'N/A' }}</td>
+            <td class="px-4 py-2 border-b">{{ r.reference or 'N/A' }}</td>
+            <td class="px-4 py-2 border-b">{{ r.ts.strftime("%Y-%m-%d %H:%M") if r.ts else 'N/A' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="text-gray-500 italic">No credit activities for this student.</p>
+    {% endif %}
+  </div>
+
   <!-- Credit Transfers -->
   <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
     <!-- Transfers Out -->
@@ -380,7 +422,8 @@ if (typeof lucide !== 'undefined') lucide.createIcons();
           year: {{ (CURRENT_YEAR or 'null')|tojson }},
           term: {{ (CURRENT_TERM or 'null')|tojson }}
         };
-        new QRCode(el, { text: JSON.stringify(payload), width: 72, height: 72 });
+        // Increase QR size for better scan reliability (print-friendly)
+        new QRCode(el, { text: JSON.stringify(payload), width: 160, height: 160 });
       }
     } catch (e) {}
   }

@@ -1,0 +1,25 @@
+{% set monthly = 1500 %}
+{% set yearly = 15000 %}
+{% set lifetime = 50000 %}
+<div class="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 text-white">
+  <div class="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl"></div>
+  <div class="relative p-5 md:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="flex items-start gap-3">
+      <span class="inline-flex p-2.5 rounded-lg bg-white/20 ring-1 ring-white/30"><i data-lucide="sparkles"></i></span>
+      <div>
+        <div class="text-base md:text-lg font-semibold">Unlock Premium Features</div>
+        <div class="text-white/90 text-xs md:text-sm mt-0.5">Upgrade to Pro for itemized fees, advanced analytics, reminders, exports, and more.</div>
+        <div class="text-white/90 text-xs md:text-sm mt-1">Plans: Monthly KES {{ monthly }}, Yearly KES {{ yearly }} <span class="bg-yellow-300/30 text-yellow-100 px-1.5 py-0.5 rounded">Save 3000</span>, Lifetime KES {{ lifetime }}.</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('monetization.index') }}" class="inline-flex items-center gap-2 bg-white text-indigo-700 hover:text-indigo-800 px-3.5 py-2 rounded-lg text-sm font-semibold shadow">
+        <i data-lucide="briefcase"></i> Upgrade to Pro
+      </a>
+      <a href="{{ url_for('monetization.index') }}#how" class="hidden md:inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 ring-1 ring-white/30 px-3 py-2 rounded-lg text-sm">
+        <i data-lucide="info"></i> Learn more
+      </a>
+    </div>
+  </div>
+</div>
+

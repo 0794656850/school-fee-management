@@ -18,6 +18,7 @@
         <input type="text" id="student_search" placeholder="Search by name or admission number..."
                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pl-10 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
         <i data-lucide="search" class="absolute left-3 top-2.5 text-gray-400 w-4 h-4"></i>
+        <button type="button" id="clear_student_search" class="absolute right-2 top-2 text-xs px-2 py-1 rounded-md border bg-white hover:bg-gray-50">Reset</button>
       </div>
       <input type="hidden" name="student_id" id="student_id">
 
@@ -80,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const searchInput = document.getElementById("student_search");
   const searchResults = document.getElementById("search_results");
   const studentIdInput = document.getElementById("student_id");
+  const clearBtn = document.getElementById("clear_student_search");
 
   let searchTimeout = null;
 
@@ -129,6 +131,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!searchResults.contains(e.target) && e.target !== searchInput) {
       searchResults.classList.add("hidden");
     }
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    searchInput.value = '';
+    studentIdInput.value = '';
+    searchResults.classList.add('hidden');
   });
 });
 </script>

@@ -14,6 +14,7 @@ if PROJECT_ROOT not in sys.path:
 # Reuse the app's DB connection util and credit column helper
 from app import get_db_connection
 from routes.credit_routes import ensure_students_credit_column
+from utils.tenant import get_or_create_school, slugify_code
 
 
 FIRST_NAMES = [
@@ -62,21 +63,30 @@ def random_balance() -> float:
     return round(val, 2)
 
 
-def load_existing_admission_numbers(cur) -> Set[str]:
+def load_existing_admission_numbers(cur, school_id: int | None, has_school: bool) -> Set[str]:
     cur.execute("SHOW COLUMNS FROM students LIKE 'admission_no'")
     if not cur.fetchone():
         # Fallback: older schemas might use reg_no/regNo
         cur.execute("SHOW COLUMNS FROM students LIKE 'reg_no'")
         if cur.fetchone():
-            cur.execute("SELECT LOWER(reg_no) FROM students")
+            if has_school and school_id:
+                cur.execute("SELECT LOWER(reg_no) FROM students WHERE school_id=%s", (school_id,))
+            else:
+                cur.execute("SELECT LOWER(reg_no) FROM students")
         else:
             cur.execute("SHOW COLUMNS FROM students LIKE 'regNo'")
             if cur.fetchone():
-                cur.execute("SELECT LOWER(regNo) FROM students")
+                if has_school and school_id:
+                    cur.execute("SELECT LOWER(regNo) FROM students WHERE school_id=%s", (school_id,))
+                else:
+                    cur.execute("SELECT LOWER(regNo) FROM students")
             else:
                 return set()
     else:
-        cur.execute("SELECT LOWER(admission_no) FROM students")
+        if has_school and school_id:
+            cur.execute("SELECT LOWER(admission_no) FROM students WHERE school_id=%s", (school_id,))
+        else:
+            cur.execute("SELECT LOWER(admission_no) FROM students")
     rows = cur.fetchall() or []
     return {list(r.values())[0] if isinstance(r, dict) else (r[0] if r else "") for r in rows}
 
@@ -98,59 +108,78 @@ def detect_schema(cur):
     has_balance = bool(cur.fetchone())
     cur.execute("SHOW COLUMNS FROM students LIKE 'fee_balance'")
     has_fee_balance = bool(cur.fetchone())
+    cur.execute("SHOW COLUMNS FROM students LIKE 'school_id'")
+    has_school = bool(cur.fetchone())
     # Ensure credit column exists for consistency with the app
-    return has_phone, has_balance, has_fee_balance
+    return has_phone, has_balance, has_fee_balance, has_school
 
 
-def build_insert_sql(has_phone: bool, has_balance: bool, has_fee_balance: bool) -> tuple[str, int]:
+def build_insert_sql(has_phone: bool, has_balance: bool, has_fee_balance: bool, has_school: bool) -> tuple[str, int, bool]:
+    """Return (SQL, param_count_without_school, with_balance_col) where param_count excludes credit/auto defaults.
+
+    If has_school=True, caller appends one extra parameter (school_id) to the tuple per row and we extend the SQL
+    with ", school_id) VALUES (..., %s)" appropriately.
+    """
+    with_balance = False
     if has_balance:
+        with_balance = True
         if has_phone:
-            # name, admission_no, class_name, phone, balance, credit
-            return (
-                "INSERT INTO students (name, admission_no, class_name, phone, balance, credit) VALUES (%s, %s, %s, %s, %s, 0)",
-                5,
-            )
+            base_cols = "name, admission_no, class_name, phone, balance, credit"
+            placeholders = "%s, %s, %s, %s, %s, 0"
+            param_count = 5
         else:
-            # name, admission_no, class_name, balance, credit
-            return (
-                "INSERT INTO students (name, admission_no, class_name, balance, credit) VALUES (%s, %s, %s, %s, 0)",
-                4,
-            )
+            base_cols = "name, admission_no, class_name, balance, credit"
+            placeholders = "%s, %s, %s, %s, 0"
+            param_count = 4
     elif has_fee_balance:
+        with_balance = True
         if has_phone:
-            # name, admission_no, class_name, phone, fee_balance, credit
-            return (
-                "INSERT INTO students (name, admission_no, class_name, phone, fee_balance, credit) VALUES (%s, %s, %s, %s, %s, 0)",
-                5,
-            )
+            base_cols = "name, admission_no, class_name, phone, fee_balance, credit"
+            placeholders = "%s, %s, %s, %s, %s, 0"
+            param_count = 5
         else:
-            # name, admission_no, class_name, fee_balance, credit
-            return (
-                "INSERT INTO students (name, admission_no, class_name, fee_balance, credit) VALUES (%s, %s, %s, %s, 0)",
-                4,
-            )
+            base_cols = "name, admission_no, class_name, fee_balance, credit"
+            placeholders = "%s, %s, %s, %s, 0"
+            param_count = 4
     else:
-        # Minimal fallback: name, admission_no, class_name only
-        return (
-            "INSERT INTO students (name, admission_no, class_name) VALUES (%s, %s, %s)",
-            3,
-        )
+        base_cols = "name, admission_no, class_name"
+        placeholders = "%s, %s, %s"
+        param_count = 3
+
+    if has_school:
+        sql = f"INSERT INTO students ({base_cols}, school_id) VALUES ({placeholders}, %s)"
+    else:
+        sql = f"INSERT INTO students ({base_cols}) VALUES ({placeholders})"
+    return sql, param_count, with_balance
 
 
-def seed_students(count: int = 2000, batch_size: int = 500) -> int:
+def seed_students(count: int = 2000, batch_size: int = 500, school: str | None = None) -> int:
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
 
     # Ensure optional credit column exists for compatibility with app features
     ensure_students_credit_column(conn)
 
-    has_phone, has_balance, has_fee_balance = detect_schema(cur)
-    sql, param_count = build_insert_sql(has_phone, has_balance, has_fee_balance)
+    has_phone, has_balance, has_fee_balance, has_school = detect_schema(cur)
 
-    existing = load_existing_admission_numbers(cur)
+    # Resolve or create target school if requested
+    school_id = None
+    if school:
+        try:
+            code = slugify_code(school)
+            school_id = get_or_create_school(conn, code=code, name=school)
+        except Exception:
+            school_id = None
 
-    # Attempt to start indices past current count
-    cur.execute("SELECT COUNT(*) AS c FROM students")
+    sql, param_count, _ = build_insert_sql(has_phone, has_balance, has_fee_balance, has_school)
+
+    existing = load_existing_admission_numbers(cur, school_id, has_school)
+
+    # Attempt to start indices past current count (scoped by school if present)
+    if has_school and school_id:
+        cur.execute("SELECT COUNT(*) AS c FROM students WHERE school_id=%s", (school_id,))
+    else:
+        cur.execute("SELECT COUNT(*) AS c FROM students")
     start_idx = (cur.fetchone() or {}).get("c", 0) + 1
 
     to_insert: list[tuple] = []
@@ -180,6 +209,10 @@ def seed_students(count: int = 2000, batch_size: int = 500) -> int:
         else:
             params = (name, adm, klass)
 
+        # Append school id if supported
+        if has_school:
+            params = (*params, school_id)
+
         to_insert.append(params)
 
         # Flush in batches
@@ -204,9 +237,10 @@ def main():
     parser = argparse.ArgumentParser(description="Seed mock students into the system.")
     parser.add_argument("--count", type=int, default=2000, help="How many students to add (default: 2000)")
     parser.add_argument("--batch", type=int, default=500, help="Batch size for bulk insert (default: 500)")
+    parser.add_argument("--school", type=str, default=None, help="School name or code to target (creates if missing)")
     args = parser.parse_args()
 
-    total = seed_students(count=args.count, batch_size=args.batch)
+    total = seed_students(count=args.count, batch_size=args.batch, school=args.school)
     print(f"Inserted {total} mock students.")
 
 

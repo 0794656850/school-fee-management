@@ -55,39 +55,21 @@
     </form>
   </div>
 
-  <!-- WhatsApp Config (Pro) -->
+  
+  <!-- Email (Gmail API) -->
   <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
     <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">WhatsApp</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full {{ 'bg-emerald-50 text-emerald-700 border-emerald-100' if whatsapp_enabled else 'bg-amber-50 text-amber-700 border-amber-100' }}">{{ 'Active' if whatsapp_enabled else 'Pending' }}</span>
+      <h3 class="text-base font-semibold">Email (Gmail API)</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">Default</span>
     </div>
-    <p class="text-sm text-gray-600 mb-4">Configure WhatsApp Cloud API. You can paste the Access Token and Phone Number ID later — this section is ready.</p>
-
-    <form method="post" class="space-y-3">
-      <input type="hidden" name="form" value="whatsapp" />
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Access Token</label>
-        <input type="text" name="WHATSAPP_ACCESS_TOKEN" value="{{ values.WHATSAPP_ACCESS_TOKEN or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="EAAG... (paste later)">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Phone Number ID</label>
-        <input type="text" name="WHATSAPP_PHONE_NUMBER_ID" value="{{ values.WHATSAPP_PHONE_NUMBER_ID or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. 123456789012345">
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Template Name (optional)</label>
-          <input type="text" name="WHATSAPP_TEMPLATE_NAME" value="{{ values.WHATSAPP_TEMPLATE_NAME or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. fee_reminder">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Language</label>
-          <input type="text" name="WHATSAPP_TEMPLATE_LANG" value="{{ values.WHATSAPP_TEMPLATE_LANG or 'en_US' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="en_US">
-        </div>
-      </div>
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save WhatsApp</button>
-    </form>
-    {% if not whatsapp_enabled and whatsapp_reason %}
-      <div class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">{{ whatsapp_reason }}</div>
-    {% endif %}
+    <p class="text-sm text-gray-600 mb-4">Reminders and payment receipts are sent via email by default using the Gmail API. Place your OAuth client JSON at <code>credentials.json</code>. The token is saved to <code>token.json</code> after authorization.</p>
+    <div class="flex items-center gap-2">
+      <button id="adminTestEmailBtn" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">
+        <i data-lucide="mail"></i>
+        Send Test Email
+      </button>
+      <a href="{{ url_for('reminders.reminders_home') }}" class="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 inline-flex items-center gap-2 text-sm"><i data-lucide="send"></i><span>Open Reminder Center</span></a>
+    </div>
   </div>
 
   <!-- Reminder Settings (Pro) -->
@@ -96,13 +78,13 @@
       <h3 class="text-base font-semibold">Reminder Settings</h3>
       <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Premium</span>
     </div>
-    <p class="text-sm text-gray-600 mb-4">Choose which phone column to use when sending reminders and set a default message template. Placeholders: {name}, {balance}, {class_name}, {school_name}.</p>
+    <p class="text-sm text-gray-600 mb-4">Choose which email column to use when sending reminders and set a default message template. Placeholders: {name}, {balance}, {class_name}, {school_name}.</p>
 
     <form method="post" class="space-y-3">
       <input type="hidden" name="form" value="reminders" />
       <div>
-        <label class="block text-sm font-medium text-gray-700">Student Phone Column</label>
-        <input type="text" name="REMINDER_PHONE_COLUMN" value="{{ values.REMINDER_PHONE_COLUMN or 'phone' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. phone">
+        <label class="block text-sm font-medium text-gray-700">Student Email Column</label>
+        <input type="text" name="REMINDER_EMAIL_COLUMN" value="{{ values.REMINDER_EMAIL_COLUMN or 'email' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. email or parent_email">
         <p class="text-xs text-gray-500 mt-1">This must match a column in the students table.</p>
       </div>
       <div>
@@ -115,7 +97,55 @@
       </div>
     </form>
   </div>
+
+  <!-- AI Assistant Settings (Vertex AI) -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">AI Assistant</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">Optional</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Configure Vertex AI (Gemini) to enable intelligent answers in the in-app assistant.</p>
+
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="form" value="ai" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">GCP Project ID</label>
+          <input type="text" name="VERTEX_PROJECT_ID" value="{{ values.VERTEX_PROJECT_ID or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="my-gcp-project" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Region</label>
+          <input type="text" name="VERTEX_LOCATION" value="{{ values.VERTEX_LOCATION or 'us-central1' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="us-central1" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Service Account JSON (path)</label>
+          <input type="text" name="GOOGLE_APPLICATION_CREDENTIALS" value="{{ values.GOOGLE_APPLICATION_CREDENTIALS or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="C:\\path\\to\\sa.json (optional if using ADC)" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Gemini Model</label>
+          <input type="text" name="VERTEX_GEMINI_MODEL" value="{{ values.VERTEX_GEMINI_MODEL or 'gemini-1.5-flash' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="gemini-1.5-flash" />
+        </div>
+      </div>
+      <p class="text-xs text-gray-500">Settings are stored in the app DB; environment variables still work and take precedence.</p>
+      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Vertex Settings</button>
+    </form>
+  </div>
 </div>
 
-<script>if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();</script>
+<script>
+  // Icons
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  // Admin: test email using reminders endpoint
+  document.getElementById('adminTestEmailBtn')?.addEventListener('click', async () => {
+    const to = prompt('Send test email to: (leave blank to use SCHOOL_EMAIL/MAIL_SENDER)') || undefined;
+    try {
+      const r = await fetch('/reminders/test_email', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to})});
+      const j = await r.json();
+      if (j.ok) alert('Test email sent via: ' + j.via);
+      else alert('Test failed: ' + (j.error || 'Unknown error'));
+    } catch (e) { alert('Test failed.'); }
+  });
+</script>
 {% endblock %}

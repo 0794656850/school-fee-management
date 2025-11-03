@@ -67,9 +67,9 @@
   <!-- Total Students -->
   <div class="kpi group p-6">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">Total Students</h4>
-        <p id="total_students" class="text-3xl font-extrabold text-gray-900 tracking-tight">{{ total_students or 0 }}</p>
+        <p id="total_students" class="fit-text font-extrabold text-gray-900 tracking-tight">{{ total_students or 0 }}</p>
         <div class="mt-2 text-[11px] text-gray-500">Roster size</div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="users" class="text-white w-6 h-6"></i></div>
@@ -79,9 +79,9 @@
   <!-- Total Fees Collected -->
   <div class="kpi kpi--success group p-6">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">Total Collected</h4>
-        <p id="total_collected" class="text-3xl font-extrabold text-emerald-600 tracking-tight">KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}</p>
+        <p id="total_collected" class="fit-text font-extrabold text-emerald-600 tracking-tight">KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}</p>
         <div id="mom_badge" class="mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
           <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
           <span>Loading MoM…</span>
@@ -94,9 +94,9 @@
   <!-- This Term Outstanding -->
   <div class="kpi kpi--danger group p-6">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">This Term Outstanding</h4>
-        <p id="term_outstanding" class="text-3xl font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(term_outstanding or 0) }}</p>
+        <p id="term_outstanding" class="fit-text font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(term_outstanding or 0) }}</p>
         <div class="mt-2 text-[11px] text-rose-700/80">Fees due for current term</div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="alert-octagon" class="text-white w-6 h-6"></i></div>
@@ -106,9 +106,9 @@
   <!-- Pending Balance -->
   <div class="kpi kpi--danger group p-6">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">Pending Balance</h4>
-        <p id="pending_balance" class="text-3xl font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(pending_balance or 0) }}</p>
+        <p id="pending_balance" class="fit-text font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(pending_balance or 0) }}</p>
         <div class="mt-2 text-[11px] text-rose-700/80">Outstanding across all students</div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="alert-circle" class="text-white w-6 h-6"></i></div>
@@ -118,9 +118,9 @@
   <!-- Total Credit -->
   <div class="kpi kpi--warn group p-6">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">Total Credit</h4>
-        <p id="total_credit" class="text-3xl font-extrabold text-amber-500 tracking-tight">KES {{ '{:,.2f}'.format(total_credit or 0) }}</p>
+        <p id="total_credit" class="fit-text font-extrabold text-amber-500 tracking-tight">KES {{ '{:,.2f}'.format(total_credit or 0) }}</p>
         <div class="mt-2 text-[11px] text-amber-700/80">Prepaid/overpayment</div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="gift" class="text-white w-6 h-6"></i></div>
@@ -232,6 +232,8 @@
           document.getElementById("total_credit").textContent =
             "KES " + Number(data.total_credit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
+        // Refit KPI values to avoid overlap
+        if (window.fitKpis) window.fitKpis();
       })
       .catch(err => console.error("Error fetching dashboard data:", err));
   }

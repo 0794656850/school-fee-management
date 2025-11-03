@@ -1,0 +1,12 @@
+﻿{
+  "name": "Fee Management System",
+  "short_name": "Fees",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "/static/css/lovato_logo.jpg", "sizes": "192x192", "type": "image/jpeg" },
+    { "src": "/static/css/lovato_logo1.jpg", "sizes": "512x512", "type": "image/jpeg" }
+  ]
+}

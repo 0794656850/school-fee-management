@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Recovery - {{ student.name }}{% endblock %}
+{% block page_title %}Recovery: {{ student.name }}{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2">
+    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-lg font-semibold">History</div>
+            <div class="text-sm text-gray-500">All recovery actions for this student</div>
+          </div>
+        </div>
+      </div>
+      <div class="p-6">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-3 py-2 text-left">When</th>
+                <th class="px-3 py-2 text-left">Action</th>
+                <th class="px-3 py-2 text-left">Status</th>
+                <th class="px-3 py-2 text-left">Promise</th>
+                <th class="px-3 py-2 text-left">Next Follow-up</th>
+                <th class="px-3 py-2 text-left">By</th>
+                <th class="px-3 py-2 text-left">Notes</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {% for a in actions %}
+                <tr>
+                  <td class="px-3 py-2">{{ a.created_at }}</td>
+                  <td class="px-3 py-2">{{ a.action }}</td>
+                  <td class="px-3 py-2">{{ a.status or '-' }}</td>
+                  <td class="px-3 py-2">
+                    {% if a.amount_promised %}
+                      KES {{ "{:,.2f}".format(a.amount_promised|float) }} on {{ a.promise_date or '-' }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td class="px-3 py-2">{{ a.next_follow_up or '-' }}</td>
+                  <td class="px-3 py-2">{{ a.created_by or '-' }}</td>
+                  <td class="px-3 py-2">{{ a.notes or '' }}</td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="7" class="text-center text-gray-500 py-6">No recovery actions logged yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <div class="text-lg font-semibold">Student</div>
+      </div>
+      <div class="p-6 space-y-2">
+        <div class="text-gray-900 font-medium">{{ student.name }}</div>
+        <div class="text-gray-600 text-sm">ID: {{ student.id }}{% if student.class_name %} • Class: {{ student.class_name }}{% endif %}</div>
+        <div class="text-rose-600 font-semibold">Outstanding: KES {{ "{:,.2f}".format(student.balance or 0) }}</div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white mt-6">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <div class="text-lg font-semibold">Log Recovery Action</div>
+      </div>
+      <form method="post" action="{{ url_for('recovery.log_action', student_id=student.id) }}" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Action</label>
+          <select name="action" class="rounded-lg border-gray-300 text-sm w-full">
+            <option value="call">Phone Call</option>
+            <option value="sms">SMS</option>
+            <option value="email">Email</option>
+            <option value="visit">Visit</option>
+            <option value="letter">Letter</option>
+            <option value="note">Note</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Status</label>
+          <select name="status" class="rounded-lg border-gray-300 text-sm w-full">
+            <option value="">—</option>
+            <option value="no_answer">No Answer</option>
+            <option value="left_message">Left Message</option>
+            <option value="contacted">Contacted</option>
+            <option value="promise">Promise to Pay</option>
+            <option value="paid_partial">Paid Partial</option>
+            <option value="paid_full">Paid in Full</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Amount Promised (KES)</label>
+            <input type="number" name="amount_promised" step="0.01" min="0" class="rounded-lg border-gray-300 text-sm w-full" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Promise Date</label>
+            <input type="date" name="promise_date" class="rounded-lg border-gray-300 text-sm w-full" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Next Follow-up</label>
+          <input type="date" name="next_follow_up" class="rounded-lg border-gray-300 text-sm w-full" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Notes</label>
+          <textarea name="notes" rows="3" class="rounded-lg border-gray-300 text-sm w-full" placeholder="Summary of conversation, context, etc."></textarea>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Your Name</label>
+          <input type="text" name="created_by" class="rounded-lg border-gray-300 text-sm w-full" />
+        </div>
+        <div class="pt-2">
+          <button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm">
+            <i data-lucide="save"></i>
+            <span>Save</span>
+          </button>
+          <a href="{{ url_for('recovery.dashboard') }}" class="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Back</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+

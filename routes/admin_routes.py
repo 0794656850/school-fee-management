@@ -465,11 +465,29 @@ def access_settings():
             return redirect(url_for("admin.access_settings"))
 
         elif form_kind == "reminders":
-            phone_col = (request.form.get("REMINDER_PHONE_COLUMN") or "phone").strip() or "phone"
+            email_col = (request.form.get("REMINDER_EMAIL_COLUMN") or "email").strip() or "email"
             default_msg = (request.form.get("REMINDER_DEFAULT_MESSAGE") or "").strip()
-            set_school_setting("REMINDER_PHONE_COLUMN", phone_col)
+            set_school_setting("REMINDER_EMAIL_COLUMN", email_col)
             set_school_setting("REMINDER_DEFAULT_MESSAGE", default_msg)
             flash("Reminder settings saved.", "success")
+            return redirect(url_for("admin.access_settings"))
+
+        elif form_kind == "ai":
+            # Store Vertex AI configuration (env still supported)
+            ai_keys = [
+                "VERTEX_PROJECT_ID",
+                "VERTEX_LOCATION",
+                "GOOGLE_APPLICATION_CREDENTIALS",
+                "VERTEX_GEMINI_MODEL",
+            ]
+            for k in ai_keys:
+                val = (request.form.get(k) or "").strip()
+                set_setting(k, val)
+                try:
+                    current_app.config[k] = val
+                except Exception:
+                    pass
+            flash("Vertex AI settings saved.", "success")
             return redirect(url_for("admin.access_settings"))
 
     values = {}
@@ -479,8 +497,14 @@ def access_settings():
     values["WHATSAPP_PHONE_NUMBER_ID"] = (get_setting("WHATSAPP_PHONE_NUMBER_ID") or current_app.config.get("WHATSAPP_PHONE_NUMBER_ID", ""))
     values["WHATSAPP_TEMPLATE_NAME"] = (get_setting("WHATSAPP_TEMPLATE_NAME") or current_app.config.get("WHATSAPP_TEMPLATE_NAME", ""))
     values["WHATSAPP_TEMPLATE_LANG"] = (get_setting("WHATSAPP_TEMPLATE_LANG") or current_app.config.get("WHATSAPP_TEMPLATE_LANG", "en_US") or "en_US")
-    values["REMINDER_PHONE_COLUMN"] = (get_setting("REMINDER_PHONE_COLUMN") or "phone")
+    values["REMINDER_EMAIL_COLUMN"] = (get_setting("REMINDER_EMAIL_COLUMN") or "email")
     values["REMINDER_DEFAULT_MESSAGE"] = (get_setting("REMINDER_DEFAULT_MESSAGE") or "Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.")
+
+    # Vertex AI settings (pre-fill from DB or current config)
+    values["VERTEX_PROJECT_ID"] = (get_setting("VERTEX_PROJECT_ID") or current_app.config.get("VERTEX_PROJECT_ID", ""))
+    values["VERTEX_LOCATION"] = (get_setting("VERTEX_LOCATION") or current_app.config.get("VERTEX_LOCATION", "us-central1"))
+    values["GOOGLE_APPLICATION_CREDENTIALS"] = (get_setting("GOOGLE_APPLICATION_CREDENTIALS") or current_app.config.get("GOOGLE_APPLICATION_CREDENTIALS", ""))
+    values["VERTEX_GEMINI_MODEL"] = (get_setting("VERTEX_GEMINI_MODEL") or current_app.config.get("VERTEX_GEMINI_MODEL", "gemini-1.5-flash"))
 
     wa_ok, wa_reason = whatsapp_is_configured()
     pro = is_pro_enabled(current_app)

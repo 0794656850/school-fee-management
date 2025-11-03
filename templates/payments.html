@@ -28,6 +28,7 @@
           <input type="text" id="student_search" placeholder="Search by name or admission number..."
                  value="{% for s in students %}{% if selected_student_id == s.id %}{{ s.name }}{% endif %}{% endfor %}"
                  class="w-full border border-gray-300 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+          <button type="button" id="clear_student_search" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded-md border bg-white hover:bg-gray-50">Reset</button>
         </div>
         <input type="hidden" id="student_id" name="student_id" value="{{ selected_student_id or '' }}">
         <div id="search_results" class="hidden absolute w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto z-20 text-sm"></div>
@@ -135,6 +136,7 @@
         <div class="relative hidden sm:block">
           <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
           <input id="table_search" type="text" placeholder="Filter payments..." class="pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+          <button type="button" id="clear_table_search" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded-md border bg-white hover:bg-gray-50">Reset</button>
         </div>
         <a href="{{ url_for('export_payments') }}" 
            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition">
@@ -227,10 +229,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const searchInput = document.getElementById("student_search");
   const searchResults = document.getElementById("search_results");
   const studentIdInput = document.getElementById("student_id");
+  const clearStudentBtn = document.getElementById("clear_student_search");
   const seg = document.getElementById("method_segment");
   const methodSelect = document.getElementById("method");
   const tableSearch = document.getElementById("table_search");
   const tableBody = document.getElementById("payments_body");
+  const clearTableBtn = document.getElementById("clear_table_search");
 
   let searchTimeout = null;
 
@@ -297,6 +301,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!searchResults.contains(e.target) && e.target !== searchInput) hideResults();
   });
 
+  clearStudentBtn?.addEventListener('click', () => {
+    searchInput.value = '';
+    studentIdInput.value = '';
+    hideResults();
+  });
+
   form.addEventListener("submit", (e) => {
     if (!studentIdInput.value) {
       e.preventDefault();
@@ -318,6 +328,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const hay = `${row.dataset.student} ${row.dataset.method}`;
       row.style.display = hay.includes(q) ? '' : 'none';
     });
+  });
+  clearTableBtn?.addEventListener('click', () => {
+    tableSearch.value = '';
+    const rows = tableBody?.querySelectorAll('tr') || [];
+    rows.forEach(row => row.style.display = '');
   });
 });
 </script>

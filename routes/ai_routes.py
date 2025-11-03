@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify, session, Response, stream_with_context
+import json
 from datetime import datetime
 from typing import Any, Dict, List
 
-from utils.ai import classify_intent, answer_with_ai
+from utils.ai import classify_intent, answer_with_ai, answer_with_ai_rag, ai_is_configured, chat_anything, chat_anything_stream, rag_status, ai_provider
+from ai_engine.query import handle_query
 from utils.settings import get_settings
 from utils.settings import _db as _get_conn
 from utils.pro import is_pro_enabled, upgrade_url
@@ -70,21 +72,62 @@ def _list_chats(db) -> List[Dict[str, Any]]:
 @ai_bp.route("/")
 def ai_home():
     settings = get_settings([
-        "OPENAI_API_KEY",
-        "AZURE_OPENAI_API_KEY",
+        "VERTEX_PROJECT_ID",
+        "VERTEX_LOCATION",
+        "GOOGLE_APPLICATION_CREDENTIALS",
     ])
-    db = _get_conn()
+    configured = False
     try:
-        chats = _list_chats(db)
-    finally:
-        db.close()
+        configured = ai_is_configured()
+    except Exception:
+        configured = False
+    kb = {}
+    try:
+        kb = rag_status()
+    except Exception:
+        kb = {"project_index": {"available": False, "chunks": 0}, "user_index": {"available": False, "chunks": 0}}
+    chats = []
+    try:
+        db = _get_conn()
+        try:
+            chats = _list_chats(db)
+        finally:
+            db.close()
+    except Exception:
+        chats = []
+    # Determine active AI provider label
+    try:
+        provider = ai_provider()
+    except Exception:
+        provider = "none"
     return render_template(
         "ai.html",
         settings=settings,
+        ai_configured=configured,
+        ai_provider=provider,
         is_pro=is_pro_enabled(),
         upgrade_link=upgrade_url(),
         chats=chats,
+        kb_status=kb,
     )
+
+
+@ai_bp.route("/query", methods=["POST"])
+def ai_query():
+    """Conversational backend endpoint for AI queries.
+
+    Expects JSON: { question: str, allow_actions?: bool, model?: str }
+    Returns JSON with answer and optional data.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        # propagate school_id if available for tenant-aware actions
+        if session and session.get("school_id"):
+            payload.setdefault("school_id", session.get("school_id"))
+        result = handle_query(payload)
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 def _find_student_by_hint(db, name: str | None, admission_no: str | None) -> Dict[str, Any] | None:
@@ -118,12 +161,16 @@ def _find_student_by_hint(db, name: str | None, admission_no: str | None) -> Dic
 
 @ai_bp.route("/api/chats", methods=["GET"])
 def list_chats_api():
-    db = _get_conn()
     try:
-        chats = _list_chats(db)
-        return jsonify({"ok": True, "chats": chats})
-    finally:
-        db.close()
+        db = _get_conn()
+        try:
+            chats = _list_chats(db)
+            return jsonify({"ok": True, "chats": chats})
+        finally:
+            db.close()
+    except Exception:
+        # Fallback: no DB available -> empty list but OK
+        return jsonify({"ok": True, "chats": []})
 
 
 @ai_bp.route("/api/new_chat", methods=["POST"])
@@ -198,11 +245,14 @@ def ai_chat():
     data = request.get_json(silent=True) or {}
     query = (data.get("message") or "").strip()
     chat_id = data.get("chat_id")
+    model = (data.get("model") or "").strip() or None
+    redo = bool(data.get("redo"))
     if not query:
         return jsonify({"ok": False, "answer": "Please provide a message."}), 400
 
     intent, entities = classify_intent(query)
 
+    # Try DB-backed flow first; if DB not available, run stateless fallback
     try:
         db = _get_conn()
         _ensure_ai_tables(db)
@@ -268,7 +318,7 @@ def ai_chat():
             )
             cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
             db.commit()
-            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t})
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
         if intent == "top_debtors":
             n = int((entities or {}).get("count", 5))
@@ -373,20 +423,18 @@ def ai_chat():
             db.commit()
             return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
-        # Unknown intent -> general answer using AI with safe context (totals only)
-        sid = session.get("school_id") if session else None
-        if sid:
-            cur.execute("SELECT COUNT(*) AS total FROM students WHERE school_id=%s", (sid,))
-            total_students = (cur.fetchone() or {}).get("total", 0)
-            cur.execute("SELECT COALESCE(SUM(amount),0) AS total_collected FROM payments WHERE school_id=%s", (sid,))
-            total_collected = float((cur.fetchone() or {}).get("total_collected", 0))
-        else:
-            cur.execute("SELECT COUNT(*) AS total FROM students")
-            total_students = (cur.fetchone() or {}).get("total", 0)
-            cur.execute("SELECT COALESCE(SUM(amount),0) AS total_collected FROM payments")
-            total_collected = float((cur.fetchone() or {}).get("total_collected", 0))
-        context = f"Students: {total_students}\nTotal collected: {total_collected:,.2f}"
-        answer = answer_with_ai(context, query)
+        # Unknown or general question -> use full chat with history (ChatGPT-like)
+        # Build recent conversation history for coherence (limit to last 40 messages)
+        cur.execute(
+            "SELECT role, content FROM ai_messages WHERE chat_id=%s ORDER BY id ASC",
+            (chat_id,),
+        )
+        rows = cur.fetchall() or []
+        # Limit and optionally drop the last assistant for regenerate
+        history = [{"role": r["role"], "content": r["content"]} for r in rows][-40:]
+        if redo and history and history[-1].get('role') == 'assistant':
+            history = history[:-1]
+        answer = chat_anything(history, model=model or None)
         cur.execute(
             "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
             (chat_id, 'assistant', answer, now),
@@ -399,3 +447,103 @@ def ai_chat():
             db and db.close()
         except Exception:
             pass
+
+    # Stateless fallback (no DB): general chat without persistence
+    try:
+        answer = chat_anything([{"role": "user", "content": query}], model=model or None)
+    except Exception:
+        answer = "AI not available. Please configure API key or build the index."
+    return jsonify({"ok": True, "answer": answer, "chat_id": None})
+
+
+@ai_bp.route("/api/chat_stream", methods=["GET"])
+def ai_chat_stream():
+    """Server-Sent Events stream for ChatGPT-like typing.
+
+    Query params: q (message), chat_id (optional int)
+    Sends an initial meta event with chat_id/title, then streams data chunks.
+    """
+    q = (request.args.get('q') or '').strip()
+    model = (request.args.get('model') or '').strip() or None
+    redo = (request.args.get('redo') or '').strip() in ('1','true','True','yes')
+    if not q:
+        return jsonify({"ok": False, "error": "q is required"}), 400
+
+    def sse_format(event: str | None, data: str):
+        if event:
+            return f"event: {event}\n" + "data: " + data + "\n\n"
+        return "data: " + data + "\n\n"
+
+    @stream_with_context
+    def generate():
+        buf = []
+        title = None
+        now = datetime.now()
+        db = None
+        try:
+            db = _get_conn()
+            _ensure_ai_tables(db)
+            cur = db.cursor(dictionary=True)
+            chat_id = request.args.get('chat_id', type=int)
+            # Create chat if needed
+            if not chat_id:
+                title = (q[:40] + ("..." if len(q) > 40 else "")).strip() or "New Chat"
+                cur2 = db.cursor()
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur2.execute("INSERT INTO ai_chats (title, created_at, updated_at, school_id) VALUES (%s,%s,%s,%s)", (title, now, now, sid))
+                else:
+                    cur2.execute("INSERT INTO ai_chats (title, created_at, updated_at) VALUES (%s,%s,%s)", (title, now, now))
+                db.commit()
+                chat_id = cur2.lastrowid
+            else:
+                # Validate ownership and get title
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute("SELECT id, title FROM ai_chats WHERE id=%s AND school_id=%s", (chat_id, sid))
+                    row = cur.fetchone()
+                    if not row:
+                        yield sse_format('error', 'Not found')
+                        return
+                    title = row.get('title')
+            # Store user message immediately
+            cur.execute("INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)", (chat_id, 'user', q, now))
+            db.commit()
+            # Send meta so client knows chat_id/title
+            meta = {"chat_id": chat_id, "title": title}
+            yield sse_format('meta', json.dumps(meta))
+
+            # Build history (limit last 40) and stream
+            cur.execute("SELECT role, content FROM ai_messages WHERE chat_id=%s ORDER BY id ASC", (chat_id,))
+            rows = cur.fetchall() or []
+            history = [{"role": r["role"], "content": r["content"]} for r in rows][-40:]
+            if redo and history and history[ -1 ].get('role') == 'assistant':
+                history = history[:-1]
+            for delta in chat_anything_stream(history, model=model or None):
+                buf.append(delta)
+                yield sse_format(None, delta)
+            # Persist assistant reply at the end
+            answer_full = ''.join(buf)
+            cur.execute("INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)", (chat_id, 'assistant', answer_full, datetime.now()))
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (datetime.now(), chat_id))
+            db.commit()
+        except Exception as e:
+            try:
+                err = str(e)
+            except Exception:
+                err = 'stream_error'
+            yield sse_format('error', err)
+        finally:
+            try:
+                db and db.close()
+            except Exception:
+                pass
+            yield sse_format('done', 'true')
+
+    resp = Response(generate(), mimetype='text/event-stream')
+    try:
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers['X-Accel-Buffering'] = 'no'
+    except Exception:
+        pass
+    return resp

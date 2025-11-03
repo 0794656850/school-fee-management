@@ -22,6 +22,7 @@
       <input type="text" name="q" value="{{ q or '' }}" placeholder="Student, Class, Invoice #" class="border rounded-lg px-2 py-1 text-sm w-56">
     </div>
     <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm px-3 py-1.5">Apply</button>
+    <a href="{{ url_for('terms.invoices_list') }}" class="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg text-sm px-3 py-1.5">Reset</a>
     <a href="{{ url_for('terms.manage_term_fees', year=year, term=term) }}" class="ml-auto inline-flex items-center gap-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm px-3 py-1.5">
       Manage Term Fees
     </a>

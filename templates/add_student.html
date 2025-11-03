@@ -35,12 +35,27 @@
               class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
     </div>
 
-    <!-- Phone Number -->
+    <!-- Email for Reminders -->
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number (for SMS)</label>
-      <input type="tel" name="phone" placeholder="e.g. +2547XXXXXXXX or 0794XXXXXX"
+      <label class="block text-sm font-medium text-gray-700 mb-1">Email (for reminders)</label>
+      <input type="email" name="email" placeholder="e.g. guardian@example.com"
              class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
-      <p class="text-xs text-gray-500 mt-1">Enter guardian/student phone for reminders. Country code optional.</p>
+      <p class="text-xs text-gray-500 mt-1">Enter guardian/student email for reminder messages.</p>
+    </div>
+
+    <!-- Contact Numbers -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phone (Student)</label>
+        <input type="text" name="phone" placeholder="e.g. +254712345678"
+               class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
+        <p class="text-xs text-gray-500 mt-1">Optional. Include country code.</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Guardian Phone</label>
+        <input type="text" name="parent_phone" placeholder="e.g. +254712345678"
+               class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
+      </div>
     </div>
 
     <!-- Opening Balance for Current Year -->

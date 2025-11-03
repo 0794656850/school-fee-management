@@ -214,6 +214,13 @@ def bootstrap_new_school(conn, school_id: int, name: str, code: Optional[str] = 
                     # On unique conflict due to legacy uniq key, continue
                     pass
             conn.commit()
+            # Persist initial current term/year for this school in settings
+            try:
+                from utils.settings import set_school_setting
+                set_school_setting("CURRENT_YEAR", str(y), school_id=school_id)
+                set_school_setting("CURRENT_TERM", str(current_term), school_id=school_id)
+            except Exception:
+                pass
     except Exception:
         try:
             conn.rollback()
@@ -258,6 +265,106 @@ def ensure_unique_indices_per_school(conn) -> None:
         except Exception:
             pass
     except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+    # Performance indices for large datasets (search and analytics)
+    try:
+        # Students: name, class and balance lookups within a school
+        try:
+            cur.execute("SHOW INDEX FROM students WHERE Key_name='idx_students_school_name'")
+            if not cur.fetchone():
+                cur.execute("CREATE INDEX idx_students_school_name ON students(school_id, name)")
+                conn.commit()
+        except Exception:
+            pass
+        try:
+            cur.execute("SHOW INDEX FROM students WHERE Key_name='idx_students_school_class'")
+            if not cur.fetchone():
+                cur.execute("CREATE INDEX idx_students_school_class ON students(school_id, class_name)")
+                conn.commit()
+        except Exception:
+            pass
+        # Balance/fee_balance index for debtor lists
+        try:
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            has_bal = bool(cur.fetchone())
+            if has_bal:
+                cur.execute("SHOW INDEX FROM students WHERE Key_name='idx_students_school_balance'")
+                if not cur.fetchone():
+                    cur.execute("CREATE INDEX idx_students_school_balance ON students(school_id, balance)")
+                    conn.commit()
+            else:
+                cur.execute("SHOW INDEX FROM students WHERE Key_name='idx_students_school_feebalance'")
+                if not cur.fetchone():
+                    cur.execute("CREATE INDEX idx_students_school_feebalance ON students(school_id, fee_balance)")
+                    conn.commit()
+        except Exception:
+            pass
+        # Payments: common analytics filters
+        try:
+            cur.execute("SHOW INDEX FROM payments WHERE Key_name='idx_pay_school_date'")
+            if not cur.fetchone():
+                cur.execute("CREATE INDEX idx_pay_school_date ON payments(school_id, date)")
+                conn.commit()
+        except Exception:
+            pass
+        try:
+            cur.execute("SHOW INDEX FROM payments WHERE Key_name='idx_pay_school_year_term'")
+            if not cur.fetchone():
+                cur.execute("CREATE INDEX idx_pay_school_year_term ON payments(school_id, year, term)")
+                conn.commit()
+        except Exception:
+            pass
+        try:
+            cur.execute("SHOW INDEX FROM payments WHERE Key_name='idx_pay_school_method'")
+            if not cur.fetchone():
+                cur.execute("CREATE INDEX idx_pay_school_method ON payments(school_id, method)")
+                conn.commit()
+        except Exception:
+            pass
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+def ensure_perf_indices(conn) -> None:
+    """Compatibility wrapper for older imports."""
+    ensure_unique_indices_per_school(conn)
+
+
+def ensure_fulltext_students(conn) -> None:
+    """Create an optional FULLTEXT index on students(name, admission_no).
+
+    Safe to call repeatedly; silently skips if not supported or already exists.
+    """
+    try:
+        cur = conn.cursor()
+        # Check if a FULLTEXT index already exists on (name, admission_no)
+        try:
+            cur.execute(
+                "SHOW INDEX FROM students WHERE Index_type='FULLTEXT' AND (Column_name='name' OR Column_name='admission_no')"
+            )
+            if cur.fetchone():
+                return
+        except Exception:
+            # SHOW INDEX not supported or table missing; abort quietly
+            return
+
+        # Attempt to create a combined FULLTEXT index
+        try:
+            cur.execute("CREATE FULLTEXT INDEX ft_students_name_adm ON students(name, admission_no)")
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+    except Exception:
+        # Non-fatal: environments without privileges/engine support
         try:
             conn.rollback()
         except Exception:
