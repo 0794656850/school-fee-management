@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
@@ -94,10 +94,10 @@ def list_students_with_pending_balance(school_id: Optional[int] = None) -> List[
         has_balance = bool(cur.fetchone())
         bal_col = "balance" if has_balance else "fee_balance"
         if school_id:
-            q = f"SELECT id, name, regNo, class_name, {bal_col} AS balance FROM students WHERE {bal_col} > 0 AND school_id=%s ORDER BY {bal_col} DESC"
+            q = f"SELECT id, name, admission_no AS regNo, class_name, {bal_col} AS balance FROM students WHERE {bal_col} > 0 AND school_id=%s ORDER BY {bal_col} DESC"
             cur.execute(q, (school_id,))
         else:
-            q = f"SELECT id, name, regNo, class_name, {bal_col} AS balance FROM students WHERE {bal_col} > 0 ORDER BY {bal_col} DESC"
+            q = f"SELECT id, name, admission_no AS regNo, class_name, {bal_col} AS balance FROM students WHERE {bal_col} > 0 ORDER BY {bal_col} DESC"
             cur.execute(q)
         return cur.fetchall() or []
     except Exception:
@@ -197,3 +197,4 @@ def handle_query(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # Default to RAG answer
     return answer_query(question, model=model)
+

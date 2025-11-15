@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -6,7 +6,17 @@
   <title>Sign In - {{ APP_TITLE }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <meta name="theme-color" content="{{ BRAND_COLOR or '#2563eb' }}" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    try {
+      var pref = localStorage.getItem('theme');
+      if (!pref) {
+        pref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (pref === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    } catch(e){}
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
   <!-- Overlay transitions removed to keep clean slide only; styles centralized in theme.css -->
@@ -18,37 +28,45 @@
   {% endif %}
   {% endwith %}
   </head>
-  <body class="min-h-screen flex items-center justify-center p-6">
+  <body class="bg-white min-h-screen flex items-center justify-center p-6">
+    <!-- Theme toggle -->
+    <button id="themeToggle" class="fixed top-3 right-3 z-40 p-2 rounded-full nav-button" title="Toggle theme">
+      <i data-lucide="moon"></i>
+    </button>
     <!-- Flash messages on top -->
     <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
 
     <div class="max-w-xl w-full">
-            <div class="text-center mb-8">
-        <div class="flex items-center justify-center gap-4">
-          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" class="h-16 w-16 md:h-20 md:w-20 rounded-2xl ring-2 ring-blue-200/70 ring-offset-1 shadow-md" alt="{{ BRAND_NAME }} Logo"/>
-          <div class="leading-tight text-left select-none">
-            <div class="font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600">
-              {% for word in (BRAND_NAME or '').split() %}
-                <div class="leading-6 text-2xl">{{ word }}</div>
-              {% endfor %}
+      <div class="brand-hero mb-6">
+        <div class="brand-hero__row">
+          <div class="app-badge">
+            <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }} Logo" />
+          </div>
+          <div class="leading-tight select-none">
+            <div class="brand-title text-3xl md:text-4xl">
+              {{ BRAND_NAME }}
             </div>
-            <div class="mt-1 text-xs text-gray-600 tracking-wide flex items-center gap-1.5">
+            <div class="mt-1 text-sm brand-subtitle tracking-wide flex items-center gap-1.5">
               <i data-lucide="graduation-cap" class="w-4 h-4 text-blue-600"></i>
               <span class="font-medium">{{ PORTAL_TITLE }}</span>
             </div>
           </div>
         </div>
       </div><!-- Single modern login card -->
+      <!-- School Admin only; removed guardian/parent switch on this page -->
+      <div class="text-center -mt-2 mb-2 text-xs">
+        <a href="{{ url_for('auth.entry') }}" class="text-indigo-700 hover:underline">All Login Options</a>
+      </div>
       <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter">
         <div class="text-center mb-4">
-          <h2 class="text-xl font-bold">School Profile Login</h2>
+          <h2 class="text-xl font-bold">Existing School Login</h2>
           <p class="text-sm text-gray-500">Sign in to access your dashboard</p>
         </div>
         <form method="post" action="{{ url_for('auth.login', next=next_url) }}" class="space-y-4" autocomplete="on">
           <input type="hidden" name="next" value="{{ next_url }}" />
           <div>
-            <label class="block text-sm font-medium text-gray-700">School name or code</label>
-            <input id="school" name="school_name" placeholder="e.g., Greenfield Academy or greenfield-academy"
+            <label class="block text-sm font-medium text-gray-700">School Code</label>
+            <input id="school" name="school_code" placeholder="Enter your school code"
                    class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
           </div>
           <div>
@@ -69,11 +87,21 @@
             </label>
             <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="text-sm text-indigo-700 hover:underline flex items-center gap-1"><i data-lucide='life-buoy' class="w-4 h-4"></i> Help</a>
           </div>
-          <button class="w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary">Login to Dashboard</button>
-          <div class="text-center text-sm text-gray-600">
-            <div>Forgot your password?</div>
-            <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline"><i data-lucide='message-circle'></i> Contact Admin via WhatsApp</a>
+          <button class="w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary btn-lg flex items-center justify-center gap-2"><i data-lucide="arrow-right"></i> Login to Dashboard</button>
+          <div class="text-center text-sm text-gray-500 mt-2">
+            <button id="forgotToggle" type="button" class="text-indigo-700 hover:underline">Forgot your password?</button>
           </div>
+          <div id="forgotForm" class="hidden mt-2 grid gap-2">
+            <div>
+              <label class="block text-xs text-gray-600">School Code</label>
+              <input name="school_code" placeholder="Enter your school code" class="w-full px-3 py-2 border rounded-lg" />
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnResetSend" class="px-3 py-2 rounded-lg btn-secondary text-sm" type="button">Reset &amp; Send Password</button>
+              <span id="forgotMsg" class="text-xs text-gray-500"></span>
+            </div>
+          </div>
+          <!-- Guardian/Parent link removed on School Admin login screen -->
         </form>
         <div class="text-center mt-6 text-sm">
           <span class="text-gray-600">New here?</span>
@@ -94,11 +122,23 @@
       const box = document.getElementById('flash');
       const styles = { success: 'bg-green-50 text-green-700 border-green-200', error: 'bg-red-50 text-red-700 border-red-200', info: 'bg-blue-50 text-blue-700 border-blue-200', warning: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
       flash.forEach(([cat, msg]) => {
-        const div = document.createElement('div');
-        div.className = `mb-2 border rounded-lg px-4 py-3 text-sm shadow ${styles[cat]||'bg-gray-50 text-gray-700 border-gray-200'}`;
-        div.textContent = msg;
-        box.appendChild(div);
+        const item = document.createElement('div');
+        item.className = `flash-item mb-2 border rounded-lg px-4 py-3 text-sm shadow flex items-start gap-2 ${styles[cat]||'bg-gray-50 text-gray-700 border-gray-200'}`;
+        const text = document.createElement('div');
+        text.className = 'flex-1';
+        text.textContent = msg;
+        const btn = document.createElement('button');
+        btn.type='button';
+        btn.className='dismiss p-1 -m-1 text-gray-400 hover:text-gray-600';
+        btn.setAttribute('aria-label','Dismiss');
+        const ic = document.createElement('i'); ic.setAttribute('data-lucide','x'); btn.appendChild(ic);
+        item.appendChild(text); item.appendChild(btn);
+        box.appendChild(item);
+        btn.addEventListener('click', () => item.remove());
       });
+      try { lucide.createIcons(); } catch(e){}
+      // Auto-dismiss after a few seconds
+      setTimeout(() => { box.querySelectorAll('.flash-item').forEach(el => el.remove()); }, 4500);
       // Autofill remembered school and remember checkbox
       try {
         const s = document.getElementById('school');
@@ -147,9 +187,63 @@
           setTimeout(() => { if (!fired) done(); }, 480);
         });
       }
+      // Forgot password: single-click reset and email
+      (function(){
+        const toggle = document.getElementById('forgotToggle');
+        const form = document.getElementById('forgotForm');
+        const msg = document.getElementById('forgotMsg');
+        const btnReset = document.getElementById('btnResetSend');
+        if (!toggle || !form || !btnReset) return;
+        toggle.addEventListener('click', ()=>{ form.classList.toggle('hidden'); });
+        const getCode = () => form.querySelector('input[name="school_code"]').value.trim();
+        btnReset.addEventListener('click', async ()=>{
+          msg.textContent = 'Resetting and emailing password...';
+          try{
+            const fd = new FormData(); fd.append('school_code', getCode());
+            const r = await fetch('{{ url_for('auth.forgot_password_simple') }}', { method: 'POST', body: fd });
+            if (r.redirected){ window.location = r.url; return; }
+            msg.textContent = 'If the school was found, a new password has been sent.';
+          }catch(e){ msg.textContent = 'Failed to reset password.'; }
+        });
+      })();
+  </script>
+  <script>
+    // Initialize theme icon state on load
+    (function(){
+      try {
+        const btn = document.getElementById('themeToggle');
+        if (!btn) return;
+        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        btn.innerHTML='';
+        const i=document.createElement('i');
+        i.setAttribute('data-lucide', cur==='dark' ? 'sun' : 'moon');
+        btn.appendChild(i);
+        lucide.createIcons();
+      } catch(_){}
+    })();
+    // Toggle handler
+    (function(){
+      const btn = document.getElementById('themeToggle');
+      if (!btn) return;
+      btn.addEventListener('click', function(){
+        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const next = cur === 'dark' ? 'light' : 'dark';
+        if (next === 'dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme');
+        try { localStorage.setItem('theme', next); } catch(_){}
+        try {
+          const meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', next === 'dark' ? '#0b1220' : (window.BRAND_COLOR || '{{ BRAND_COLOR or "#2563eb" }}'));
+        } catch(_){}
+        try {
+          btn.innerHTML='';
+          const i=document.createElement('i');
+          i.setAttribute('data-lucide', next==='dark' ? 'sun' : 'moon');
+          btn.appendChild(i);
+          lucide.createIcons();
+        } catch(_){}
+      });
+    })();
   </script>
   <!-- Overlay transitions removed -->
 </body>
 </html>
-
-

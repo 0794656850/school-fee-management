@@ -404,8 +404,12 @@ def _openai_chat(messages: List[Dict[str, str]], model: str = DEFAULT_MODEL, tem
     # Normalize model: callers may pass None/"" to mean default
     model = model or DEFAULT_MODEL
 
-    # Vertex AI (Gemini) preferred if available
-    if _has_vertex_config():
+    # Vertex AI (Gemini) preferred only when Google API key not configured
+    # and Vertex is not explicitly disabled. This avoids SDK deprecation warnings
+    # by letting google-generativeai handle requests when possible.
+    if not (os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY")) \
+       and os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") \
+       and _has_vertex_config():
         try:
             return _vertex_generate(messages)
         except Exception:
@@ -438,6 +442,12 @@ def _openai_chat(messages: List[Dict[str, str]], model: str = DEFAULT_MODEL, tem
                 return ""
         except Exception:
             # On any Gemini failure, continue to other providers
+            pass
+    # If Google key not set or failed, allow Vertex as a fallback (unless disabled)
+    if os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config():
+        try:
+            return _vertex_generate(messages)
+        except Exception:
             pass
     # Azure OpenAI configuration (env first, then DB)
     azure_key = os.environ.get("AZURE_OPENAI_API_KEY") or _get_setting_db("AZURE_OPENAI_API_KEY")
@@ -510,7 +520,6 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
     Known intents:
       - student_balance
       - top_debtors
-      - analytics_summary
       - generate_reminder
     """
     system = {
@@ -518,7 +527,7 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
         "content": (
             "You are an intent classifier for a School Fee Management app. "
             "Return STRICT JSON with keys: intent, entities. "
-            "intents: student_balance, top_debtors, analytics_summary, generate_reminder. "
+            "intents: student_balance, top_debtors, generate_reminder. "
             "Entities may include: student_name, admission_no, count."
         ),
     }
@@ -547,8 +556,7 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
         m = re.search(r"top\s+(\d{1,2})", q)
         cnt = int(m.group(1)) if m else 5
         return "top_debtors", {"count": cnt}
-    if any(k in q for k in ["analytics", "summary", "totals", "collection"]):
-        return "analytics_summary", {}
+    # analytics disabled
     if any(k in q for k in ["remind", "notice", "notify", "compose message"]):
         return "generate_reminder", {}
     return "unknown", {}

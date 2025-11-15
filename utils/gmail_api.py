@@ -5,11 +5,6 @@ from typing import Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-
 
 # Only send permission
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
@@ -23,10 +18,18 @@ def _token_path() -> str:
     return os.path.abspath(os.environ.get("GMAIL_TOKEN_JSON", "token.json"))
 
 
-def _get_creds() -> Optional[Credentials]:
+def _get_creds() -> Optional["Credentials"]:
     creds = None
     token_file = _token_path()
     cred_file = _credentials_path()
+
+    # Import Google auth libs lazily to avoid hard dependency at module import
+    try:
+        from google.oauth2.credentials import Credentials  # type: ignore
+        from google.auth.transport.requests import Request  # type: ignore
+    except Exception:
+        # Libraries not installed; caller will see None and treat as unavailable
+        return None
 
     if os.path.exists(token_file):
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
@@ -34,25 +37,39 @@ def _get_creds() -> Optional[Credentials]:
     # Refresh or run local server flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as exc:
+                try:
+                    os.remove(token_file)
+                except Exception:
+                    pass
+                try:
+                    print(f"Gmail token refresh failed, removing {token_file}: {exc}")
+                except Exception:
+                    pass
+                return None
         else:
             # In a Flask app, use the web OAuth flow handled by routes/gmail_oauth_routes.py
             # to avoid dynamic localhost port redirects that cause redirect_uri_mismatch.
             # Guide the caller to start the authorization flow via the app route.
             if not os.path.exists(cred_file):
-                raise FileNotFoundError(
-                    f"Gmail credentials file not found at {cred_file}. Place your OAuth2 client JSON there."
-                )
-            raise RuntimeError(
-                "Gmail not authorized. Visit /gmail/authorize in your browser "
-                "to connect a Google account. Ensure the Authorized redirect URI "
-                "in Google Cloud matches your app, e.g., http://127.0.0.1:5000/oauth2callback "
-                "(or set GMAIL_REDIRECT_URI)."
-            )
+                # No client creds present; cannot proceed
+                return None
+            # In app flow, we use /gmail/authorize; return None to indicate not ready
+            return None
         # Save token for next runs
         with open(token_file, "w", encoding="utf-8") as token:
             token.write(creds.to_json())
     return creds
+
+
+def has_valid_token() -> bool:
+    """Return True when Gmail credentials can be loaded."""
+    try:
+        return _get_creds() is not None
+    except Exception:
+        return False
 
 
 def authenticate_gmail():
@@ -66,6 +83,12 @@ def authenticate_gmail():
     """
     try:
         creds = _get_creds()
+        if creds is None:
+            return None
+        try:
+            from googleapiclient.discovery import build  # type: ignore
+        except Exception:
+            return None
         return build("gmail", "v1", credentials=creds)
     except Exception as e:
         try:
@@ -96,13 +119,6 @@ def send_email(to: str, subject: str, body: str) -> bool:
 
         service.users().messages().send(userId="me", body={"raw": raw}).execute()
         return True
-    except HttpError as e:
-        # Surface Gmail API errors for visibility
-        try:
-            print(f"Gmail API error: {e}")
-        except Exception:
-            pass
-        return False
     except Exception as e:
         try:
             print(f"Email send failed: {e}")
@@ -135,12 +151,6 @@ def send_email_html(to: str, subject: str, html_body: str) -> bool:
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         service.users().messages().send(userId="me", body={"raw": raw}).execute()
         return True
-    except HttpError as e:
-        try:
-            print(f"Gmail API error: {e}")
-        except Exception:
-            pass
-        return False
     except Exception as e:
         try:
             print(f"HTML email send failed: {e}")

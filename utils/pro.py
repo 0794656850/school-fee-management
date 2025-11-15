@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import os
-from typing import Tuple
 
 
 def _stored_key_path() -> str:
-    # Store under instance/ to avoid source control; ensure folder exists
+    """Persistent location for a license key per deployment."""
     base = os.path.join(os.getcwd(), "instance")
     try:
         os.makedirs(base, exist_ok=True)
@@ -16,7 +14,7 @@ def _stored_key_path() -> str:
 
 
 def get_license_key() -> str:
-    # Priority: ENV -> file
+    """Return the configured license value (env override preferred)."""
     key = os.environ.get("LICENSE_KEY", "").strip()
     if key:
         return key
@@ -28,30 +26,19 @@ def get_license_key() -> str:
 
 
 def set_license_key(key: str) -> None:
+    """Persist the provided license key to disk (for local dev)."""
     try:
         with open(_stored_key_path(), "w", encoding="utf-8") as f:
             f.write((key or "").strip())
     except Exception:
-        # Fallback to env var in memory (non-persistent)
-        os.environ["LICENSE_KEY"] = key or ""
+        os.environ["LICENSE_KEY"] = (key or "").strip()
 
 
 def is_pro_enabled(app=None) -> bool:
-    # Extremely light validation: key starts with prefix and checksum matches pattern
-    key = (getattr(app, "config", {}).get("LICENSE_KEY") if app else None) or get_license_key()
-    key = (key or "").strip()
-    if not key:
-        return False
-    if not key.upper().startswith("CS-PRO-"):
-        return False
-    # Expected suffix: 6 hex chars based on simple hash of prefix body
-    body = key.split("CS-PRO-", 1)[-1].split("-", 1)[0]
-    h = hashlib.sha1(body.encode("utf-8")).hexdigest()[:6].upper()
-    return h in key.upper()
+    """Monetization feature flag has been removed; always return True."""
+    return True
 
 
 def upgrade_url(app=None) -> str:
-    if app and hasattr(app, "config"):
-        return app.config.get("BILLING_UPGRADE_URL") or "https://example.com/upgrade"
-    return os.environ.get("BILLING_UPGRADE_URL", "https://example.com/upgrade")
-
+    """Fallback upgrade URL stub (no monetization portal anymore)."""
+    return "/"

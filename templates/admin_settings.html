@@ -55,6 +55,37 @@
     </form>
   </div>
 
+  <!-- Student Portal Links -->
+  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-base font-semibold">Student Portal Links</h3>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100">Security</span>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">Control how long shared portal links remain valid and rotate all links instantly.</p>
+
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="form" value="portal" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Token Max Age (days)</label>
+          <input type="number" min="1" name="PORTAL_TOKEN_MAX_AGE_DAYS" value="{{ values.PORTAL_TOKEN_MAX_AGE_DAYS or 180 }}"
+                 class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm">
+          <p class="text-xs text-gray-500 mt-1">Links older than this become invalid automatically.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Rollover Timestamp</label>
+          <input type="text" name="PORTAL_TOKEN_ROLLOVER_AT" value="{{ values.PORTAL_TOKEN_ROLLOVER_AT or '' }}" readonly
+                 class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm bg-gray-50">
+          <p class="text-xs text-gray-500 mt-1">Set automatically when you rotate all links.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Portal Settings</button>
+        <button name="ROTATE_ALL_NOW" value="1" class="px-4 py-2 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700">Rotate All Links Now</button>
+      </div>
+    </form>
+  </div>
+
   
   <!-- Email (Gmail API) -->
   <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">

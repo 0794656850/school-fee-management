@@ -8,7 +8,8 @@ class Student(db.Model):
     __tablename__ = 'students'
 
     id = db.Column(db.Integer, primary_key=True)
-    regNo = db.Column(db.String(50), unique=True, nullable=False)
+    # Store in DB column 'admission_no' but expose as attribute 'regNo' for compatibility
+    regNo = db.Column('admission_no', db.String(50), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     class_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))

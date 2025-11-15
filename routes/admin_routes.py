@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify
+from typing import Any
 from datetime import datetime
 import mysql.connector
 
@@ -8,6 +9,7 @@ from utils.whatsapp import whatsapp_is_configured, send_whatsapp_text, send_what
 from utils.settings import get_setting, set_setting, set_school_setting
 from utils.security import verify_password, hash_password, is_hashed
 from utils.pro import is_pro_enabled, set_license_key, get_license_key, upgrade_url
+from utils.audit import fetch_audit_logs
 from utils.tenant import get_or_create_school, bootstrap_new_school, ensure_schools_table, slugify_code
 from utils.users import (
     ensure_user_tables,
@@ -73,6 +75,26 @@ def _require_admin():
     return redirect(url_for("admin.login"))
 
 
+def _serialize_audit_log(log: dict[str, Any]) -> dict[str, Any]:
+    ts = log.get("created_at")
+    return {
+        "id": log.get("id"),
+        "school_id": log.get("school_id"),
+        "user_id": log.get("user_id"),
+        "username": log.get("username") or log.get("user") or "System",
+        "user_role": log.get("user_role") or log.get("role") or "System",
+        "action": log.get("action") or "System change",
+        "target": log.get("target"),
+        "detail": log.get("detail"),
+        "status": log.get("status") or "Success",
+        "module": log.get("module"),
+        "action_type": log.get("action_type"),
+        "ip_address": log.get("ip_address"),
+        "device_info": log.get("device_info"),
+        "timestamp": ts.strftime("%Y-%m-%dT%H:%M:%S") if ts else None,
+    }
+
+
 @admin_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -82,6 +104,7 @@ def login():
             session["is_admin"] = True
             flash("Welcome, admin!", "success")
             return redirect(url_for("admin.dashboard"))
+        # No audit: failed attempts are not recorded
         flash("Invalid password.", "error")
         return redirect(url_for("admin.login"))
     return render_template("admin_login.html")
@@ -89,6 +112,7 @@ def login():
 
 @admin_bp.route("/logout")
 def logout():
+    # No audit logout logging
     session.pop("is_admin", None)
     flash("Logged out.", "info")
     return redirect(url_for("admin.login"))
@@ -281,6 +305,26 @@ def billing():
         upgrade_link=upgrade_url(),
         mpesa_ok=mpesa_ok,
     )
+
+
+@admin_bp.route("/audit")
+def audit_logs():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    logs = fetch_audit_logs(session.get("school_id"))
+    sanitized_logs = [_serialize_audit_log(log) for log in logs]
+    return render_template("admin/audit_logs.html", logs=sanitized_logs)
+
+
+@admin_bp.route("/audit/logs")
+def audit_logs_stream():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    logs = fetch_audit_logs(session.get("school_id"), limit=200)
+    payload = [_serialize_audit_log(log) for log in logs]
+    return jsonify({"logs": payload})
 
 
 @admin_bp.route("/mpesa", methods=["GET", "POST"])
@@ -490,6 +534,24 @@ def access_settings():
             flash("Vertex AI settings saved.", "success")
             return redirect(url_for("admin.access_settings"))
 
+        elif form_kind == "portal":
+            # Portal token config and global rotation
+            max_age = (request.form.get("PORTAL_TOKEN_MAX_AGE_DAYS") or "").strip()
+            rotate = (request.form.get("ROTATE_ALL_NOW") or "").strip()
+            if max_age:
+                try:
+                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", int(max_age))
+                except Exception:
+                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", max_age)
+            if rotate == "1":
+                try:
+                    now_ts = int(datetime.now().timestamp())
+                    set_school_setting("PORTAL_TOKEN_ROLLOVER_AT", now_ts)
+                except Exception:
+                    pass
+            flash("Portal settings saved.", "success")
+            return redirect(url_for("admin.access_settings"))
+
     values = {}
     values["APP_LOGIN_USERNAME"] = (get_setting("APP_LOGIN_USERNAME") or current_app.config.get("LOGIN_USERNAME", "user")).strip()
     values["APP_LOGIN_PASSWORD"] = ""
@@ -499,6 +561,10 @@ def access_settings():
     values["WHATSAPP_TEMPLATE_LANG"] = (get_setting("WHATSAPP_TEMPLATE_LANG") or current_app.config.get("WHATSAPP_TEMPLATE_LANG", "en_US") or "en_US")
     values["REMINDER_EMAIL_COLUMN"] = (get_setting("REMINDER_EMAIL_COLUMN") or "email")
     values["REMINDER_DEFAULT_MESSAGE"] = (get_setting("REMINDER_DEFAULT_MESSAGE") or "Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.")
+
+    # Portal token settings
+    values["PORTAL_TOKEN_MAX_AGE_DAYS"] = (get_setting("PORTAL_TOKEN_MAX_AGE_DAYS") or current_app.config.get("PORTAL_TOKEN_MAX_AGE_DAYS", 180))
+    values["PORTAL_TOKEN_ROLLOVER_AT"] = (get_setting("PORTAL_TOKEN_ROLLOVER_AT") or "")
 
     # Vertex AI settings (pre-fill from DB or current config)
     values["VERTEX_PROJECT_ID"] = (get_setting("VERTEX_PROJECT_ID") or current_app.config.get("VERTEX_PROJECT_ID", ""))

@@ -6,21 +6,30 @@
   <title>Register School - {{ APP_TITLE }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <meta name="theme-color" content="{{ BRAND_COLOR or '#2563eb' }}" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    try {
+      var pref = localStorage.getItem('theme');
+      if (!pref) {
+        pref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (pref === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    } catch(e){}
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
   <!-- Overlay transitions removed to keep clean slide only -->
   <style>
-    :root { --brand-600:#4f46e5; --bg-app:#ffffff; --surface:rgba(255,255,255,.88); --text:#0f172a; --border:#e5e7eb; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text); }
-    .glass { background: #ffffff; box-shadow: 0 20px 50px rgba(79,70,229,.15); }
+    body { font-family: 'Inter', sans-serif; }
+    .glass { background: var(--surface-strong); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
     /* Entry + exit transitions (mirror login) */
     .card-enter { opacity: 0; transform: translateY(16px) scale(.985); }
     .card-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: transform .55s cubic-bezier(.2,.8,.2,1), opacity .55s ease; }
     .card-slide-in-right { opacity: 0; transform: translateX(28px); }
     .card-slide-in-right.card-enter-active { opacity: 1; transform: translateX(0); }
     .slide-out-right { transform: translateX(48px) scale(.985); opacity: 0; transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .42s ease; }
-    .btn-primary { background: linear-gradient(90deg,#0f4460,#6b4b4b,#f97316); background-size: 200% 100%; transition: background-position .5s ease, transform .2s ease; }
-    .btn-primary:hover { background-position: 100% 0; transform: translateY(-1px); }
+    /* Use global theme .btn-primary; no local override to keep consistency */
   </style>
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -29,15 +38,30 @@
   {% endwith %}
 </head>
 <body class="min-h-screen flex items-center justify-center p-6">
+  <!-- Theme toggle -->
+  <button id="themeToggle" class="fixed top-3 right-3 z-40 p-2 rounded-full nav-button" title="Toggle theme">
+    <i data-lucide="moon"></i>
+  </button>
   <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
   <div class="max-w-3xl w-full">
+    <div class="brand-hero mb-2">
+      <div class="brand-hero__row">
+        <div class="app-badge">
+          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}" />
+        </div>
+        <div>
+          <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
+          <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
+        </div>
+      </div>
+    </div>
     <div class="text-center mb-6">
       <a id="toLogin" href="{{ url_for('auth.login') }}" class="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
         <i data-lucide="arrow-left"></i>
         Back to Login
       </a>
-      <h1 class="text-2xl font-bold mt-2">Create a New School Profile</h1>
-      <p class="text-sm text-gray-600">After registration, you will go straight into the system.</p>
+      <h1 class="text-2xl font-bold mt-2">New School Registration</h1>
+      <p class="text-sm text-gray-600">Register your school to get started</p>
     </div>
     <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter card-slide-in-right">
       <form method="post" action="{{ url_for('auth.register_school') }}" class="space-y-4">
@@ -123,6 +147,43 @@
         setTimeout(() => { if (!fired) done(); }, 480);
       });
     }
+  </script>
+  <script>
+    // Initialize theme icon state on load
+    (function(){
+      try {
+        const btn = document.getElementById('themeToggle');
+        if (!btn) return;
+        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        btn.innerHTML='';
+        const i=document.createElement('i');
+        i.setAttribute('data-lucide', cur==='dark' ? 'sun' : 'moon');
+        btn.appendChild(i);
+        lucide.createIcons();
+      } catch(_){}
+    })();
+    // Toggle handler
+    (function(){
+      const btn = document.getElementById('themeToggle');
+      if (!btn) return;
+      btn.addEventListener('click', function(){
+        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const next = cur === 'dark' ? 'light' : 'dark';
+        if (next === 'dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme');
+        try { localStorage.setItem('theme', next); } catch(_){}
+        try {
+          const meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', next === 'dark' ? '#0b1220' : (window.BRAND_COLOR || '{{ BRAND_COLOR or "#2563eb" }}'));
+        } catch(_){}
+        try {
+          btn.innerHTML='';
+          const i=document.createElement('i');
+          i.setAttribute('data-lucide', next==='dark' ? 'sun' : 'moon');
+          btn.appendChild(i);
+          lucide.createIcons();
+        } catch(_){}
+      });
+    })();
   </script>
   <!-- Overlay transitions removed -->
 </body>

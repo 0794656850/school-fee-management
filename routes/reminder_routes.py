@@ -6,9 +6,8 @@ import mysql.connector
 from flask_mail import Message
 from extensions import mail
 from utils.notify import normalize_phone  # legacy import; unused after email switch
-from utils.gmail_api import send_email as gmail_send_email, _token_path
+from utils.gmail_api import send_email as gmail_send_email, has_valid_token
 from utils.settings import get_setting
-from utils.pro import is_pro_enabled
 
 reminder_bp = Blueprint('reminders', __name__, url_prefix='/reminders')
 
@@ -110,13 +109,6 @@ def _render_message(template: str, *, name: str, balance: Decimal, class_name: s
 
 @reminder_bp.route('/')
 def reminders_home():
-    # Gate behind Pro license
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Reminders are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('monetization.index'))
-    except Exception:
-        pass
     db = _db_from_config()
     cursor = db.cursor(dictionary=True)
 
@@ -191,7 +183,7 @@ def reminders_home():
 
     # Gmail connection status (token present)
     try:
-        gmail_connected = os.path.exists(_token_path())
+        gmail_connected = has_valid_token()
     except Exception:
         gmail_connected = False
 
@@ -210,12 +202,6 @@ def reminders_home():
 
 @reminder_bp.route('/send/<int:student_id>', methods=['GET', 'POST'])
 def send_email_reminder(student_id: int):
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Reminders are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('reminders.reminders_home'))
-    except Exception:
-        pass
     db = _db_from_config()
     cursor = db.cursor(dictionary=True)
 
@@ -298,12 +284,6 @@ def send_email_reminder(student_id: int):
 @reminder_bp.route('/send_all', methods=['POST'])
 def send_all_reminders():
     """Send reminders to all students with positive balances. Simple best-effort loop."""
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Reminders are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('reminders.reminders_home'))
-    except Exception:
-        pass
     db = _db_from_config()
     cursor = db.cursor(dictionary=True)
 
@@ -389,12 +369,6 @@ def test_email_endpoint():
     Request JSON: {"to": "address@example.com", "message": "optional body"}
     Falls back to SCHOOL_EMAIL or MAIL_SENDER when 'to' is not provided.
     """
-    # Pro gate for sending tests as well
-    try:
-        if not is_pro_enabled(current_app):
-            return jsonify({"ok": False, "error": "Pro required"}), 403
-    except Exception:
-        pass
     # Allow dry-run for connectivity checks without sending
     try:
         if (request.args.get('dry') or "").lower() in ('1','true','yes'):

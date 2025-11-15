@@ -6,7 +6,22 @@ import mysql.connector
 from datetime import datetime
 
 from utils.mpesa import stk_push, DarajaError, parse_callback_items
-from utils.pro import set_license_key
+from routes.student_portal import ensure_mpesa_student_table  # reuse table creator
+from routes.term_routes import ensure_academic_terms_table, get_or_seed_current_term
+# Pro activation is no longer auto-granted on STK callbacks.
+# Keys are issued only after admin verification.
+try:
+    # Optional Gmail API helpers
+    from utils.gmail_api import (
+        send_email as gmail_send_email,
+        send_email_html as gmail_send_email_html,
+    )
+except Exception:  # graceful fallback
+    def gmail_send_email(*args, **kwargs):  # type: ignore
+        return False
+
+    def gmail_send_email_html(*args, **kwargs):  # type: ignore
+        return False
 
 
 mpesa_bp = Blueprint("mpesa", __name__, url_prefix="/mpesa")
@@ -66,6 +81,14 @@ def ensure_tables(db):
         """
     )
     db.commit()
+    # Student STK tracking table (for portal payments)
+    try:
+        ensure_mpesa_student_table(db)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 @mpesa_bp.route("/checkout", methods=["POST"])
@@ -133,24 +156,131 @@ def callback():
         )
     db.commit()
 
-    # If paid, activate Pro (one-time) using receipt as unique ref
-    if str(result_code) == "0" and meta.get("receipt"):
-        ref = meta.get("receipt").upper()
-        # Create activation record if not exists
-        cur = db.cursor()
-        cur.execute("SELECT id FROM pro_activations WHERE mpesa_ref=%s", (ref,))
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO pro_activations (mpesa_ref, amount, activated_at, notes) VALUES (%s,%s,%s,%s)",
-                (ref, meta.get("amount"), now, f"Auto-activated via callback {checkout_id}"),
+    # Also update student STK records and, on success, record a student payment
+    try:
+        cur2 = db.cursor(dictionary=True)
+        cur2.execute(
+            "SELECT * FROM mpesa_student_payments WHERE checkout_request_id=%s",
+            (checkout_id,),
+        )
+        row = cur2.fetchone()
+        if row:
+            # Update the mpesa_student_payments row
+            cur3 = db.cursor()
+            cur3.execute(
+                """
+                UPDATE mpesa_student_payments
+                SET result_code=%s, result_desc=%s, mpesa_receipt=%s, phone=%s, amount=%s, raw_callback=%s, updated_at=%s
+                WHERE checkout_request_id=%s
+                """,
+                (
+                    result_code,
+                    result_desc,
+                    meta.get("receipt"),
+                    meta.get("phone"),
+                    meta.get("amount"),
+                    json.dumps(data),
+                    now,
+                    checkout_id,
+                ),
             )
             db.commit()
-            # Generate license-like key and store
-            import hashlib as _hashlib
-            h6 = _hashlib.sha1(ref.encode("utf-8")).hexdigest()[:6].upper()
-            license_key = f"CS-PRO-{ref}-{h6}"
-            set_license_key(license_key)
+            # If success, insert into payments table for the student
+            if str(result_code) == "0":
+                student_id = row.get("student_id")
+                school_id = row.get("school_id")
+                y = row.get("year")
+                t = row.get("term")
+                amt = meta.get("amount") or row.get("amount") or 0
+                try:
+                    # Ensure term/year (fallback if missing)
+                    ensure_academic_terms_table(db)
+                    if not y or not t:
+                        y, t = get_or_seed_current_term(db)
+                except Exception:
+                    pass
+                # Insert payment only if not already inserted for this receipt
+                ref = (meta.get("receipt") or f"MP_{checkout_id}")
+                cur4 = db.cursor()
+                cur4.execute(
+                    "SELECT COUNT(*) FROM payments WHERE reference=%s AND student_id=%s",
+                    (ref, student_id),
+                )
+                row_cnt = cur4.fetchone()
+                cnt = (row_cnt[0] if isinstance(row_cnt, (list, tuple)) else (row_cnt or 0)) if row_cnt is not None else 0
+                if not cnt:
+                    cur4.execute(
+                        """
+                        INSERT INTO payments (student_id, amount, method, term, year, reference, date, school_id)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                        """,
+                        (
+                            student_id,
+                            amt,
+                            "M-Pesa",
+                            t,
+                            y,
+                            ref,
+                            now,
+                            school_id,
+                        ),
+                    )
+                    db.commit()
+                    payment_id = cur4.lastrowid
+                    # Email confirmation to guardian/student when email exists
+                    try:
+                        cur5 = db.cursor()
+                        # Pick preferred email column
+                        email_col = "email"
+                        try:
+                            cur5.execute("SHOW COLUMNS FROM students LIKE 'email'")
+                            has_email = bool(cur5.fetchone())
+                        except Exception:
+                            has_email = False
+                        has_parent_email = False
+                        if not has_email:
+                            try:
+                                cur5.execute("SHOW COLUMNS FROM students LIKE 'parent_email'")
+                                has_parent_email = bool(cur5.fetchone())
+                            except Exception:
+                                has_parent_email = False
+                            if has_parent_email:
+                                email_col = "parent_email"
+                        # Fetch the email if column exists
+                        student_email = None
+                        if has_email or has_parent_email:
+                            cur5.execute(f"SELECT {email_col} FROM students WHERE id=%s", (student_id,))
+                            r5 = cur5.fetchone()
+                            if r5 and r5[0]:
+                                student_email = str(r5[0]).strip()
+                        if student_email:
+                            try:
+                                try:
+                                    receipt_url = url_for('payment_receipt', payment_id=payment_id, _external=True)
+                                except Exception:
+                                    receipt_url = ""
+                                subject = f"Payment received - KES {float(amt):,.2f}"
+                                brand = current_app.config.get("APP_NAME") or "School"
+                                student_name = row.get("student_name") or "Student"
+                                html = (
+                                    f"<p>Hi,</p><p>We received your payment of <strong>KES {float(amt):,.2f}</strong> via M-Pesa (Ref: {ref}).</p>"
+                                    f"<p>Thank you. {('View receipt: <a href=\"'+receipt_url+'\">'+receipt_url+'</a>') if receipt_url else ''}</p>"
+                                    f"<p>— {brand}</p>"
+                                )
+                                if not gmail_send_email_html(student_email, subject, html):
+                                    gmail_send_email(student_email, subject, f"Payment received KES {float(amt):,.2f} via M-Pesa (Ref: {ref}). " + (f"View receipt: {receipt_url}" if receipt_url else ""))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # IMPORTANT: Do NOT auto-activate Pro here. Admin must verify first.
+    # We only persist callback data; the licensing workflow handles issuance.
     db.close()
 
     return jsonify({"status": "ok"})
-

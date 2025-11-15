@@ -109,3 +109,21 @@ def oauth2callback():
             pass
         flash(f"Gmail authorization error: {msg}. {hint}", "error")
         return redirect(url_for("reminders.reminders_home"))
+
+
+@gmail_oauth_bp.route("/gmail/disconnect")
+def gmail_disconnect():
+    """Allow admins to clear the cached Gmail token so the UI can re-authorize."""
+    token_file = _token_path()
+    deleted = False
+    if os.path.exists(token_file):
+        try:
+            os.remove(token_file)
+            deleted = True
+        except Exception:
+            deleted = False
+    if deleted:
+        flash("Gmail connection reset; please authorize again.", "success")
+    else:
+        flash("No Gmail connection was active.", "info")
+    return redirect(url_for("reminders.reminders_home"))

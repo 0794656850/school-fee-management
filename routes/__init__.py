@@ -1,2 +1,5 @@
-# empty - this file makes routes a package
-# you can add initialization code for the routes package here if needed
+﻿"""Legacy routes package.
+
+For MVC structure, use `controllers.*` for imports. This package remains as a
+compatibility layer; blueprints can be imported from either package.
+"""

@@ -16,7 +16,6 @@ from urllib.parse import urlparse
 
 from utils.gmail_api import send_email_html as gmail_send_email_html
 from utils.settings import get_setting
-from utils.pro import is_pro_enabled
 
 
 newsletter_bp = Blueprint("newsletters", __name__, url_prefix="/newsletters")
@@ -83,12 +82,6 @@ def _resolve_email_column(cursor) -> str | None:
 
 @newsletter_bp.route("/")
 def index():
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Newsletters are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('monetization.index'))
-    except Exception:
-        pass
     db = _db()
     try:
         ensure_newsletters_table(db)
@@ -107,12 +100,6 @@ def index():
 
 @newsletter_bp.route("/compose", methods=["GET", "POST"])
 def compose():
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Newsletters are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('monetization.index'))
-    except Exception:
-        pass
     if request.method == "GET":
         return render_template("newsletters_compose.html")
 
@@ -165,12 +152,6 @@ def compose():
 
 @newsletter_bp.route("/send/<int:newsletter_id>")
 def send_now(newsletter_id: int):
-    try:
-        if not is_pro_enabled(current_app):
-            flash("Newsletters are available in Pro. Please upgrade.", "warning")
-            return redirect(url_for('monetization.index'))
-    except Exception:
-        pass
     db = _db()
     try:
         ensure_newsletters_table(db)
@@ -271,4 +252,3 @@ def send_now(newsletter_id: int):
     db.close()
     flash(f"Newsletter sent. Recipients: {len(recipients)}. Sent: {sent}, Failed: {failed}.", "info")
     return redirect(url_for("newsletters.index"))
-

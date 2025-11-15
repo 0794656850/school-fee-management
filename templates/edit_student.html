@@ -37,6 +37,14 @@
              class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
     </div>
 
+    <div class="mb-6">
+      <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+        <input type="checkbox" name="retain_next_year" {% if student.retain_next_year %}checked{% endif %} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+        <span>Retain current class at next year rollover</span>
+      </label>
+      <div class="text-xs text-gray-500 mt-1">If checked, this student will not be promoted when a new academic year is created. The flag resets after rollover.</div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Phone (Student)</label>

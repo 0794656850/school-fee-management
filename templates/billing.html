@@ -36,9 +36,9 @@
         <form class="mt-3 flex flex-col sm:flex-row gap-2" method="post" action="{{ url_for('mpesa.checkout') }}">
           <input type="tel" name="phone" placeholder="Your M-Pesa number (e.g., 07xx...)" class="border rounded-lg px-3 py-2 text-sm flex-1" required>
           <input type="hidden" name="amount" value="{{ PRO_PRICE_KES }}">
-          <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm inline-flex items-center gap-2 {% if not mpesa_ok %}opacity-60 cursor-not-allowed{% endif %}" {% if not mpesa_ok %}disabled{% endif %}>
-            <i data-lucide="smartphone"></i>
-            Pay KES {{ PRO_PRICE_KES }}
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm inline-flex items-center gap-2 {% if not mpesa_ok %}opacity-60 cursor-not-allowed{% endif %}" {% if not mpesa_ok %}disabled{% endif %}>
+            <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="M-Pesa logo" class="h-5 w-auto inline" />
+            <span class="font-semibold">Pay KES {{ PRO_PRICE_KES }}</span>
           </button>
         </form>
         <p class="text-xs text-gray-500 mt-2">After payment, activation is automatic. If not, paste your M-Pesa reference above.</p>

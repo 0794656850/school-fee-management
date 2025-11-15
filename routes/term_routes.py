@@ -1,11 +1,15 @@
 ﻿from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
+import json
+import hmac
+import hashlib
 import mysql.connector
 from urllib.parse import urlparse
 from datetime import date, datetime
 import os
 from utils.pro import is_pro_enabled, upgrade_url
+from utils.audit import log_event
 from utils.gmail_api import send_email_html as gmail_send_email_html
 from utils.classes import promote_class_name
 from utils.settings import get_setting, set_school_setting
@@ -142,6 +146,19 @@ def ensure_student_enrollments_table(conn) -> None:
         """
     )
     conn.commit()
+
+    # Add a one-time retention flag on students to support real-world cases
+    # where a learner repeats the current class for the upcoming year.
+    try:
+        cur.execute("SHOW COLUMNS FROM students LIKE 'retain_next_year'")
+        if not cur.fetchone():
+            cur.execute("ALTER TABLE students ADD COLUMN retain_next_year TINYINT(1) NOT NULL DEFAULT 0 AFTER class_name")
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
 
 def _resolve_email_column(cursor) -> str | None:
@@ -722,16 +739,27 @@ def start_new_year():
         bal_col = "balance" if has_balance else "fee_balance"
 
         # Create enrollment for all existing students if missing (scoped to school)
+        # Fetch retention flags to decide promotion per student
+        try:
+            cur.execute("SHOW COLUMNS FROM students LIKE 'retain_next_year'")
+            has_retain = bool(cur.fetchone())
+        except Exception:
+            has_retain = False
+
+        sel_cols = "id, class_name, COALESCE(" + bal_col + ",0) AS bal"
+        if has_retain:
+            sel_cols += ", retain_next_year"
         if sid:
-            cur.execute("SELECT id, class_name, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE school_id=%s", (sid,))
+            cur.execute(f"SELECT {sel_cols} FROM students WHERE school_id=%s", (sid,))
         else:
-            cur.execute("SELECT id, class_name, COALESCE(" + bal_col + ",0) AS bal FROM students")
+            cur.execute(f"SELECT {sel_cols} FROM students")
         students = cur.fetchall() or []
         created = 0
         cur2 = db.cursor()
         for s in students:
             current_class = (s.get("class_name") or "").strip()
-            next_class = promote_class_name(current_class)
+            retained = bool(s.get("retain_next_year")) if isinstance(s, dict) else False
+            next_class = current_class if retained else promote_class_name(current_class)
             if sid:
                 try:
                     cur2.execute(
@@ -750,31 +778,41 @@ def start_new_year():
                 )
             if cur2.fetchone():
                 continue
+            status_val = "retained" if retained else "active"
             if sid:
                 try:
                     cur2.execute(
                         "INSERT INTO student_enrollments (student_id, year, class_name, opening_balance, status, school_id) VALUES (%s,%s,%s,%s,%s,%s)",
-                        (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), "active", sid),
+                        (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), status_val, sid),
                     )
                 except Exception:
                     cur2.execute(
                         "INSERT INTO student_enrollments (student_id, year, class_name, opening_balance, status) VALUES (%s,%s,%s,%s,%s)",
-                        (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), "active"),
+                        (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), status_val),
                     )
             else:
                 cur2.execute(
                     "INSERT INTO student_enrollments (student_id, year, class_name, opening_balance, status) VALUES (%s,%s,%s,%s,%s)",
-                    (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), "active"),
+                    (s["id"], next_year, (next_class or current_class), float(s.get("bal") or 0), status_val),
                 )
             created += 1
 
             # Update the student's current class to the promoted one when applicable
-            if next_class and next_class != current_class:
+            if (not retained) and next_class and next_class != current_class:
                 try:
                     if sid:
                         cur2.execute("UPDATE students SET class_name=%s WHERE id=%s AND school_id=%s", (next_class, s["id"], sid))
                     else:
                         cur2.execute("UPDATE students SET class_name=%s WHERE id=%s", (next_class, s["id"]))
+                except Exception:
+                    pass
+            # Reset one-time retention flag after rollover
+            if retained:
+                try:
+                    if sid:
+                        cur2.execute("UPDATE students SET retain_next_year=0 WHERE id=%s AND school_id=%s", (s["id"], sid))
+                    else:
+                        cur2.execute("UPDATE students SET retain_next_year=0 WHERE id=%s", (s["id"]))
                 except Exception:
                     pass
         db.commit()
@@ -913,13 +951,7 @@ def open_term_route():
                     (year, term),
                 )
         db.commit()
-        # Audit
-        try:
-            from utils.audit import ensure_audit_table, log_event
-            ensure_audit_table(db)
-            log_event(db, sid, None, 'open_term', 'term', None, {'year': year, 'term': term})
-        except Exception:
-            pass
+        # Audit removed
         # Auto-compose communications drafts for the opened term
         try:
             _auto_compose_term_comms(db, year, term)
@@ -964,13 +996,7 @@ def close_term_route():
         else:
             cur.execute("UPDATE academic_terms SET status='CLOSED', closes_at=NOW(), is_current=IF(is_current=1,0,is_current) WHERE id=%s", (row.get('id'),))
         db.commit()
-        # Audit
-        try:
-            from utils.audit import ensure_audit_table, log_event
-            ensure_audit_table(db)
-            log_event(db, sid, None, 'close_term', 'term', int(row.get('id')), {'year': year, 'term': term})
-        except Exception:
-            pass
+        # Audit removed
         flash("Term closed.", "success")
         # TODO: apply rollover credits into next term (future enhancement)
     except Exception as e:
@@ -1701,16 +1727,6 @@ def ensure_invoices_tables(conn) -> None:
 
 @term_bp.route("/invoices")
 def invoices_list():
-    # Premium guard: require non-FREE plan
-    try:
-        from utils.monetization import plan_status as _plan_status
-        sid = session.get("school_id") if session else None
-        status = _plan_status(int(sid)) if sid else {"plan_code": "FREE"}
-    except Exception:
-        status = {"plan_code": "FREE"}
-    if status.get("plan_code") == "FREE":
-        flash("Upgrade to Pro to access invoices.", "warning")
-        return redirect(url_for("monetization.index"))
     db = _db()
     try:
         ensure_invoices_tables(db)
@@ -1845,16 +1861,37 @@ def invoice_view(invoice_id: int):
             penalty_amount = 0.0
             penalty_label = None
 
-        return render_template("invoice.html", invoice=invoice, items=items, penalty_amount=penalty_amount, penalty_label=penalty_label)
+        # Build signed QR payload for authenticity
+        try:
+            sid = session.get("school_id") if session else None
+            qr_payload = {
+                "t": "invoice",
+                "iid": int(invoice.get("id")),
+                "sid": int(invoice.get("student_id")),
+                "name": invoice.get("student_name") or "",
+                "cls": invoice.get("class_name") or "",
+                "year": invoice.get("year") or "",
+                "term": invoice.get("term") or "",
+                "due": str(invoice.get("due_date") or ""),
+                "status": invoice.get("status") or "",
+                "total": round(float(invoice.get("total") or 0.0), 2),
+                "school_id": sid,
+            }
+            canon = json.dumps(qr_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            from flask import current_app as _ca
+            sig = hmac.new((_ca.secret_key or "secret").encode("utf-8"), canon, hashlib.sha256).hexdigest()[:20]
+            qr_payload["sig"] = sig
+            auth_qr_data = json.dumps(qr_payload, separators=(",", ":"))
+        except Exception:
+            auth_qr_data = ""
+
+        return render_template("invoice.html", invoice=invoice, items=items, penalty_amount=penalty_amount, penalty_label=penalty_label, auth_qr_data=auth_qr_data)
     finally:
         db.close()
 
 
 @term_bp.route("/fees/components", methods=["POST"])
 def add_component():
-    if not is_pro_enabled():
-        flash("Fee components are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
     name = (request.form.get("name") or "").strip()
     code = (request.form.get("code") or "").strip() or None
     default_amount = request.form.get("default_amount", type=float) or 0.0
@@ -1872,6 +1909,10 @@ def add_component():
         )
         db.commit()
         flash("Component added.", "success")
+        try:
+            log_event("edit_fee_component", target=f"component:{code or name}", detail=f"Default {default_amount:.2f} ({'optional' if is_optional else 'required'})")
+        except Exception:
+            pass
     except Exception as e:
         try: db.rollback()
         except Exception: pass
@@ -1883,9 +1924,6 @@ def add_component():
 
 @term_bp.route("/fees/class_defaults", methods=["POST"])
 def set_class_defaults():
-    if not is_pro_enabled():
-        flash("Class defaults are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
     year = request.form.get("year", type=int)
     term = request.form.get("term", type=int)
     class_name = (request.form.get("class_name") or "").strip()
@@ -1916,6 +1954,10 @@ def set_class_defaults():
             )
         db.commit()
         flash("Class defaults saved.", "success")
+        try:
+            log_event("update_class_defaults", target=f"class:{class_name}", detail=f"{year} T{term} defaults applied")
+        except Exception:
+            pass
     except Exception as e:
         try: db.rollback()
         except Exception: pass
@@ -1927,9 +1969,6 @@ def set_class_defaults():
 
 @term_bp.route("/fees/student_items", methods=["POST"])
 def set_student_items():
-    if not is_pro_enabled():
-        flash("Student fee item overrides are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
     year = request.form.get("year", type=int)
     term = request.form.get("term", type=int)
     student_id = request.form.get("student_id", type=int)
@@ -1960,6 +1999,10 @@ def set_student_items():
             )
         db.commit()
         flash("Student items saved.", "success")
+        try:
+            log_event("update_student_items", target=f"student:{student_id}", detail=f"{year} T{term} items set")
+        except Exception:
+            pass
     except Exception as e:
         try: db.rollback()
         except Exception: pass
@@ -2026,9 +2069,6 @@ def set_student_items():
 
 @term_bp.route("/fees/discount", methods=["POST"])
 def set_discount():
-    if not is_pro_enabled():
-        flash("Discounts are a Pro feature.", "warning")
-        return redirect(url_for("terms.manage_term_fees"))
     year = request.form.get("year", type=int)
     term = request.form.get("term", type=int)
     student_id = request.form.get("student_id", type=int)
@@ -2049,6 +2089,10 @@ def set_discount():
         )
         db.commit()
         flash("Discount saved.", "success")
+        try:
+            log_event("edit_fee_discount", target=f"student:{student_id}", detail=f"{kind} {value} applied")
+        except Exception:
+            pass
     except Exception as e:
         try: db.rollback()
         except Exception: pass
@@ -2060,16 +2104,6 @@ def set_discount():
 
 @term_bp.route("/fees/generate_invoices", methods=["POST"])
 def generate_invoices():
-    # Premium guard: require non-FREE plan
-    try:
-        from utils.monetization import plan_status as _plan_status
-        sid = session.get("school_id") if session else None
-        status = _plan_status(int(sid)) if sid else {"plan_code": "FREE"}
-    except Exception:
-        status = {"plan_code": "FREE"}
-    if status.get("plan_code") == "FREE":
-        flash("Upgrade to Pro to generate invoices.", "warning")
-        return redirect(url_for("monetization.index"))
     year = request.form.get("year", type=int)
     term = request.form.get("term", type=int)
     due_date_raw = request.form.get("due_date")
@@ -2091,6 +2125,10 @@ def generate_invoices():
         created = _generate_or_update_invoices(db, year, term, due_date)
         db.commit()
         flash(f"Generated/updated {created} invoices for {year} T{term}.", "success")
+        try:
+            log_event("generate_invoices", target=f"term:{year}T{term}", detail=f"{created} invoices")
+        except Exception:
+            pass
         # Premium-only: optionally send memo emails
         if send_memo:
             sent, skipped = _send_term_memos(db, year, term, due_date)

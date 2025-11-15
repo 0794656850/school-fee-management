@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parent Dashboard - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+</head>
+<body class="min-h-screen bg-[var(--bg-app)] text-[var(--text)]">
+  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="brand-hero__row">
+        <div class="app-badge">
+          <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }}"/>
+        </div>
+        <div class="leading-tight">
+          <div class="brand-title text-2xl md:text-3xl">{{ BRAND_NAME }}</div>
+          <div class="brand-subtitle text-xs">Parent / Guardian Portal</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="openMenu" class="md:hidden p-2 rounded-lg border border-gray-200 bg-white text-gray-700 flex items-center gap-1"><i data-lucide="menu"></i> Menu</button>
+        <a href="{{ url_for('guardian.guardian_logout') }}" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"><i data-lucide="log-out"></i> Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6 grid md:grid-cols-[240px,1fr] gap-6">
+    <!-- Sidebar: Guardian profile + children selector -->
+    <aside id="side" class="hidden md:block glass rounded-2xl p-5 border border-gray-100 h-fit md:relative md:translate-x-0 md:shadow-none fixed top-0 left-0 w-64 h-full bg-white z-40 shadow-xl translate-x-[-120%] transition-transform">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="kpi__icon" style="width:40px;height:40px"><i data-lucide="users"></i></div>
+        <div>
+          <div class="text-sm text-gray-500">Signed in as</div>
+          <div class="font-semibold">Parent / Guardian</div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 mb-2">Children</div>
+      <ul class="space-y-1">
+        <li class="text-sm">
+          <a href="{{ url_for('guardian.guardian_dashboard', token=token) }}" class="text-indigo-700 hover:underline">{{ student.name }}</a>
+        </li>
+        {% for s in siblings %}
+        <li class="text-sm">
+          <a href="#" data-id="{{ s.id }}" class="sib-link text-indigo-700 hover:underline">{{ s.name }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </aside>
+    <div id="overlay" class="fixed inset-0 bg-black/30 z-30 hidden md:hidden"></div>
+    <section class="space-y-6">
+      <div class="glass rounded-2xl p-5 border border-gray-100">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-xs text-gray-500">Student</div>
+            <div class="text-xl font-bold">{{ student.name }}</div>
+            <div class="text-sm text-gray-500">Admission: {{ student.regNo }} · Class: {{ student.class or student.class_name or '—' }}</div>
+            <div class="text-xs text-gray-500">Year/Term: {{ year }}/{{ term }}</div>
+          </div>
+          <div class="kpi__icon" aria-hidden="true"><i data-lucide="id-card"></i></div>
+        </div>
+        <div class="mt-4">
+          {% if percent is not none %}
+          <div class="mb-1 text-xs text-gray-600">Term progress: {{ percent }}%</div>
+          <div class="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-2 bg-gradient-to-r from-blue-600 to-indigo-600" style="width: {{ percent }}%"></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-5 border border-gray-100">
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div class="text-xs text-gray-500">Total Fee</div>
+            <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(expected or 0) }}</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">Paid</div>
+            <div class="text-lg font-semibold text-emerald-600">Ksh {{ '%.0f'|format(paid or 0) }}</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">Balance</div>
+            <div class="text-lg font-semibold text-rose-600">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+          </div>
+        </div>
+        <form id="payForm" class="mt-4 grid md:grid-cols-3 gap-3 items-end">
+          <input type="hidden" name="token" value="{{ token }}" />
+          <div>
+            <label class="text-xs text-gray-600">Phone Number (M‑Pesa)</label>
+            <input name="phone" placeholder="07xx..." class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">Amount (KES)</label>
+            <input name="amount" type="number" min="10" step="10" placeholder="e.g. 500" class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
+          </div>
+          <button type="submit" class="btn-primary rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="smartphone"></i> Pay Now with M‑Pesa</button>
+        </form>
+        <div id="payMsg" class="text-sm mt-2"></div>
+        <div id="payTrack" class="hidden mt-2 text-xs text-gray-600"></div>
+        <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+          <div class="text-xs text-gray-500">Need help? {% if bursar_phone %}Call {{ bursar_phone }}{% endif %}{% if bursar_email %} or email {{ bursar_email }}{% endif %}.</div>
+          <div class="flex items-center gap-2">
+            <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-2"><i data-lucide="download"></i> Download Statement</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Recent Payments</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500">
+              <th class="py-2">Date</th>
+              <th class="py-2">Reference</th>
+              <th class="py-2">Method</th>
+              <th class="py-2">Status</th>
+              <th class="py-2 text-right">Amount (KES)</th>
+              <th class="py-2 text-right">Receipt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in payments %}
+            <tr class="border-t border-gray-100">
+              <td class="py-2">{{ p.date }}</td>
+              <td class="py-2">{{ p.reference or '-' }}</td>
+              <td class="py-2">{{ p.method or 'M-Pesa' }}</td>
+              <td class="py-2">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Success</span>
+              </td>
+              <td class="py-2 text-right">{{ '%.0f'|format(p.amount or 0) }}</td>
+              <td class="py-2 text-right text-indigo-700"><a href="{{ url_for('guardian.guardian_receipt', payment_id=p.id, token=token) }}" class="hover:underline">Print</a></td>
+            </tr>
+            {% else %}
+            <tr class="border-t border-gray-100 text-gray-500"><td colspan="4" class="py-4 text-center">No payments yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Premium: Spending Analytics -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Spending Analytics</h3>
+        <div class="text-xs text-gray-500" id="termSummary"></div>
+      </div>
+      <div>
+        <canvas id="payChart" height="120"></canvas>
+        <div id="payMsg" class="text-xs text-gray-500 mt-2"></div>
+      </div>
+    </section>
+
+    <!-- Premium: Notices & Announcements -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Notices & Announcements</h3>
+        <div class="text-xs text-gray-500">Latest updates</div>
+      </div>
+      <div class="space-y-3">
+        {% for n in announcements %}
+          <div class="p-3 rounded-xl border border-gray-100 bg-white/70">
+            <div class="text-sm font-medium">{{ n.title or n.subject }}</div>
+            <div class="text-xs text-gray-500">{{ n.category|default('notice') }} • {{ n.created_at }}</div>
+          </div>
+        {% else %}
+          <div class="text-sm text-gray-500">No announcements yet.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- Premium: Message the School -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <h3 class="text-lg font-semibold mb-3">Message the School</h3>
+      <form id="msgForm" class="grid md:grid-cols-2 gap-3">
+        <input type="hidden" name="token" value="{{ token }}" />
+        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="name" placeholder="Your name (optional)">
+        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="email" placeholder="Your email (optional)">
+        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="phone" placeholder="Phone (optional)">
+        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="subject" placeholder="Subject (optional)">
+        <select class="border border-gray-200 rounded-xl p-2.5 text-sm" name="category">
+          <option>General</option>
+          <option>Fees</option>
+          <option>Academics</option>
+          <option>Support</option>
+        </select>
+        <textarea class="border border-gray-200 rounded-xl p-2.5 text-sm md:col-span-2" name="message" rows="4" placeholder="Write your message..."></textarea>
+        <div class="md:col-span-2 flex items-center justify-between">
+          <div id="msgBox" class="text-xs text-gray-500"></div>
+          <button type="submit" class="btn-primary rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-2"><i data-lucide="send"></i> Send Message</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Premium: Calendar / Important Dates -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Calendar</h3>
+        <div class="flex items-center gap-2 text-sm">
+          <button id="calPrev" class="btn-secondary rounded-lg px-2 py-1"><i data-lucide="chevron-left"></i></button>
+          <div id="calTitle" class="min-w-[140px] text-center"></div>
+          <button id="calNext" class="btn-secondary rounded-lg px-2 py-1"><i data-lucide="chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div id="calGrid" class="grid grid-cols-7 gap-2 text-sm"></div>
+      <div id="calEvents" class="mt-3 text-sm"></div>
+    </section>
+
+    <!-- Premium: AI Assistant -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <h3 class="text-lg font-semibold mb-3">Lovato SmartBot</h3>
+      <div class="grid md:grid-cols-[1fr,220px] gap-3">
+        <div>
+          <div id="aiLog" class="text-sm p-3 rounded-xl border border-gray-100 bg-white/70 min-h-[80px]"></div>
+        </div>
+        <form id="aiForm" class="flex md:flex-col gap-2">
+          <input type="hidden" name="token" value="{{ token }}" />
+          <input id="aiQ" class="border border-gray-200 rounded-xl p-2.5 text-sm flex-1" placeholder="Ask e.g. What is my child's fee balance?">
+          <button class="btn-primary rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-2" type="submit"><i data-lucide="message-square"></i> Ask</button>
+        </form>
+      </div>
+    </section>
+    {% if stk_activity %}
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Recent STK Activity</h3>
+        <div class="text-xs text-gray-500">Refresh pending items to check latest status</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500">
+              <th class="py-2">Updated</th>
+              <th class="py-2">Phone</th>
+              <th class="py-2">Amount</th>
+              <th class="py-2">Status</th>
+              <th class="py-2">Details</th>
+              <th class="py-2 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in stk_activity %}
+            <tr class="border-t border-gray-100">
+              <td class="py-2">{{ r.updated_at }}</td>
+              <td class="py-2">{{ r.phone }}</td>
+              <td class="py-2">KES {{ '%.0f'|format(r.amount or 0) }}</td>
+              <td class="py-2">
+                {% if r.status == 'pending' %}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="clock" class="w-3.5 h-3.5"></i> Pending</span>
+                {% elif r.status == 'success' %}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Success</span>
+                {% else %}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Failed</span>
+                {% endif %}
+              </td>
+              <td class="py-2 text-gray-600">{{ r.result_desc or '-' }}</td>
+              <td class="py-2 text-right">
+                {% if r.status == 'pending' %}
+                  <button class="refresh btn-secondary rounded-lg px-3 py-1.5 text-xs" data-crid="{{ r.checkout_request_id }}">Refresh</button>
+                {% elif r.status == 'success' and r.payment_id %}
+                  <a class="text-indigo-700 hover:underline" href="{{ url_for('guardian.guardian_receipt', payment_id=r.payment_id, token=token) }}">Print receipt</a>
+                {% else %}
+                  <span class="text-xs text-gray-400">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+    <!-- AI fee summary blurb -->
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-start gap-3">
+        <div class="kpi__icon" style="width:40px;height:40px"><i data-lucide="sparkles"></i></div>
+        <div class="text-sm text-gray-700">
+          {% if percent is not none %}
+          <strong>Smart summary:</strong> Your child has cleared <strong>{{ percent }}%</strong> of this term’s fees. Outstanding balance: <strong>Ksh {{ '%.0f'|format(balance or 0) }}</strong>.
+          {% else %}
+          <strong>Smart summary:</strong> No fee summary available for the current term yet.
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    try { lucide.createIcons(); } catch(e){}
+    (function(){
+      const form = document.getElementById('payForm');
+      const box = document.getElementById('payMsg');
+      const track = document.getElementById('payTrack');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault(); box.textContent = 'Sending STK push...'; box.className='text-sm text-gray-600';
+        const data = Object.fromEntries(new FormData(form).entries());
+        const res = await fetch('{{ url_for('guardian.guardian_make_payment') }}', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+        });
+        const j = await res.json().catch(()=>({ok:false,error:'Invalid response'}));
+        if (j.ok) {
+          box.textContent = j.message || 'Request sent. Check your phone.'; box.className='text-sm text-emerald-600';
+          if (j.checkout_request_id) {
+            track.classList.remove('hidden');
+            let tries = 0; track.textContent = 'Awaiting confirmation…';
+            const iv = setInterval(async () => {
+              tries += 1;
+              const u = new URL('{{ url_for('guardian.guardian_payment_status') }}', window.location.origin);
+              u.searchParams.set('crid', j.checkout_request_id);
+              u.searchParams.set('token', {{ token|tojson }});
+              try {
+                const r = await fetch(u.toString());
+                const s = await r.json();
+                if (s && s.status === 'success') { track.textContent = 'Payment confirmed. Reloading…'; clearInterval(iv); setTimeout(()=>window.location.reload(), 1000); }
+                else if (s && s.status === 'failed') { track.textContent = 'Payment failed. ' + (s.message||'Try again.'); clearInterval(iv); }
+                else { track.textContent = 'Awaiting confirmation…'; }
+              } catch(e) { /* ignore */ }
+              if (tries > 30) { clearInterval(iv); track.textContent = 'No confirmation yet. You can refresh later.'; }
+            }, 3000);
+          }
+        } else {
+          box.textContent = j.error || 'Payment failed.'; box.className='text-sm text-rose-600';
+        }
+      });
+    })();
+    // Mobile sidebar drawer
+    (function(){
+      const btn = document.getElementById('openMenu');
+      const side = document.getElementById('side');
+      const ov = document.getElementById('overlay');
+      if (!btn || !side || !ov) return;
+      const open = () => { side.classList.remove('hidden'); ov.classList.remove('hidden'); requestAnimationFrame(()=> side.style.transform='translateX(0)'); };
+      const close = () => { side.style.transform='translateX(-120%)'; ov.classList.add('hidden'); setTimeout(()=> side.classList.add('hidden'), 250); };
+      btn.addEventListener('click', open);
+      ov.addEventListener('click', close);
+    })();
+    // Manual refresh for pending STK attempts
+    (function(){
+      try{
+        document.querySelectorAll('button.refresh').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            btn.disabled = true; const crid = btn.getAttribute('data-crid');
+            const u = new URL('{{ url_for('guardian.guardian_payment_status') }}', window.location.origin);
+            u.searchParams.set('crid', crid);
+            u.searchParams.set('token', {{ token|tojson }});
+            try {
+              const r = await fetch(u.toString());
+              const s = await r.json();
+              if (s.status === 'success') { window.location.reload(); }
+              else if (s.status === 'failed') { btn.textContent = 'Failed'; }
+              else { btn.textContent = 'Still pending'; btn.disabled = false; }
+            } catch(e) { btn.textContent = 'Error'; btn.disabled = false; }
+          });
+        });
+      }catch(_){ }
+    })();
+    // Sibling links: generate secure token on the server via redirect endpoint
+    (function(){
+      try{
+        document.querySelectorAll('.sib-link').forEach(a => {
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sid = a.getAttribute('data-id');
+            if (!sid) return;
+            const u = new URL('{{ url_for('guardian.guardian_switch') }}', window.location.origin);
+            u.searchParams.set('sid', sid);
+            window.location.assign(u.toString());
+          });
+        });
+      }catch(_){ }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Spending analytics
+    (async function(){
+      try{
+        const u = new URL('{{ url_for('guardian.guardian_analytics') }}', window.location.origin);
+        u.searchParams.set('token', {{ token|tojson }});
+        const r = await fetch(u.toString()); const j = await r.json();
+        if (!j.ok) throw new Error(j.error||'Failed');
+        const ctx = document.getElementById('payChart');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: j.labels,
+            datasets: [
+              { label: 'This Year', data: j.current, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,.2)' },
+              { label: 'Last Year', data: j.previous, borderColor: 'rgba(124,58,237,1)', backgroundColor: 'rgba(124,58,237,.15)' }
+            ]
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        });
+        const t = j.term || {}; const el = document.getElementById('termSummary');
+        el.textContent = `Term ${t.t||''}/${t.year||''}: Ksh ${Math.round(t.paid||0)} paid of ${Math.round(t.expected||0)} (Bal ${Math.round(t.balance||0)}, ${t.percent||0}%)`;
+      } catch(e) { try{ document.getElementById('payMsg').textContent = 'Unable to load analytics.'; }catch(_){} }
+    })();
+
+    // Message the school
+    (function(){
+      const f = document.getElementById('msgForm'); if (!f) return;
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault(); const box = document.getElementById('msgBox'); box.textContent = 'Sending...';
+        const data = new FormData(f);
+        try{
+          const r = await fetch('{{ url_for('student_portal.contact_school') }}', { method: 'POST', body: data });
+          const j = await r.json();
+          if (j && j.ok) { box.textContent = j.message || 'Sent.'; f.reset(); }
+          else { box.textContent = j.error || 'Failed to send message.'; }
+        }catch(err){ box.textContent = 'Network error.'; }
+      });
+    })();
+
+    // Simple AI assistant
+    (function(){
+      const f = document.getElementById('aiForm'); const log = document.getElementById('aiLog'); const q = document.getElementById('aiQ');
+      if (!f || !q || !log) return;
+      const append = (text, who) => {
+        const p = document.createElement('p'); p.className='mb-2';
+        p.innerHTML = `<span class="text-xs text-gray-500">${who}:</span> ${text}`; log.appendChild(p); log.scrollTop = log.scrollHeight;
+      };
+      append('Hi, I am Lovato SmartBot. Ask me about fees or exams.','Bot');
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault(); const val = (q.value||'').trim(); if (!val) return; append(val,'You'); q.value='';
+        try{
+          const r = await fetch('{{ url_for('guardian.guardian_ai_assistant') }}', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ token: {{ token|tojson }}, question: val }) });
+          const j = await r.json(); append(j.answer || j.text || j.response || j.error || 'Sorry, I could not help right now.','Bot');
+        }catch(err){ append('Network error.','Bot'); }
+      });
+    })();
+
+    // Calendar UI
+    (function(){
+      const title = document.getElementById('calTitle'); const grid = document.getElementById('calGrid'); const list = document.getElementById('calEvents');
+      if (!title || !grid || !list) return;
+      let d = new Date();
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      async function load(){
+        const y = d.getFullYear(); const m = d.getMonth()+1; title.textContent = `${monthNames[m-1]} ${y}`;
+        // fetch events
+        let items = [];
+        try{
+          const u = new URL('{{ url_for('guardian.guardian_events') }}', window.location.origin);
+          u.searchParams.set('token', {{ token|tojson }}); u.searchParams.set('y', y); u.searchParams.set('m', m);
+          const r = await fetch(u.toString()); const j = await r.json(); if (j && j.ok) items = j.items || [];
+        }catch(_){ items = []; }
+        // build days grid
+        grid.innerHTML = ''; list.innerHTML = '';
+        const first = new Date(y, m-1, 1); const startDay = first.getDay();
+        const last = new Date(y, m, 0).getDate();
+        for (let i=0;i<startDay;i++){ const ph=document.createElement('div'); ph.className='p-3 rounded-xl border border-dashed border-gray-100 text-gray-300'; grid.appendChild(ph); }
+        const byDay = {};
+        for (const ev of items){
+          const sd = new Date(ev.start_date); const key = sd.getDate(); (byDay[key] ||= []).push(ev);
+        }
+        for (let day=1; day<=last; day++){
+          const cell = document.createElement('div'); cell.className='p-3 rounded-xl border border-gray-100 bg-white/70';
+          const h = document.createElement('div'); h.className='text-xs text-gray-500'; h.textContent = day; cell.appendChild(h);
+          const listEl = document.createElement('div'); listEl.className='mt-1 space-y-1';
+          const evs = byDay[day] || [];
+          for (const e of evs){ const b=document.createElement('div'); b.className='px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs'; b.textContent = e.title; listEl.appendChild(b); }
+          cell.appendChild(listEl); grid.appendChild(cell);
+        }
+        if (items.length){
+          const ul = document.createElement('ul'); ul.className='space-y-2';
+          for (const e of items){ const li=document.createElement('li'); li.innerHTML = `<strong>${e.title}</strong> <span class="text-xs text-gray-500">(${e.start_date}${e.end_date?(' - '+e.end_date):''})</span>`; ul.appendChild(li);} 
+          list.appendChild(ul);
+        } else { list.textContent = 'No events this month.'; }
+      }
+      document.getElementById('calPrev')?.addEventListener('click', ()=>{ d.setMonth(d.getMonth()-1); load(); });
+      document.getElementById('calNext')?.addEventListener('click', ()=>{ d.setMonth(d.getMonth()+1); load(); });
+      load();
+    })();
+  </script>
+</body>
+</html>
+
+
+
+
+

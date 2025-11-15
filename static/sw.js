@@ -15,6 +15,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
+  // Never interfere with admin pages that are dynamic; always go to network
+  if (url.pathname.startsWith('/admin/audit')) {
+    return; // allow default browser fetch
+  }
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).catch(() => caches.match(OFFLINE_URL))

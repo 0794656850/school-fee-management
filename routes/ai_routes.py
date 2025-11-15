@@ -10,6 +10,7 @@ from ai_engine.query import handle_query
 from utils.settings import get_settings
 from utils.settings import _db as _get_conn
 from utils.pro import is_pro_enabled, upgrade_url
+from utils.audit import log_event
 
 
 ai_bp = Blueprint("ai", __name__, url_prefix="/ai")
@@ -100,6 +101,63 @@ def ai_home():
         provider = ai_provider()
     except Exception:
         provider = "none"
+    insights = {"defaults": [], "strategies": [], "methods": [], "summary": {"collected": 0, "pending": 0, "credit": 0, "collection_rate": 0.0}}
+    try:
+        db = _get_conn()
+        cursor = db.cursor(dictionary=True)
+        sid = session.get("school_id") if session else None
+        school_filter = "AND school_id=%s" if sid else ""
+        params = (sid,) if sid else ()
+        cursor.execute(
+            f"SELECT id, name, class_name, COALESCE(balance, fee_balance,0) AS balance FROM students WHERE COALESCE(balance, fee_balance,0) > 0 {school_filter} ORDER BY balance DESC LIMIT 5",
+            params,
+        )
+        insights["defaults"] = cursor.fetchall() or []
+        cursor.execute(
+            f"SELECT class_name, COUNT(*) AS due_students, SUM(COALESCE(balance, fee_balance,0)) AS total_due FROM students WHERE COALESCE(balance, fee_balance,0) > 0 {school_filter} GROUP BY class_name ORDER BY total_due DESC LIMIT 4",
+            params,
+        )
+        insights["strategies"] = cursor.fetchall() or []
+        cursor.execute(
+            f"SELECT method, COUNT(*) AS count, SUM(amount) AS total FROM payments WHERE method <> 'Credit Transfer' {school_filter} GROUP BY method ORDER BY total DESC LIMIT 4",
+            params,
+        )
+        insights["methods"] = cursor.fetchall() or []
+        cursor.execute(
+            f"SELECT COALESCE(SUM(amount),0) AS total_collected FROM payments WHERE method <> 'Credit Transfer' {school_filter}",
+            params,
+        )
+        collected = float((cursor.fetchone() or {}).get("total_collected") or 0)
+        cursor.execute(
+            f"SELECT COALESCE(SUM(COALESCE(balance, fee_balance,0)),0) AS pending FROM students WHERE 1=1 {school_filter}",
+            params,
+        )
+        pending = float((cursor.fetchone() or {}).get("pending") or 0)
+        cursor.execute(
+            f"SELECT COALESCE(SUM(credit),0) AS credit FROM students WHERE 1=1 {school_filter}",
+            params,
+        )
+        credit = float((cursor.fetchone() or {}).get("credit") or 0)
+        collection_rate = round((collected / (collected + pending) * 100) if (collected + pending) else 0.0, 1)
+        insights["summary"] = {
+            "collected": collected,
+            "pending": pending,
+            "credit": credit,
+            "collection_rate": collection_rate,
+        }
+    except Exception:
+        pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    try:
+        log_event("view_ai_insights", detail="AI insights dashboard accessed")
+    except Exception:
+        pass
+
     return render_template(
         "ai.html",
         settings=settings,
@@ -109,6 +167,7 @@ def ai_home():
         upgrade_link=upgrade_url(),
         chats=chats,
         kb_status=kb,
+        insights=insights,
     )
 
 
@@ -355,36 +414,7 @@ def ai_chat():
             return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
         if intent == "analytics_summary":
-            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
-            has_balance = bool(cur.fetchone())
-            bal_col = "balance" if has_balance else "fee_balance"
-            sid = session.get("school_id") if session else None
-            if sid:
-                cur.execute("SELECT COUNT(*) AS total FROM students WHERE school_id=%s", (sid,))
-            else:
-                cur.execute("SELECT COUNT(*) AS total FROM students")
-            total_students = (cur.fetchone() or {}).get("total", 0)
-            if sid:
-                cur.execute("SELECT COALESCE(SUM(amount),0) AS total_collected FROM payments WHERE method <> 'Credit Transfer' AND school_id=%s", (sid,))
-            else:
-                cur.execute("SELECT COALESCE(SUM(amount),0) AS total_collected FROM payments WHERE method <> 'Credit Transfer'")
-            total_collected = float((cur.fetchone() or {}).get("total_collected", 0))
-            if sid:
-                cur.execute(f"SELECT COALESCE(SUM({bal_col}),0) AS total_balance FROM students WHERE school_id=%s", (sid,))
-            else:
-                cur.execute(f"SELECT COALESCE(SUM({bal_col}),0) AS total_balance FROM students")
-            total_balance = float((cur.fetchone() or {}).get("total_balance", 0))
-            if sid:
-                cur.execute("SELECT COALESCE(SUM(credit),0) AS total_credit FROM students WHERE school_id=%s", (sid,))
-            else:
-                cur.execute("SELECT COALESCE(SUM(credit),0) AS total_credit FROM students")
-            total_credit = float((cur.fetchone() or {}).get("total_credit", 0))
-            answer = (
-                f"Students: {total_students}\n"
-                f"Collected: KES {total_collected:,.2f}\n"
-                f"Pending: KES {total_balance:,.2f}\n"
-                f"Credit:  KES {total_credit:,.2f}"
-            )
+            answer = "Analytics are disabled."
             cur.execute(
                 "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
                 (chat_id, 'assistant', answer, now),

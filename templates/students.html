@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Students - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}All Students{% endblock %}
 {% block content %}
 
 <div class="bg-white/90 backdrop-blur-md border border-gray-100 rounded-2xl shadow-sm p-8">
 
-  <!-- Premium Banner -->
+  <!-- Student controls banner -->
   <div class="relative overflow-hidden rounded-xl mb-8">
     <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 opacity-90"></div>
     <div class="relative px-6 py-6 md:px-8 md:py-7 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -18,11 +18,11 @@
           <p class="text-white/80 text-xs">Search, filter, edit, and export student records</p>
         </div>
       </div>
-      <div class="flex gap-2">
-        <a href="{{ url_for('import_students') }}" class="premium-only inline-flex items-center gap-2 px-3.5 py-2 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded-lg ring-1 ring-white/30 transition" title="Upgrade to Pro to import via CSV">
+      <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('import_students') }}" class="inline-flex items-center gap-2 px-3.5 py-2 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded-lg ring-1 ring-white/30 transition">
           <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
         </a>
-        <a href="{{ url_for('export_students') }}" class="premium-only inline-flex items-center gap-2 px-3.5 py-2 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded-lg ring-1 ring-white/30 transition" title="Upgrade to Pro to export CSV">
+        <a href="{{ url_for('export_students') }}" class="inline-flex items-center gap-2 px-3.5 py-2 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded-lg ring-1 ring-white/30 transition">
           <i data-lucide="download" class="w-4 h-4"></i> Export CSV
         </a>
         <a href="{{ url_for('add_student') }}" class="inline-flex items-center gap-2 px-3.5 py-2 bg-white text-indigo-700 hover:text-indigo-800 text-sm font-semibold rounded-lg shadow-sm transition">
@@ -31,10 +31,6 @@
       </div>
     </div>
   </div>
-
-  {% if (plan_status and plan_status.plan_code=='FREE') %}
-    {% include '_upgrade_banner.html' %}
-  {% endif %}
 
   <!-- Controls -->
   <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -78,6 +74,7 @@
       </thead>
       <tbody id="studentRows" class="divide-y divide-gray-100">
         {% for s in students %}
+        {% set bal = (s.balance if s.balance is not none else s.fee_balance) or 0 %}
         <tr class="hover:bg-blue-50/40 transition">
           <td class="px-5 py-3 text-gray-600">{{ loop.index }}</td>
           <td class="px-5 py-3 font-medium text-gray-800">
@@ -90,8 +87,9 @@
           </td>
           <td class="px-5 py-3 text-gray-500">{{ s.admission_no or '-' }}</td>
           <td class="px-5 py-3 text-gray-700">{{ s.class_name }}</td>
-          <td class="px-5 py-3 text-right font-semibold {% if s.balance <= 0 %}text-green-600{% else %}text-blue-600{% endif %}">
-            {{ '{:,.2f}'.format(s.balance or 0) }}
+          {% set bal_class = balance_class(bal) %}
+          <td class="px-5 py-3 text-right font-semibold balance-value {{ bal_class }}">
+            {{ '{:,.2f}'.format(bal) }}
           </td>
           <td class="px-5 py-3">
             <div class="flex justify-center gap-3">
@@ -124,7 +122,7 @@
 
   {% if total is defined and pages is defined %}
   <div class="mt-4 flex items-center justify-between text-sm text-gray-600">
-    <div>Showing page {{ page }} of {{ pages }} • {{ total }} total</div>
+    <div>Showing page {{ page }} of {{ pages }} | {{ total }} total</div>
     <div class="flex gap-2">
       {% if page > 1 %}
         <a href="{{ url_for('students') }}?page={{ page-1 }}&page_size={{ page_size or 100 }}" class="px-3 py-1.5 rounded-lg border hover:bg-gray-50">Prev</a>
@@ -149,13 +147,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const studentRows = document.getElementById("studentRows");
   const resetBtn = document.getElementById("resetFilters");
 
+  let __ctrl = null; let __deb = null; let __req = 0;
   function fetchStudents() {
     const query = searchInput.value.trim();
     const selectedClass = classFilter.value.trim();
-
-    fetch(`/search_student?query=${encodeURIComponent(query)}`)
-      .then(res => res.json())
-      .then(data => {
+    if (__deb) clearTimeout(__deb);
+    __deb = setTimeout(() => {
+      try { if (__ctrl) __ctrl.abort(); } catch(_){}
+      __ctrl = new AbortController();
+      const my = ++__req;
+      fetch(`/search_student?query=${encodeURIComponent(query)}`, { signal: __ctrl.signal })
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          if (my !== __req) return; // ignore out-of-order
         let filtered = data;
         if (selectedClass) {
           filtered = filtered.filter(s => s.class_name === selectedClass);
@@ -175,8 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </td>
                 <td class="px-5 py-3 text-gray-500">${s.admission_no || '-'}</td>
                 <td class="px-5 py-3 text-gray-700">${s.class_name}</td>
-                <td class="px-5 py-3 text-right font-semibold ${parseFloat(s.balance) <= 0 ? 'text-green-600' : 'text-blue-600'}">
-                  ${parseFloat(s.balance || 0).toFixed(2)}
+                ${(() => { const bal = parseFloat((s.balance ?? s.fee_balance ?? 0) || 0); return `<td class=\"px-5 py-3 text-right font-semibold ${bal <= 0 ? 'text-green-600' : 'text-blue-600'}\">${bal.toFixed(2)}</td>` })()}
                 </td>
                 <td class="px-5 py-3">
                   <div class="flex justify-center gap-3">
@@ -193,7 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
           : `<tr><td colspan="6" class="text-center text-gray-500 py-6">No students found.</td></tr>`;
 
         lucide.createIcons();
-      });
+      }).catch(_=>{});
+    }, 180);
   }
 
   searchInput.addEventListener("input", fetchStudents);

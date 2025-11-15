@@ -1,8 +1,9 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Dashboard - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}Dashboard Overview{% endblock %}
 {% block content %}
 
+<div class="dash-band">
 <!-- Hero / Welcome -->
 <div class="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-6 md:p-8 mb-8">
   <div class="absolute -top-8 -right-8 h-40 w-40 rounded-full bg-gradient-to-tr from-indigo-400/20 to-cyan-400/20 blur-2xl"></div>
@@ -19,17 +20,73 @@
       <p class="mt-1.5 text-sm text-slate-600">Track collections, balances and trends. Updated in real time.</p>
     </div>
     <div class="flex items-center gap-3">
-      <a href="{{ url_for('payments') }}" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
+            <a href="{{ url_for('payments') }}" class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
         <i data-lucide="plus"></i>
         Add Payment
       </a>
-      <a href="{{ url_for('analytics') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-        <i data-lucide="bar-chart-2"></i>
-        Analytics
+      <a href="{{ url_for('export_fees_full') }}?year={{ CURRENT_YEAR }}&term={{ CURRENT_TERM }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50">
+        <i data-lucide="download"></i>
+        Full Fee Report
       </a>
     </div>
   </div>
 </div>
+
+<!-- Quick Action: Reports (Dashboard-only) -->
+<div class="mb-6">
+  <a href="{{ url_for('reports') }}?year={{ CURRENT_YEAR }}&term={{ CURRENT_TERM }}" class="quick-chip">
+    <span class="quick-chip__icon"><i data-lucide="file-text" class="w-4 h-4"></i></span>
+    <span class="quick-chip__label">Reports</span>
+  </a>
+  
+</div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <article class="insight-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[0.65rem] uppercase tracking-[0.4em] text-gray-500">Payment alerts</p>
+          <p id="dashboardAlertsCount" class="text-2xl font-semibold text-gray-900">0 students</p>
+        </div>
+        <span id="dashboardAlertsThreshold" class="text-xs text-gray-500">Threshold: KES 5,000</span>
+      </div>
+      <p class="text-sm text-gray-500 mt-3">Have reminder flags.</p>
+      <a href="{{ url_for('reminders.reminders_home') }}" class="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-sky-600">
+        View list
+        <i data-lucide="chevron-right" class="w-3 h-3"></i>
+      </a>
+    </article>
+
+    <article class="insight-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[0.65rem] uppercase tracking-[0.4em] text-gray-500">Fee deadline</p>
+          <p id="dashboardDeadlineAmount" class="text-2xl font-semibold text-indigo-700">KES 5,000</p>
+        </div>
+        <span class="text-xs text-gray-400">Deadline within 7 days.</span>
+      </div>
+      <p class="text-sm text-gray-500 mt-3">Threshold for sending reminders this week.</p>
+      <a href="{{ url_for('reminders.reminders_home') }}" class="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600">
+        Send reminder
+        <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+      </a>
+    </article>
+
+    <article class="insight-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[0.65rem] uppercase tracking-[0.4em] text-gray-500">Trend</p>
+          <p id="dashboardTrendValue" class="text-2xl font-semibold text-gray-900">+0.0%</p>
+        </div>
+        <span id="dashboardTrendMood" class="text-xs font-semibold px-2 py-0.5 rounded-full border border-transparent bg-emerald-50 text-emerald-700">Collections vs last month</span>
+      </div>
+      <p class="text-sm text-gray-500 mt-3">Collections vs last month.</p>
+      <a href="{{ url_for('analytics_dashboard') }}" class="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+        View insights
+        <i data-lucide="activity" class="w-4 h-4"></i>
+      </a>
+    </article>
+  </div>
 
 <!-- School Profile Card -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -39,7 +96,7 @@
       <div class="text-sm text-gray-500">School</div>
       <div class="font-semibold truncate">{{ SCHOOL_NAME }}</div>
       {% if SCHOOL_PHONE or SCHOOL_EMAIL %}
-      <div class="text-xs text-gray-500 truncate">{{ SCHOOL_PHONE }}{% if SCHOOL_PHONE and SCHOOL_EMAIL %} • {% endif %}{{ SCHOOL_EMAIL }}</div>
+      <div class="text-xs text-gray-500 truncate">{{ SCHOOL_PHONE }}{% if SCHOOL_PHONE and SCHOOL_EMAIL %} | {% endif %}{{ SCHOOL_EMAIL }}</div>
       {% endif %}
     </div>
   </div>
@@ -53,9 +110,9 @@
   <div class="bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl p-6 flex items-center gap-4">
     <div class="min-w-0">
       <div class="text-sm text-gray-500">Current Term</div>
-      <div class="font-semibold">{{ (CURRENT_YEAR or '—') }} / Term {{ (CURRENT_TERM or '—') }}</div>
+      <div class="font-semibold">{{ (CURRENT_YEAR or '-') }} / Term {{ (CURRENT_TERM or '-') }}</div>
       {% if LATE_PENALTY_KIND %}
-      <div class="text-xs text-gray-500">Late penalty: {{ LATE_PENALTY_VALUE }} {{ 'percent' if LATE_PENALTY_KIND=='percent' else 'KES' }}{% if LATE_PENALTY_GRACE_DAYS %} • {{ LATE_PENALTY_GRACE_DAYS }}d grace{% endif %}</div>
+      <div class="text-xs text-gray-500">Late penalty: {{ LATE_PENALTY_VALUE }} {{ 'percent' if LATE_PENALTY_KIND=='percent' else 'KES' }}{% if LATE_PENALTY_GRACE_DAYS %} | {{ LATE_PENALTY_GRACE_DAYS }}d grace{% endif %}</div>
       {% endif %}
     </div>
   </div>
@@ -84,7 +141,7 @@
         <p id="total_collected" class="fit-text font-extrabold text-emerald-600 tracking-tight">KES {{ '{:,.2f}'.format(total_fees_collected or 0) }}</p>
         <div id="mom_badge" class="mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
           <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
-          <span>Loading MoM…</span>
+          <span>Loading MoM...</span>
         </div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="wallet" class="text-white w-6 h-6"></i></div>
@@ -108,7 +165,7 @@
     <div class="flex items-center justify-between">
       <div class="min-w-0">
         <h4 class="text-sm font-medium text-gray-500 mb-1">Pending Balance</h4>
-        <p id="pending_balance" class="fit-text font-extrabold text-rose-600 tracking-tight">KES {{ '{:,.2f}'.format(pending_balance or 0) }}</p>
+        <p id="pending_balance" class="fit-text balance-value {{ balance_class(pending_balance) }} tracking-tight">KES {{ '{:,.2f}'.format(pending_balance or 0) }}</p>
         <div class="mt-2 text-[11px] text-rose-700/80">Outstanding across all students</div>
       </div>
       <div class="kpi__icon group-hover:scale-110 transition"><i data-lucide="alert-circle" class="text-white w-6 h-6"></i></div>
@@ -164,7 +221,7 @@
       <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2">
         <i data-lucide="credit-card" class="text-blue-600"></i> Recent Payments
       </h3>
-      <a href="{{ url_for('payments') }}" class="px-4 py-2 btn-brand text-white text-sm font-medium rounded-lg">+ Add Payment</a>
+      <a href="{{ url_for('payments') }}" class="px-4 py-2 btn-primary text-white text-sm font-medium rounded-lg">+ Add Payment</a>
     </div>
     <div class="overflow-x-auto rounded-xl border border-gray-200">
       <table class="min-w-full text-sm">
@@ -194,7 +251,7 @@
                   {{ p.date.strftime('%Y-%m-%d %H:%M') }}
                 {% endif %}
               {% else %}
-                —
+                â€”
               {% endif %}
             </td>
           </tr>
@@ -211,6 +268,10 @@
 
 <!-- Dashboard Scripts -->
 <script>
+// Universal palette from CSS variables for consistent charts
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || name;
+const hexToRgba = (hex, a=1)=>{ const h=(hex||'').replace('#',''); if(!h) return `rgba(79,70,229,${a})`; const v=h.length===3?h.split('').map(c=>c+c).join(''):h; const n=parseInt(v,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r},${g},${b},${a})`; };
+const CHART = { brand: cssVar('--chart-brand')||'#4f46e5', accent: cssVar('--chart-accent')||'#06b6d4', palette:[cssVar('--chart-brand'),cssVar('--chart-2'),cssVar('--chart-3'),cssVar('--chart-4'),cssVar('--chart-5'),cssVar('--chart-6')] };
   // Icons
   lucide.createIcons();
 
@@ -241,6 +302,19 @@
   updateDashboardData();
 
   // Analytics-driven charts and insights
+  const balanceClassName = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "balance-value balance-neutral";
+    if (num > 0) return "balance-value balance-negative";
+    if (num < 0) return "balance-value balance-positive";
+    return "balance-value balance-neutral";
+  };
+  const formatCurrency = (value) => {
+    const num = Number(value || 0);
+    return Number.isFinite(num)
+      ? num.toLocaleString(undefined, { minimumFractionDigits: 0 })
+      : "0";
+  };
   const monthlyCtx = document.getElementById('monthlyChart');
   const methodCtx  = document.getElementById('methodChart');
 
@@ -261,9 +335,9 @@
             data: monthTotals,
             tension: 0.35,
             fill: true,
-            borderColor: '#4f46e5',
-            backgroundColor: 'rgba(79,70,229,0.12)',
-            pointBackgroundColor: '#4f46e5',
+            borderColor: CHART.brand,
+            backgroundColor: hexToRgba(CHART.brand, 0.12),
+            pointBackgroundColor: CHART.brand,
           }]
         },
         options: {
@@ -283,7 +357,7 @@
           labels: methods,
           datasets: [{
             data: methodTotals,
-            backgroundColor: ['#06b6d4','#4f46e5','#10b981','#f59e0b','#ef4444','#8b5cf6'],
+            backgroundColor: CHART.palette,
           }]
         },
         options: { plugins: { legend: { position: 'bottom' } } }
@@ -311,35 +385,121 @@
                 <div class="text-xs text-gray-500">${d.class_name || ''}</div>
               </div>
             </div>
-            <div class="text-sm font-semibold text-rose-600">KES ${(Number(d.balance || 0)).toLocaleString()}</div>
+            <div class="${balanceClassName(d.balance || 0)} text-sm font-semibold">KES ${(Number(d.balance || 0)).toLocaleString()}</div>
           `;
           list.appendChild(li);
         });
       }
     }
 
-    // Month-over-month badge
+    const reminders = payload.reminders || {};
     const mom = payload.mom || { percent_change: 0 };
+    const momPercent = Number(mom.percent_change || 0);
+    const alertsCountEl = document.getElementById('dashboardAlertsCount');
+    const alertsThresholdEl = document.getElementById('dashboardAlertsThreshold');
+    const deadlineAmountEl = document.getElementById('dashboardDeadlineAmount');
+    const trendValueEl = document.getElementById('dashboardTrendValue');
+    const trendMoodEl = document.getElementById('dashboardTrendMood');
+    if (alertsCountEl) {
+      alertsCountEl.textContent = `${Number(reminders.count || 0).toLocaleString()} students`;
+    }
+    if (alertsThresholdEl) {
+      alertsThresholdEl.textContent = `Threshold: KES ${formatCurrency(reminders.threshold)}`;
+    }
+    if (deadlineAmountEl) {
+      deadlineAmountEl.textContent = `KES ${formatCurrency(reminders.threshold)}`;
+    }
+    if (trendValueEl) {
+      const sign = momPercent >= 0 ? '+' : '';
+      const trendColor = momPercent >= 0 ? 'text-emerald-600' : 'text-rose-600';
+      trendValueEl.className = `text-2xl font-semibold ${trendColor}`;
+      trendValueEl.textContent = `${sign}${momPercent.toFixed(1)}%`;
+    }
+    if (trendMoodEl) {
+      const moodClass = momPercent >= 0
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        : 'bg-rose-50 border-rose-200 text-rose-600';
+      trendMoodEl.className = `text-xs font-semibold px-2 py-0.5 rounded-full border ${moodClass}`;
+      trendMoodEl.innerHTML = `<i data-lucide="${momPercent >= 0 ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i> Collections vs last month`;
+    }
+
+    // Month-over-month badge
     const badge = document.getElementById('mom_badge');
     if (badge) {
-      const pct = Number(mom.percent_change || 0);
+      const pct = momPercent;
       const up = pct >= 0;
       badge.className = `mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${up ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`;
       badge.innerHTML = `
         <i data-lucide="${up ? 'trending-up' : 'trending-down'}" class="w-3.5 h-3.5"></i>
         <span>${up ? '+' : ''}${pct.toFixed(1)}% MoM</span>
       `;
-      lucide.createIcons();
     }
+    lucide.createIcons();
   }
 
   function loadAnalytics() {
-    fetch('/api/analytics_data')
-      .then(r => r.json())
-      .then(renderCharts)
-      .catch(e => console.warn('Analytics load failed', e));
+    fetch("/api/analytics_data")
+      .then(res => res.json())
+      .then(payload => {
+        renderCharts(payload);
+      })
+      .catch(err => {
+        console.error("Failed to load analytics data:", err);
+      });
   }
+
+  // Auto-refresh analytics periodically when the tab is visible
+  let __dashAnalyticsTimer;
+  function __getAnalyticsRefreshMs(){
+    try { const v = parseInt(localStorage.getItem('analyticsRefreshMs')||'5000', 10); return (!isFinite(v) || v<2000) ? 5000 : v; } catch(_) { return 5000; }
+  }
+  function startAnalyticsAutoRefresh() {
+    try { clearInterval(__dashAnalyticsTimer); } catch(_) {}
+    const ms = __getAnalyticsRefreshMs();
+    __dashAnalyticsTimer = setInterval(() => {
+      if (!document.hidden) loadAnalytics();
+    }, ms);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      loadAnalytics();
+      startAnalyticsAutoRefresh();
+    }
+  });
+
   loadAnalytics();
+  startAnalyticsAutoRefresh();
 </script>
 
+
+<!-- Latest Students (last 10) -->
+<div class="mt-8 bg-white/90 backdrop-blur-md shadow-sm border border-gray-100 rounded-2xl">
+  <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-base font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="users"></i> Latest Students</h3>
+    <a href="{{ url_for('students') }}" class="text-sm text-indigo-600 hover:text-indigo-700">View all</a>
+  </div>
+  <div class="p-0 overflow-x-auto">
+    <table class="w-full text-sm text-left border-collapse">
+      <thead class="border-b bg-gray-50 font-semibold text-gray-600 uppercase text-xs tracking-wide">
+        <tr>
+          <th class="py-2 px-3">Name</th>
+          <th class="py-2 px-3">Class</th>
+          <th class="py-2 px-3">Admission No</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_students %}
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-2.5 px-3 font-medium text-gray-800">{{ s.name }}</td>
+          <td class="py-2.5 px-3 text-gray-600">{{ s.class_name }}</td>
+          <td class="py-2.5 px-3 text-gray-500">{{ s.admission_no }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-gray-500 py-6">No students found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
+

@@ -1,0 +1,800 @@
+        text_x = x_margin
+
+    # Header text
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(text_x, height - 11 * mm, str(school_name))
+    sub = " ".join(filter(None, [school_address, school_phone, school_email, school_website])) or "Official Payment Receipt"
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.whitesmoke)
+    c.drawString(text_x, height - 15.5 * mm, sub)
+
+    # PAID badge on the right
+    badge_w, badge_h = 22 * mm, 8 * mm
+    badge_x = width - x_margin - badge_w
+    badge_y = height - 12 * mm - (badge_h / 2)
+    c.setFillColor(colors.white)
+    c.setStrokeColor(colors.white)
+    c.roundRect(badge_x, badge_y, badge_w, badge_h, 2 * mm, fill=1, stroke=0)
+    c.setFillColor(brand_indigo)
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawCentredString(badge_x + badge_w / 2, badge_y + 2.6 * mm, "PAID")
+
+    # Content origin (below header)
+    y = height - header_h - 10 * mm
+
+    # Amount card
+    card_h = 14 * mm
+    card_y = y - card_h
+    c.setFillColor(light_bg)
+    c.setStrokeColor(soft_border)
+    c.roundRect(x_margin, card_y, width - 2 * x_margin, card_h, 3 * mm, fill=1, stroke=0)
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawCentredString(width / 2, card_y + card_h - 5 * mm, "Amount Paid")
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, card_y + 4.8 * mm, f"KES {float(payment.get('amount') or 0):,.2f}")
+    y = card_y - content_gap
+
+    # Separator (dashed)
+    c.setStrokeColor(colors.lightgrey)
+    c.setDash(1, 2)
+    c.line(x_margin, y, width - x_margin, y)
+    c.setDash()
+    y -= content_gap
+
+    # Key-value rows
+    def draw_kv(label: str, value: str):
+        nonlocal y
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(x_margin, y, label)
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawRightString(width - x_margin, y, value)
+        y -= 6.5 * mm
+
+    pdate = payment.get("date")
+    if hasattr(pdate, "strftime"):
+        date_str = pdate.strftime("%Y-%m-%d %H:%M")
+    else:
+        date_str = str(pdate or "N/A")
+
+    draw_kv("Receipt No.", f"#{payment['id']}")
+    draw_kv("Date", date_str)
+    draw_kv("Student", str(payment.get("student_name") or ""))
+    draw_kv("Class", str(payment.get("class_name") or "N/A"))
+    draw_kv("Method", str(payment.get("method") or "N/A"))
+    draw_kv("Reference", str(payment.get("reference") or "N/A"))
+    draw_kv("Year / Term", f"{payment.get('year') or 'N/A'} / {payment.get('term') or 'N/A'}")
+
+    # Secondary separator
+    y += 1.5 * mm
+    c.setStrokeColor(colors.lightgrey)
+    c.setDash(1, 2)
+    c.line(x_margin, y, width - x_margin, y)
+    c.setDash()
+    y -= 7.5 * mm
+
+    draw_kv("Current Balance", f"KES {float(srow['bal'] or 0):,.2f}")
+    draw_kv("Credit on Account", f"KES {float(srow['credit'] or 0):,.2f}")
+
+    # Footer
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(width / 2, max(y, 22 * mm), "Thank you for your payment.")
+
+    # Add QR code for authenticity (signed details)
+    try:
+        from reportlab.graphics.barcode import qr as rl_qr
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics import renderPDF
+        # Prepare signed JSON payload similar to HTML receipt
+        pdate = payment.get("date")
+        if hasattr(pdate, "strftime"):
+            date_str = pdate.strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = str(pdate or "")
+        qr_payload = {
+            "t": "receipt",
+            "rid": int(payment.get("id")),
+            "sid": int(payment.get("sid")),
+            "amt": round(float(payment.get("amount") or 0.0), 2),
+            "cur": "KES",
+            "name": payment.get("student_name") or "",
+            "cls": payment.get("class_name") or "",
+            "dt": date_str,
+            "m": payment.get("method") or "",
+            "ref": payment.get("reference") or "",
+            "term": payment.get("term") or "",
+            "year": payment.get("year") or "",
+            "school_id": session.get("school_id"),
+        }
+        canon = json.dumps(qr_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        sig = hmac.new(app.secret_key.encode("utf-8"), canon, hashlib.sha256).hexdigest()[:20]
+        qr_payload["sig"] = sig
+        qr_text = json.dumps(qr_payload, separators=(",", ":"))
+
+        qr_widget = rl_qr.QrCodeWidget(qr_text)
+        b = qr_widget.getBounds()
+        size = 36 * mm
+        w = b[2] - b[0]
+        h = b[3] - b[1]
+        d = Drawing(size, size)
+        qr_widget.transform = [size / w, 0, 0, size / h, 0, 0]
+        d.add(qr_widget)
+        renderPDF.draw(d, c, width - x_margin - size, 10 * mm)
+        c.setFont("Helvetica", 7.5)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawRightString(width - x_margin, 9 * mm, "Scan for signed receipt data")
+    except Exception:
+        pass
+
+    c.showPage()
+    c.save()
+    pdf_bytes = buf.getvalue()
+    buf.close()
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=receipt_{payment_id}.pdf",
+        },
+    )
+
+
+@app.route("/collections")
+def collections_overview():
+    from flask import redirect, url_for
+    try:
+        if is_pro_enabled(app):
+            return redirect(url_for('my_analytics'))
+        return redirect(url_for('monetization.index'))
+    except Exception:
+        return redirect('/')
+
+
+# ---------- ANALYTICS DATA (LIVE) ----------
+@app.route("/api/analytics_data")
+def analytics_data():
+    """Provide live analytics for charts and class summary.
+
+    Returns keys:
+      - monthly_data: [{month, total}]
+      - daily_trend: [{day, total}] last 30 days
+      - class_summary: [{class_name, total_students, total_paid, total_pending, total_credit, percent_paid}]
+      - method_breakdown: [{method, count, total}]
+      - top_debtors: [{name, class_name, balance}]
+      - mom: {current_month_total, prev_month_total, percent_change}
+      - meta: {active_classes}
+    """
+    # Allow analytics for all plans so charts always show real-time data.
+    # Historically this endpoint returned 403 on non-Pro which blanked charts.
+    # We keep the is_pro_enabled call for compatibility but do not enforce.
+    try:
+        _ = is_pro_enabled(app)
+    except Exception:
+        pass
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+
+    # Resolve current academic context
+    try:
+        cy, ct = get_or_seed_current_term(db)
+    except Exception:
+        cy, ct = None, None
+
+    # Monthly totals (by first day label for readability)
+    if cy and ct in (1, 2, 3):
+        cursor.execute(
+            """
+            SELECT DATE_FORMAT(MIN(date), '%b %Y') AS month, SUM(amount) AS total
+            FROM payments
+            WHERE method <> 'Credit Transfer' AND school_id=%s AND year=%s AND term=%s
+            GROUP BY YEAR(date), MONTH(date)
+            ORDER BY YEAR(date), MONTH(date)
+            """,
+            (session.get("school_id"), cy, ct),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT DATE_FORMAT(MIN(date), '%b %Y') AS month, SUM(amount) AS total
+            FROM payments
+            WHERE method <> 'Credit Transfer' AND school_id=%s
+            GROUP BY YEAR(date), MONTH(date)
+            ORDER BY YEAR(date), MONTH(date)
+            """,
+            (session.get("school_id"),),
+        )
+    monthly_data = cursor.fetchall()
+
+    # Daily trend - last 30 days
+    if cy and ct in (1, 2, 3):
+        cursor.execute(
+            """
+            SELECT DATE(date) AS day, SUM(amount) AS total
+            FROM payments
+            WHERE date >= (CURRENT_DATE - INTERVAL 29 DAY)
+              AND method <> 'Credit Transfer' AND school_id=%s AND year=%s AND term=%s
+            GROUP BY DATE(date)
+            ORDER BY DATE(date)
+            """,
+            (session.get("school_id"), cy, ct),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT DATE(date) AS day, SUM(amount) AS total
+            FROM payments
+            WHERE date >= (CURRENT_DATE - INTERVAL 29 DAY)
+              AND method <> 'Credit Transfer' AND school_id=%s
+            GROUP BY DATE(date)
+            ORDER BY DATE(date)
+            """,
+            (session.get("school_id"),),
+        )
+    daily_trend = cursor.fetchall()
+
+    # Class summary
+    if cy and ct in (1, 2, 3):
+        cursor.execute(
+            """
+            SELECT 
+                s.class_name,
+                COUNT(s.id) AS total_students,
+                COALESCE(SUM(p.amount), 0) AS total_paid,
+                COALESCE(SUM(COALESCE(s.balance, s.fee_balance)), 0) AS total_pending,
+                COALESCE(SUM(s.credit), 0) AS total_credit
+            FROM students s
+            LEFT JOIN payments p ON s.id = p.student_id AND p.method <> 'Credit Transfer' AND p.school_id=%s AND p.year=%s AND p.term=%s
+            WHERE s.school_id=%s
+            GROUP BY s.class_name
+            ORDER BY s.class_name
+            """,
+            (session.get("school_id"), cy, ct, session.get("school_id")),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT 
+                s.class_name,
+                COUNT(s.id) AS total_students,
+                COALESCE(SUM(p.amount), 0) AS total_paid,
+                COALESCE(SUM(COALESCE(s.balance, s.fee_balance)), 0) AS total_pending,
+                COALESCE(SUM(s.credit), 0) AS total_credit
+            FROM students s
+            LEFT JOIN payments p ON s.id = p.student_id AND p.method <> 'Credit Transfer' AND p.school_id=%s
+            WHERE s.school_id=%s
+            GROUP BY s.class_name
+            ORDER BY s.class_name
+            """,
+            (session.get("school_id"), session.get("school_id")),
+        )
+    class_summary = cursor.fetchall()
+
+    # Payment method breakdown
+    if cy and ct in (1, 2, 3):
+        cursor.execute(
+            """
+            SELECT method, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+            FROM payments
+            WHERE school_id=%s AND year=%s AND term=%s
+            GROUP BY method
+            ORDER BY total DESC
+            """,
+            (session.get("school_id"), cy, ct),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT method, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+            FROM payments
+            WHERE school_id=%s
+            GROUP BY method
+            ORDER BY total DESC
+            """,
+            (session.get("school_id"),),
+        )
+    method_breakdown = cursor.fetchall()
+
+    # Top debtors (highest balances)
+    cursor.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+    has_balance = bool(cursor.fetchone())
+    balance_col = "balance" if has_balance else "fee_balance"
+
+    cursor.execute(
+        f"""
+        SELECT name, class_name, COALESCE({balance_col}, 0) AS balance
+        FROM students
+        WHERE school_id=%s
+        ORDER BY COALESCE({balance_col}, 0) DESC
+        LIMIT 5
+        """,
+        (session.get("school_id"),),
+    )
+    top_debtors = cursor.fetchall()
+
+    # Month-over-month change
+    if cy and ct in (1, 2, 3):
+        cursor.execute(
+            """
+            SELECT 
+                SUM(CASE WHEN YEAR(date) = YEAR(CURRENT_DATE) AND MONTH(date) = MONTH(CURRENT_DATE) THEN amount ELSE 0 END) AS current_month_total,
+                SUM(CASE WHEN DATE_FORMAT(date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH), '%Y-%m') THEN amount ELSE 0 END) AS prev_month_total
+            FROM payments
+            WHERE method <> 'Credit Transfer' AND school_id=%s AND year=%s AND term=%s
+            """,
+            (session.get("school_id"), cy, ct),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT 
+                SUM(CASE WHEN YEAR(date) = YEAR(CURRENT_DATE) AND MONTH(date) = MONTH(CURRENT_DATE) THEN amount ELSE 0 END) AS current_month_total,
+                SUM(CASE WHEN DATE_FORMAT(date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH), '%Y-%m') THEN amount ELSE 0 END) AS prev_month_total
+            FROM payments
+            WHERE method <> 'Credit Transfer' AND school_id=%s
+            """,
+            (session.get("school_id"),),
+        )
+    mom_row = cursor.fetchone() or {"current_month_total": 0, "prev_month_total": 0}
+    current_month_total = float(mom_row.get("current_month_total") or 0)
+    prev_month_total = float(mom_row.get("prev_month_total") or 0)
+    percent_change = (
+        round(((current_month_total - prev_month_total) / prev_month_total) * 100, 1)
+        if prev_month_total > 0
+        else (100.0 if current_month_total > 0 else 0.0)
+    )
+
+    # Meta: active classes
+    cursor.execute("SELECT COUNT(DISTINCT class_name) AS active_classes FROM students WHERE school_id=%s", (session.get("school_id"),))
+    active_classes = (cursor.fetchone() or {}).get("active_classes", 0)
+
+    db.close()
+
+    # Normalize rows to JSON-safe primitives (avoid Decimal/date serialization issues)
+    try:
+        from datetime import date, datetime  # type: ignore
+    except Exception:  # pragma: no cover
+        date, datetime = None, None
+
+    def _to_float(v):
+        try:
+            return float(v or 0)
+        except Exception:
+            return 0.0
+
+    def _to_int(v):
+        try:
+            return int(v or 0)
+        except Exception:
+            return 0
+
+    # Monthly totals
+    monthly_data = [
+        {"month": (r.get("month") if isinstance(r, dict) else r[0]), "total": _to_float((r.get("total") if isinstance(r, dict) else r[1]))}
+        for r in (monthly_data or [])
+    ]
+
+    # Daily trend with ISO day
+    _daily = []
+    for r in (daily_trend or []):
+        day_val = (r.get("day") if isinstance(r, dict) else r[0])
+        if date and isinstance(day_val, (date, datetime)):
+            day_str = day_val.isoformat()
+        else:
+            day_str = str(day_val)
+        _daily.append({"day": day_str, "total": _to_float((r.get("total") if isinstance(r, dict) else r[1]))})
+    daily_trend = _daily
+
+    # Class summary numbers
+    class_summary = [
+        {
+            "class_name": (r.get("class_name") if isinstance(r, dict) else r[0]),
+            "total_students": _to_int((r.get("total_students") if isinstance(r, dict) else r[1])),
+            "total_paid": _to_float((r.get("total_paid") if isinstance(r, dict) else r[2])),
+            "total_pending": _to_float((r.get("total_pending") if isinstance(r, dict) else r[3])),
+            "total_credit": _to_float((r.get("total_credit") if isinstance(r, dict) else r[4])),
+        }
+        for r in (class_summary or [])
+    ]
+
+    # Payment method breakdown
+    method_breakdown = [
+        {
+            "method": (r.get("method") if isinstance(r, dict) else r[0]) or "",
+            "count": _to_int((r.get("count") if isinstance(r, dict) else r[1])),
+            "total": _to_float((r.get("total") if isinstance(r, dict) else r[2])),
+        }
+        for r in (method_breakdown or [])
+    ]
+
+    # Top debtors
+    top_debtors = [
+        {
+            "name": (r.get("name") if isinstance(r, dict) else r[0]) or "",
+            "class_name": (r.get("class_name") if isinstance(r, dict) else r[1]) or "",
+            "balance": _to_float((r.get("balance") if isinstance(r, dict) else r[2])),
+        }
+        for r in (top_debtors or [])
+    ]
+
+    # Enrich class summary with percent_paid
+    for row in class_summary:
+        paid = _to_float(row.get("total_paid"))
+        pending = _to_float(row.get("total_pending"))
+        total = paid + pending
+        row["percent_paid"] = round((paid / total * 100), 1) if total > 0 else 0.0
+
+    resp = jsonify(
+        {
+            "monthly_data": monthly_data,
+            "daily_trend": daily_trend,
+            "class_summary": class_summary,
+            "method_breakdown": method_breakdown,
+            "top_debtors": top_debtors,
+            "mom": {
+                "current_month_total": current_month_total,
+                "prev_month_total": prev_month_total,
+                "percent_change": percent_change,
+            },
+            "meta": {"active_classes": int(active_classes or 0)},
+        }
+    )
+    # Ensure real-time: prevent intermediary/browser caching
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
+# ---------- DOCUMENTATION ----------
+@app.route("/docs")
+def docs():
+    """Media hub for documentation with featured video support."""
+    # Ensure media folder exists
+    media_root = os.path.join(app.root_path, "static", "media")
+    try:
+        os.makedirs(media_root, exist_ok=True)
+    except Exception:
+        pass
+
+    # Resolve featured video from settings
+    featured_name = (get_setting("FEATURED_VIDEO_NAME") or "").strip()
+    featured_url = None
+    if featured_name:
+        candidate = os.path.join(media_root, featured_name)
+        if os.path.exists(candidate):
+            featured_url = url_for("static", filename=f"media/{featured_name}")
+
+    return render_template("docs.html", featured_url=featured_url, featured_name=featured_name)
+
+
+@app.route("/docs/media")
+def docs_media():
+    """List media files under static/media for the library grid."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    try:
+        os.makedirs(media_root, exist_ok=True)
+    except Exception:
+        pass
+    items = []
+    allowed = {".mp4", ".webm", ".mov", ".png", ".jpg", ".jpeg", ".gif"}
+    try:
+        for name in sorted(os.listdir(media_root)):
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in allowed:
+                continue
+            mtype = "video" if ext in {".mp4", ".webm", ".mov"} else "image"
+            items.append({
+                "name": name,
+                "type": mtype,
+                "url": url_for("static", filename=f"media/{name}"),
+            })
+    except Exception:
+        items = []
+    return jsonify({"ok": True, "media": items})
+
+
+@app.route("/docs/upload", methods=["POST"])
+def docs_upload():
+    """Upload one or more media files to static/media."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    try:
+        os.makedirs(media_root, exist_ok=True)
+    except Exception:
+        pass
+    files = request.files.getlist("files") if request.files else []
+    if not files:
+        return jsonify({"ok": False, "error": "No files"}), 400
+    allowed = {".mp4", ".webm", ".mov", ".png", ".jpg", ".jpeg", ".gif"}
+    saved = []
+    for f in files:
+        try:
+            name = secure_filename(f.filename or "")
+            if not name:
+                continue
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in allowed:
+                continue
+            path = os.path.join(media_root, name)
+            f.save(path)
+            saved.append(name)
+        except Exception:
+            continue
+    return jsonify({"ok": True, "saved": saved})
+
+
+@app.route("/docs/media/<name>", methods=["DELETE"])
+def docs_media_delete(name: str):
+    """Delete a media file by name from static/media."""
+    media_root = os.path.join(app.root_path, "static", "media")
+    safe_name = secure_filename(name or "")
+    if not safe_name:
+        return jsonify({"ok": False, "error": "Invalid name"}), 400
+    path = os.path.join(media_root, safe_name)
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/docs/feature", methods=["POST"])
+def docs_feature():
+    """Set the featured video by file name in settings."""
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+    except Exception:
+        name = ""
+    name = secure_filename(name)
+    if not name:
+        return jsonify({"ok": False, "error": "Invalid name"}), 400
+    media_root = os.path.join(app.root_path, "static", "media")
+    if not os.path.exists(os.path.join(media_root, name)):
+        return jsonify({"ok": False, "error": "File not found"}), 404
+    try:
+        set_school_setting("FEATURED_VIDEO_NAME", name)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+
+# ---------- REPORTS PAGE ----------
+@app.route("/reports")
+def reports():
+    # Simple page; exports are scoped to current term
+    return render_template("reports.html")
+
+
+# ---------- XLSX EXPORT (optional) ----------
+@app.route("/export_fees_xlsx")
+def export_fees_xlsx():
+    if not is_pro_enabled(app):
+        try:
+            flash('Exports are available in Pro. Please upgrade.', 'warning')
+        except Exception:
+            pass
+        return redirect(url_for('monetization.index'))
+    try:
+        from openpyxl.workbook import Workbook
+    except Exception:
+        try:
+            flash('XLSX export requires openpyxl. Falling back to ZIP of CSVs.', 'warning')
+        except Exception:
+            pass
+        return redirect(url_for('export_fees_full'))
+
+    db = get_db_connection()
+    cur = db.cursor(dictionary=True)
+    sid = session.get('school_id')
+
+    # Optional scope params
+    year = request.args.get('year')
+    term = request.args.get('term')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    try:
+        y_val = int(year) if (year or '').isdigit() else None
+    except Exception:
+        y_val = None
+    try:
+        t_val = int(term) if (term or '').isdigit() else None
+    except Exception:
+        t_val = None
+
+    # Optional scoping
+    year = request.args.get('year')
+    term = request.args.get('term')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    try:
+        y_val = int(year) if (year or '').isdigit() else None
+    except Exception:
+        y_val = None
+    try:
+        t_val = int(term) if (term or '').isdigit() else None
+    except Exception:
+        t_val = None
+
+    # Students sheet: full roster is still useful regardless of scope
+    cur.execute("SELECT name, admission_no, class_name, COALESCE(balance, fee_balance) AS balance, COALESCE(credit,0) AS credit FROM students WHERE school_id=%s ORDER BY class_name, name", (sid,))
+    students = cur.fetchall() or []
+
+    # Payments sheet (filtered)
+    pay_sql = ("SELECT s.name, s.admission_no, s.class_name, p.year, p.term, p.amount, p.method, p.reference, p.date "
+               "FROM payments p JOIN students s ON s.id=p.student_id WHERE p.school_id=%s AND p.method <> 'Credit Transfer'")
+    params = [sid]
+    if y_val and t_val:
+        pay_sql += " AND p.year=%s AND p.term=%s"; params += [y_val, t_val]
+    else:
+        if y_val:
+            pay_sql += " AND p.year=%s"; params.append(y_val)
+        if start_date:
+            pay_sql += " AND p.date >= %s"; params.append(start_date)
+        if end_date:
+            pay_sql += " AND p.date <= %s"; params.append(end_date)
+    pay_sql += " ORDER BY p.date DESC"
+    cur.execute(pay_sql, tuple(params))
+    payments = cur.fetchall() or []
+
+    # Class summary (roster-based)
+    cur.execute("SELECT class_name AS class, COUNT(*) AS total_students, COALESCE(SUM(COALESCE(balance,fee_balance)),0) AS total_pending, COALESCE(SUM(credit),0) AS total_credit FROM students WHERE school_id=%s GROUP BY class_name ORDER BY class_name", (sid,))
+    class_summary = cur.fetchall() or []
+
+    # Term summary (respect year filter if provided)
+    term_sql = ("SELECT p.year AS year, p.term AS term, COALESCE(SUM(p.amount),0) AS total FROM payments p WHERE p.school_id=%s AND p.method <> 'Credit Transfer'")
+    tparams = [sid]
+    if y_val:
+        term_sql += " AND p.year=%s"; tparams.append(y_val)
+    term_sql += " GROUP BY p.year, p.term ORDER BY p.year, p.term"
+    cur.execute(term_sql, tuple(tparams))
+    term_summary = cur.fetchall() or []
+
+    # Method breakdown (filtered to scope)
+    meth_sql = ("SELECT p.method AS method, COUNT(*) AS cnt, COALESCE(SUM(p.amount),0) AS total FROM payments p WHERE p.school_id=%s AND p.method <> 'Credit Transfer'")
+    mparams = [sid]
+    if y_val and t_val:
+        meth_sql += " AND p.year=%s AND p.term=%s"; mparams += [y_val, t_val]
+    else:
+        if y_val:
+            meth_sql += " AND p.year=%s"; mparams.append(y_val)
+        if start_date:
+            meth_sql += " AND p.date >= %s"; mparams.append(start_date)
+        if end_date:
+            meth_sql += " AND p.date <= %s"; mparams.append(end_date)
+    meth_sql += " GROUP BY p.method ORDER BY total DESC"
+    cur.execute(meth_sql, tuple(mparams))
+    method_breakdown = cur.fetchall() or []
+
+    db.close()
+
+    from io import BytesIO
+    from openpyxl.workbook import Workbook
+    wb = Workbook()
+    ws = wb.active; ws.title = 'Students'
+    ws.append(['Name','Admission No','Class','Balance (KES)','Credit (KES)'])
+    for r in students:
+        ws.append([r.get('name'), r.get('admission_no'), r.get('class_name'), r.get('balance'), r.get('credit')])
+
+    ws2 = wb.create_sheet('Payments')
+    ws2.append(['Student Name','Admission No','Class','Year','Term','Amount (KES)','Method','Reference','Date'])
+    for p in payments:
+        ws2.append([p.get('name'), p.get('admission_no'), p.get('class_name'), p.get('year'), p.get('term'), p.get('amount'), p.get('method'), p.get('reference'), p.get('date')])
+
+    ws3 = wb.create_sheet('Class Summary')
+    ws3.append(['Class','Total Students','Total Pending (KES)','Total Credit (KES)'])
+    for c in class_summary:
+        ws3.append([c.get('class'), c.get('total_students'), c.get('total_pending'), c.get('total_credit')])
+
+    ws4 = wb.create_sheet('Term Summary')
+    ws4.append(['Year','Term','Total Collected (KES)'])
+    for t in term_summary:
+        ws4.append([t.get('year'), t.get('term'), t.get('total')])
+
+    ws5 = wb.create_sheet('Method Breakdown')
+    ws5.append(['Method','Count','Total (KES)'])
+    for m in method_breakdown:
+        ws5.append([m.get('method'), m.get('cnt'), m.get('total')])
+
+    mem = BytesIO(); wb.save(mem); mem.seek(0)
+    from datetime import datetime as _dt
+    ts = _dt.now().strftime('%Y%m%d_%H%M%S')
+    return Response(mem.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': f'attachment; filename=fees_full_report_{ts}.xlsx'})
+
+# ---------- RUN ----------
+
+# ---------- MY ANALYTICS (PRO) ----------
+@app.route("/my_analytics")
+def my_analytics():
+    """Advanced analytics for Pro plan."""
+    if not is_pro_enabled(app):
+        flash("Advanced analytics are available in Pro. Please upgrade.", "warning")
+        return redirect(url_for("monetization.index"))
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+    has_balance = bool(cursor.fetchone())
+    column = "balance" if has_balance else "fee_balance"
+
+    cursor.execute("SELECT COUNT(*) AS total FROM students WHERE school_id=%s", (session.get("school_id"),))
+    total_students = cursor.fetchone()["total"]
+
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS total_collected FROM payments WHERE method <> 'Credit Transfer' AND school_id=%s",
+        (session.get("school_id"),),
+    )
+    total_collected = cursor.fetchone()["total_collected"]
+
+    cursor.execute(f"SELECT COALESCE(SUM({column}), 0) AS total_balance FROM students WHERE school_id=%s", (session.get("school_id"),))
+    total_balance = cursor.fetchone()["total_balance"]
+
+    cursor.execute("SELECT COALESCE(SUM(credit), 0) AS total_credit FROM students WHERE school_id=%s", (session.get("school_id"),))
+    total_credit = cursor.fetchone()["total_credit"]
+
+    db.close()
+    return render_template(
+        "analytics_pro.html",
+        total_students=total_students,
+        total_collected=total_collected,
+        total_balance=total_balance,
+        total_credit=total_credit
+    )
+
+from utils.reports_bootstrap import enable_reports_scheduler
+try:
+    _sched = enable_reports_scheduler(app)
+except Exception as _e:
+    print("[scheduler] not started:", _e)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+
+
+
+
+@app.route("/export_fees_full")
+def export_fees_full():
+    """Export a comprehensive school fee report as a ZIP with multiple CSVs.
+
+    Includes:
+      - students.csv: roster with balances and credit
+      - payments.csv: all payments (student, class, year/term, method, ref, date)
+      - class_summary.csv: totals per class (students, paid, pending, credit, collection_rate)
+      - term_summary.csv: totals per year/term collected
+      - method_breakdown.csv: totals per payment method
+    """
+    # Gate to Pro plan like other exports
+    if not is_pro_enabled(app):
+        try:
+            flash('Exports are available in Pro. Please upgrade.', 'warning')
+        except Exception:
+            pass
+        return redirect(url_for('monetization.index'))
+
+    import zipfile
+    from datetime import datetime
+    from io import BytesIO, StringIO
+
+    db = get_db_connection()
+    cur = db.cursor(dictionary=True)
+    sid = session.get('school_id')
+
+    # Students
+    cur.execute(
+        """
+        SELECT 
+            name AS 'Name', 
+            admission_no AS 'Admission No', 
+            class_name AS 'Class', 
+            COALESCE(balance, fee_balance) AS 'Balance (KES)', 

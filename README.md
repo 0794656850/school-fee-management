@@ -209,3 +209,19 @@ No license specified. If you intend to open-source, add a suitable license file.
 - Configure Daraja for `production` and update callback URL.
 - Configure Gmail OAuth redirect URIs for your domain; place client JSON securely.
 - Change default passwords in Admin → Settings.
+
+## Architecture (MVC)
+- Controllers: controllers/ (blueprints; backward compatible with outes/).
+- Views: 	emplates/ + static/ (Jinja + assets).
+- Models: models.py (to be split gradually as needed).
+See docs/MVC.md for details.
+
+
+
+## Data Wipe
+To remove all profiles and all data:
+
+- Preview: python scripts/wipe_all_data.py --dry-run
+- Irreversible wipe: python scripts/wipe_all_data.py --force "DELETE ALL"
+
+This truncates all tables in the configured MySQL database and purges stored files in static/media, static/uploads, uploads/, and instance/. Ensure you have backups if needed.

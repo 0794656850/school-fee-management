@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Student / Guardian Login{% endblock %}
+{% block page_title %}Student / Guardian Access{% endblock %}
+{% block content %}
+<div class="brand-hero">
+  <div class="brand-hero__row">
+    <div class="app-badge">
+      <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+    </div>
+    <div>
+      <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
+      <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
+    </div>
+  </div>
+</div>
+<!-- Floating back button for student auth -->
+<button id="stdBackBtn" class="fixed top-4 left-4 z-40 p-2 rounded-full nav-button" title="Back">
+  <i data-lucide="arrow-left"></i>
+</button>
+
+<div class="max-w-xl mx-auto bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+  <h3 class="text-xl font-semibold mb-2">Secure Student Login</h3>
+  <p class="text-sm text-gray-600 mb-4">Tip: Your initial password is your Admission Number. You can change it after login.</p>
+  <div class="mb-3">
+    <a href="{{ url_for('guardian.guardian_login') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline">
+      <i data-lucide="arrow-left"></i>
+      <span>Back to Parent/Guardian Access</span>
+    </a>
+    <span class="mx-2 text-gray-400">•</span>
+    <a href="{{ url_for('auth.entry') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline"><i data-lucide="grid"></i> <span>All Login Options</span></a>
+  </div>
+  <form method="post" class="space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">School Name or Code</label>
+      <input name="school" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. Greenfield High or greenfield-high" required />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Admission Number</label>
+      <input name="regNo" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. ADM1234" required />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Password</label>
+      <div class="relative">
+        <input id="pwd" type="password" name="password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm pr-28" placeholder="Enter password" required />
+        <button type="button" id="useAdm" class="absolute right-1 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50">Use Adm No</button>
+      </div>
+    </div>
+    <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">Login</button>
+  </form>
+  <div class="text-sm text-gray-600 mt-4">
+    New here? <a href="{{ url_for('student_auth.student_signup') }}" class="text-emerald-700 hover:underline">Create your account</a>
+  </div>
+  <div class="text-xs text-gray-500 mt-2">No password? Use the <a href="{{ url_for('guardian.guardian_login') }}" class="text-indigo-700 hover:underline">Parent/Guardian quick access</a>.</div>
+</div>
+<script>
+  // Back behavior: prefer history, fallback to Guardian page
+  (function(){
+    const btn = document.getElementById('stdBackBtn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      try {
+        const ref = document.referrer || '';
+        if (ref && new URL(ref).origin === window.location.origin) { history.back(); return; }
+      } catch(_) {}
+      window.location.assign('{{ url_for('guardian.guardian_login') }}');
+    });
+  })();
+
+  // One-click fill: use admission number as password
+  (function(){
+    try{
+      const adm = document.querySelector('input[name="regNo"]');
+      const pwd = document.getElementById('pwd');
+      const btn = document.getElementById('useAdm');
+      if (adm && pwd && btn) btn.addEventListener('click', ()=> { pwd.value = adm.value || ''; pwd.focus(); });
+    }catch(_){ }
+  })();
+  // Prefill from query parameters (school & regNo)
+  (function(){
+    try{
+      const params = new URLSearchParams(window.location.search);
+      const school = params.get('school');
+      const regNo = params.get('regNo');
+      if (school) {
+        const s = document.querySelector('input[name="school"]'); if (s) s.value = school;
+      }
+      if (regNo) {
+        const r = document.querySelector('input[name="regNo"]'); if (r) r.value = regNo;
+      }
+    }catch(_){ }
+  })();
+</script>
+{% endblock %}

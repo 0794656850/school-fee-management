@@ -50,7 +50,7 @@
         </div>
       </div>
       <div>
-        <button class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+        <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg">
           <i data-lucide="filter"></i>
           <span>Apply Filters</span>
         </button>
@@ -85,8 +85,9 @@
                 <span class="text-gray-400 text-xs">-</span>
               {% endif %}
             </td>
-            <td class="px-4 py-3 font-semibold">
-              <span class="text-rose-600">KES {{ "{:,.2f}".format(s.balance or 0) }}</span>
+            {% set bal = (s.balance or 0) %}
+            <td class="px-4 py-3">
+              <span class="balance-value {{ balance_class(bal) }}">KES {{ "{:,.2f}".format(bal) }}</span>
             </td>
             <td class="px-4 py-3">
               {{ s.last_action or '-' }}
@@ -113,4 +114,5 @@
 </div>
 
 {% endblock %}
+
 

@@ -105,11 +105,12 @@
       <img class="logo" src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ brand }} Logo" onerror="this.style.display='none'" />
       <div>
         <div class="brand">{{ brand or SCHOOL_NAME or 'Receipt' }}</div>
-        {% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL %}
+        {% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL or SCHOOL_WEBSITE %}
           <div class="sub">
             {% if SCHOOL_ADDRESS %}{{ SCHOOL_ADDRESS }}{% endif %}
             {% if SCHOOL_PHONE %}{% if SCHOOL_ADDRESS %} • {% endif %}{{ SCHOOL_PHONE }}{% endif %}
             {% if SCHOOL_EMAIL %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE %} • {% endif %}{{ SCHOOL_EMAIL }}{% endif %}
+            {% if SCHOOL_WEBSITE %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL %} • {% endif %}{{ SCHOOL_WEBSITE }}{% endif %}
           </div>
         {% else %}
           <div class="sub">Official Payment Receipt</div>
@@ -125,8 +126,11 @@
           <div class="row"><div class="label">Date</div><div class="value">{% if payment.date %}{% if payment.date.__class__.__name__ == "str" %}{{ payment.date }}{% else %}{{ payment.date.strftime('%Y-%m-%d %H:%M') }}{% endif %}{% else %}N/A{% endif %}</div></div>
           <div class="row"><div class="label">Student</div><div class="value">{{ payment.student_name }}</div></div>
           <div class="row"><div class="label">Class</div><div class="value">{{ payment.class_name or 'N/A' }}</div></div>
-          <div class="row"><div class="label">Method</div><div class="value">{{ payment.method or 'N/A' }}</div></div>
-          <div class="row"><div class="label">Reference</div><div class="value">{{ payment.reference or 'N/A' }}</div></div>
+        <div class="row"><div class="label">Method</div><div class="value">{{ payment.method or 'N/A' }}</div></div>
+        <div class="row"><div class="label">Reference</div><div class="value">{{ payment.reference or 'N/A' }}</div></div>
+        {% if payment.method and payment.method|lower == 'paypal' %}
+        <div class="row"><div class="label">Note</div><div class="value">Processed by PayPal. Capture ID: {{ payment.reference or 'N/A' }}</div></div>
+        {% endif %}
           <div class="row"><div class="label">Year / Term</div><div class="value">{{ payment.year or 'N/A' }} / {{ payment.term or 'N/A' }}</div></div>
         </div>
         <div class="amount">
@@ -152,6 +156,20 @@
           var link = {{ payment_link|tojson }};
           var payload = link || ({{ brand|tojson }} + ' payment');
           new QRCode(document.getElementById('qr'), { text: payload, width: 160, height: 160 });
+        } catch (e) { /* ignore */ }
+      </script>
+      {% endif %}
+
+      {% if auth_qr_data %}
+      <div class="section qrblock" style="margin-top:10px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Receipt authenticity QR (signed)</div>
+        <div class="qrwrap" style="padding:12px;"><div id="qr-auth"></div></div>
+        <div style="font-size:11px; color:var(--muted); margin-top:6px">Contains key receipt details and a signature.</div>
+      </div>
+      <script>
+        try {
+          var a = {{ auth_qr_data|tojson }};
+          new QRCode(document.getElementById('qr-auth'), { text: a, width: 220, height: 220 });
         } catch (e) { /* ignore */ }
       </script>
       {% endif %}

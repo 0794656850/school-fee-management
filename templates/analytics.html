@@ -1,400 +1,364 @@
 {% extends "base.html" %}
-{% block title %}Analytics Overview{% endblock %}
-{% block page_title %}Analytics Overview{% endblock %}
+{% block title %}Lovato_Tech Analytics · {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Lovato_Tech Insights{% endblock %}
+
 {% block content %}
-
-{% if (plan_status and plan_status.plan_code=='FREE') %}
-  {% include '_upgrade_banner.html' %}
-  <div class="h-4"></div>
-{% endif %}
-
-<!-- Toolbar -->
-<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-  <div class="flex items-center gap-3">
-    <button class="premium-only btn-brand px-3 py-2 rounded-lg text-sm flex items-center gap-2" id="exportCsv" title="Upgrade to Pro to export analytics">
-      <i data-lucide="download"></i> Export CSV
-    </button>
-    <div class="hidden md:block text-gray-500 text-sm">Updated <span id="lastUpdated">—</span></div>
-  </div>
-  <div class="flex items-center gap-2">
-    <select id="timeframe" class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2">
-      <option value="30">Last 30 days</option>
-      <option value="90">Last 90 days</option>
-      <option value="365" selected>Last 12 months</option>
-      <option value="all">All time</option>
-    </select>
-  </div>
-  </div>
-
-<!-- KPI Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-  <div class="kpi p-5">
-    <div class="flex items-center justify-between">
-      <div class="min-w-0">
-        <div class="text-xs uppercase tracking-wide text-gray-500">Total Collected</div>
-        <div class="fit-text font-bold mt-1" id="kpi_collected">KES {{ "{:,.2f}".format(total_collected or 0) }}</div>
+{% set mom_pct = analytics_payload.mom.percent_change if analytics_payload.mom else 0 %}
+{% set mom_positive = mom_pct >= 0 %}
+<div class="space-y-8">
+  <section class="analytics-hero relative overflow-hidden rounded-3xl p-8 text-white shadow-[0_35px_60px_rgba(15,23,42,0.6)]">
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="max-w-2xl space-y-4">
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-300">Fee Pulse · Live</p>
+        <h1 class="text-3xl md:text-4xl font-semibold">Premium analytics for Lovato_Tech</h1>
+        <p class="text-sm text-slate-200">Your collections, class health, and alerts refreshed as each payment closes the books.</p>
+        <div class="flex flex-wrap gap-3">
+          <span class="rounded-full border border-white/30 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-white/70">Scoped to current term</span>
+          <span class="rounded-full border border-white/30 px-4 py-1 text-[0.6rem] uppercase tracking-[0.4em] text-white/70">Auto-refresh enabled</span>
+        </div>
       </div>
-      <div class="kpi__icon"><i data-lucide="wallet"></i></div>
-    </div>
-    <div class="mt-2 text-xs text-gray-500">MoM <span id="kpi_mom" class="font-medium">—</span></div>
-  </div>
-
-  <div class="kpi p-5 kpi--danger">
-    <div class="flex items-center justify-between">
-      <div class="min-w-0">
-        <div class="text-xs uppercase tracking-wide text-gray-500">Pending Balance</div>
-        <div class="fit-text font-bold mt-1" id="kpi_pending">KES {{ "{:,.2f}".format(total_balance or 0) }}</div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="stat-card bg-white/10 text-slate-50">
+          <p class="text-[0.7rem] uppercase tracking-[0.4em] text-slate-200">Monthly revenue</p>
+          <p class="text-3xl font-semibold">KES {{ '{:,.0f}'.format(total_collected or 0) }}</p>
+          <p class="text-xs {{ 'text-emerald-300' if mom_positive else 'text-rose-300' }}">
+            {% set mom_sign = '+' if mom_pct >= 0 else '' %}
+            {{ mom_sign }}{{ '{:,.1f}'.format(mom_pct) if mom_pct is not none else '0.0' }}% vs last month
+          </p>
+        </div>
+        <div class="stat-card bg-white/10 text-slate-50">
+          <p class="text-[0.7rem] uppercase tracking-[0.4em] text-slate-200">Avg. payment</p>
+          <p class="text-3xl font-semibold">KES {{ '{:,.0f}'.format(avg_collection_per_student or 0) }}</p>
+          <p class="text-xs text-slate-200">Across {{ total_students or 0 }} students</p>
+        </div>
       </div>
-      <div class="kpi__icon"><i data-lucide="alert-circle"></i></div>
     </div>
-    <div class="mt-2 text-xs text-gray-500">Collection Rate <span id="kpi_collection_rate" class="font-medium">—</span></div>
-  </div>
+    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <article class="stat-pill stat-pill--pending">
+        <p class="text-[0.65rem] uppercase tracking-[0.5em]">Pending balance</p>
+        <p class="text-xl font-semibold balance-value balance-negative">KES {{ '{:,.0f}'.format(total_balance or 0) }}</p>
+        <p class="text-[0.65rem] text-slate-300">Across {{ analytics_payload.meta.active_classes or 0 }} classes</p>
+      </article>
+      <article class="stat-pill stat-pill--rate">
+        <p class="text-[0.65rem] uppercase tracking-[0.5em]">Collection rate</p>
+        <p class="text-xl font-semibold text-white">{{ '{:,.0f}'.format(collection_rate_pct or 0) }}%</p>
+        <p class="text-[0.65rem] text-slate-300">Percent of dues cleared</p>
+      </article>
+      <article class="stat-pill stat-pill--alert">
+        <p class="text-[0.65rem] uppercase tracking-[0.5em]">Students in arrears</p>
+        <p class="text-xl font-semibold">{{ analytics_payload.reminders.count or 0 }}</p>
+        <p class="text-[0.65rem] text-slate-300">Triggered reminders</p>
+      </article>
+      <article class="stat-pill stat-pill--classes">
+        <p class="text-[0.65rem] uppercase tracking-[0.5em]">Active classes</p>
+        <p class="text-xl font-semibold">{{ analytics_payload.meta.active_classes or 0 }}</p>
+        <p class="text-[0.65rem] text-slate-300">With enrolled students</p>
+      </article>
+    </div>
+  </section>
 
-  <div class="kpi p-5 kpi--success">
-    <div class="flex items-center justify-between">
-      <div class="min-w-0">
-        <div class="text-xs uppercase tracking-wide text-gray-500">Total Credit</div>
-        <div class="fit-text font-bold mt-1" id="kpi_credit">KES 0</div>
+  <section class="grid gap-4 lg:grid-cols-2">
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Trend</p>
+        <h3 class="text-xl font-semibold text-gray-900">Weekly Revenue Trend</h3>
+        <p class="text-sm text-gray-500">Daily collections throughout the current week.</p>
       </div>
-      <div class="kpi__icon"><i data-lucide="gift"></i></div>
-    </div>
-    <div class="mt-2 text-xs text-gray-500">Active Classes <span id="kpi_classes" class="font-medium">—</span></div>
-  </div>
-
-  <div class="kpi p-5">
-    <div class="flex items-center justify-between">
-      <div class="min-w-0">
-        <div class="text-xs uppercase tracking-wide text-gray-500">Students</div>
-        <div class="fit-text font-bold mt-1" id="kpi_students">{{ total_students }}</div>
+      <div class="chart-wrapper">
+        <canvas id="weeklyRevenueChart"></canvas>
       </div>
-      <div class="kpi__icon"><i data-lucide="users"></i></div>
-    </div>
-    <div class="mt-2 text-xs text-gray-500">Avg per Student <span id="kpi_arpu" class="font-medium">—</span></div>
-  </div>
+    </article>
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Grade view</p>
+        <h3 class="text-xl font-semibold text-gray-900">Collection by Class</h3>
+        <p class="text-sm text-gray-500">Top performing classes over the selected window.</p>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="classCollectionChart"></canvas>
+      </div>
+    </article>
+  </section>
+
+  <section class="grid gap-4 md:grid-cols-2">
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Method mix</p>
+        <h3 class="text-xl font-semibold text-gray-900">Payment Method Distribution</h3>
+        <p class="text-sm text-gray-500">Breakdown by cash, transfers, and wallets.</p>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="paymentMethodChart"></canvas>
+      </div>
+    </article>
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Clearance</p>
+        <h3 class="text-xl font-semibold text-gray-900">Fee Clearance Status</h3>
+        <p class="text-sm text-gray-500">Cleared vs pending amounts.</p>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="feeClearanceChart"></canvas>
+      </div>
+    </article>
+  </section>
+
+  <section class="grid gap-4 lg:grid-cols-2">
+    <article class="rounded-3xl border border-gray-100 bg-white p-6 shadow-xl space-y-4">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Latest activity</p>
+        <h3 class="text-xl font-semibold text-gray-900">Recent Payments</h3>
+        <p class="text-sm text-gray-500">Transactions recorded in the last 10 entries.</p>
+      </div>
+      <div class="overflow-hidden rounded-2xl border border-gray-100">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-gray-600 uppercase text-[0.65rem] tracking-[0.4em]">
+            <tr>
+              <th class="px-4 py-3 text-left">Student</th>
+              <th class="px-4 py-3 text-left">Class</th>
+              <th class="px-4 py-3 text-left">Amount</th>
+              <th class="px-4 py-3 text-left">Method</th>
+              <th class="px-4 py-3 text-left">Date</th>
+            </tr>
+          </thead>
+          <tbody id="recentPaymentsBody" class="text-gray-700"></tbody>
+        </table>
+      </div>
+    </article>
+    <article class="rounded-3xl border border-gray-100 bg-white p-6 shadow-xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Collections to chase</p>
+          <h3 class="text-xl font-semibold text-gray-900">Top Debtors</h3>
+        </div>
+        <span class="text-xs text-sky-500">Review & remind</span>
+      </div>
+      <div class="space-y-3">
+        {% for debtor in analytics_payload.top_debtors %}
+          <article class="flex items-start justify-between rounded-2xl border border-gray-100 p-4 shadow-sm">
+            <div>
+              <p class="font-semibold text-gray-900">{{ debtor.name or 'Student' }}</p>
+              <p class="text-xs text-gray-500">{{ debtor.class_name or 'Class unknown' }}</p>
+            </div>
+            <div class="text-sm font-semibold text-rose-600">KES {{ '{:,.0f}'.format(debtor.balance or 0) }}</div>
+          </article>
+        {% else %}
+          <p class="text-sm text-gray-500">No outstanding debtors yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="grid gap-4 lg:grid-cols-3">
+    <article class="insight-card">
+      <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Payment alerts</p>
+      <p class="text-2xl font-semibold text-gray-900">{{ analytics_payload.reminders.count or 0 }} students</p>
+      <p class="text-sm text-gray-500">Have outstanding balances above {{ '{:,.0f}'.format(analytics_payload.reminders.threshold or 0) }} KES.</p>
+      <a class="text-sm font-semibold text-amber-600" href="{{ url_for('reminders.reminders_home') }}">View list</a>
+    </article>
+    <article class="insight-card">
+      <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Fee deadline</p>
+      <p class="text-2xl font-semibold text-gray-900">{{ '{:,.0f}'.format(analytics_payload.reminders.threshold or 0) }} KES</p>
+      <p class="text-sm text-gray-500">Threshold for sending reminders this week.</p>
+      <a class="text-sm font-semibold text-sky-600" href="{{ url_for('reminders.reminders_home') }}">Send reminder</a>
+    </article>
+    <article class="insight-card">
+      <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Trend</p>
+      <p class="text-2xl font-semibold {{ 'text-emerald-600' if mom_positive else 'text-rose-500' }}">
+        {% if mom_pct >= 0 %}+{% endif %}{{ '{:,.1f}'.format(mom_pct if mom_pct is not none else 0) }}
+        %
+      </p>
+      <p class="text-sm text-gray-500">Collections vs last month</p>
+      <a class="text-sm font-semibold text-emerald-600" href="{{ url_for('analytics_dashboard') }}">View details</a>
+    </article>
+  </section>
+
+  <section class="grid gap-4 lg:grid-cols-2">
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Revenue streak</p>
+        <h3 class="text-xl font-semibold text-gray-900">Monthly Revenue Trend</h3>
+        <p class="text-sm text-gray-500">Revenue and payment count over time.</p>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="monthlyTrendChart"></canvas>
+      </div>
+    </article>
+    <article class="chart-card">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-gray-500">Grade impact</p>
+        <h3 class="text-xl font-semibold text-gray-900">Payments Per Class</h3>
+        <p class="text-sm text-gray-500">Total collections by grade level.</p>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="paymentsPerClassChart"></canvas>
+      </div>
+    </article>
+  </section>
 </div>
 
-<!-- Collection Overview -->
-<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-  <div class="kpi p-5">
-    <div class="text-xs uppercase tracking-wide text-gray-500">Best Month</div>
-    <div class="mt-1 text-sm text-gray-700" id="co_best_month">—</div>
-    <div class="text-xl font-bold text-gray-900" id="co_best_value">KES 0</div>
-  </div>
-  <div class="kpi p-5">
-    <div class="text-xs uppercase tracking-wide text-gray-500">Avg Monthly</div>
-    <div class="mt-1 text-sm text-gray-700">Last 12 months</div>
-    <div class="text-xl font-bold text-gray-900" id="co_avg_value">KES 0</div>
-  </div>
-  <div class="kpi p-5">
-    <div class="text-xs uppercase tracking-wide text-gray-500">12-Month Total</div>
-    <div class="mt-1 text-sm text-gray-700">Collections</div>
-    <div class="text-xl font-bold text-gray-900" id="co_total_12m">KES 0</div>
-  </div>
-  <div class="kpi p-5">
-    <div class="text-xs uppercase tracking-wide text-gray-500">Median Monthly</div>
-    <div class="mt-1 text-sm text-gray-700">Distribution center</div>
-    <div class="text-xl font-bold text-gray-900" id="co_median_value">KES 0</div>
-  </div>
-</div>
-
-<!-- Charts Row 1 -->
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-  <div class="xl:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
-        <i data-lucide="bar-chart-2" class="text-indigo-600"></i> Collections Overview
-      </h3>
-    </div>
-    <canvas id="monthlyChart" height="110"></canvas>
-  </div>
-
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i data-lucide="pie-chart" class="text-cyan-600"></i> Paid vs Pending
-    </h3>
-    <canvas id="paidPendingChart" height="180"></canvas>
-  </div>
-</div>
-
-<!-- Charts Row 2 -->
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i data-lucide="line-chart" class="text-emerald-600"></i> Daily Trend (30d)
-    </h3>
-    <canvas id="dailyChart" height="180"></canvas>
-  </div>
-
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i data-lucide="credit-card" class="text-sky-600"></i> Payment Methods
-    </h3>
-    <canvas id="methodChart" height="180"></canvas>
-  </div>
-
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i data-lucide="layers" class="text-amber-600"></i> Class Performance
-    </h3>
-    <canvas id="classChart" height="180"></canvas>
-  </div>
-</div>
-
-<!-- Top Debtors -->
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-  <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
-    <i data-lucide="alert-triangle" class="text-rose-600"></i> Top Outstanding Balances
-  </h3>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm text-left border-collapse">
-      <thead class="border-b bg-gray-50 font-semibold text-gray-600 uppercase text-xs tracking-wide">
-        <tr>
-          <th class="py-2 px-3">Student</th>
-          <th class="py-2 px-3">Class</th>
-          <th class="py-2 px-3 text-right">Outstanding (KES)</th>
-        </tr>
-      </thead>
-      <tbody id="debtors_tbody">
-        <tr><td colspan="3" class="text-center text-gray-400 py-3">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="mt-3 text-xs text-gray-500">Tip: Click a class in the chart to filter.</div>
-  
-</div>
-
-<!-- Scripts -->
 <script>
-let monthlyChart, paidPendingChart, dailyChart, methodChart, classChart;
+  const analyticsPayload = {{ analytics_payload | tojson }};
+  const topClasses = {{ top_classes | tojson }};
+  const totals = analyticsPayload.totals || { collected: 0, pending: 0 };
 
-function fmtKes(v) { return `KES ${Number(v||0).toLocaleString()}`; }
-function nowString(){ const d=new Date(); return d.toLocaleString(); }
+  const weeklyTrend = (analyticsPayload.daily_trend || []).slice().sort((a, b) => new Date(a.day) - new Date(b.day)).slice(-7);
+  const monthlyTrend = (analyticsPayload.monthly_data || [])
+    .filter(row => row && row.month)
+    .slice()
+    .sort((a, b) => new Date(`${a.month}-01`) - new Date(`${b.month}-01`));
+  const classSummary = topClasses || [];
+  const methodBreakdown = analyticsPayload.method_breakdown || [];
+  const recentPayments = (analyticsPayload.recent_payments || []).slice(0, 6);
 
-function rollingAverage(arr, windowSize=3){
-  const out=[]; for(let i=0;i<arr.length;i++){ const s=Math.max(0,i-windowSize+1); const win=arr.slice(s,i+1); out.push(win.reduce((a,b)=>a+Number(b||0),0)/win.length); } return out;
-}
+  const palette = ['#2563eb', '#10b981', '#f97316', '#a855f7', '#3b82f6'];
+  const dateFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-function renderMonthlyChart(monthly){
-  const ctx = document.getElementById('monthlyChart').getContext('2d');
-  const labels = monthly.map(m=>m.month);
-  const totals = monthly.map(m=>Number(m.total||0));
-  const avg = rollingAverage(totals, 3);
-  if (monthlyChart) monthlyChart.destroy();
-  monthlyChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Collected', data: totals, borderRadius: 8, backgroundColor: 'rgba(79,70,229,0.85)' },
-        { type: 'line', label: '3-mo Avg', data: avg, borderColor: '#06b6d4', backgroundColor: 'transparent', tension: .35 }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: { 
-        legend: { display: true }, 
-        tooltip: { 
-          mode:'index', 
-          intersect:false,
-          callbacks: {
-            label: function(ctx){
-              const v = ctx.parsed.y ?? ctx.parsed;
-              return `${ctx.dataset.label}: ${fmtKes(v)}`;
-            }
-          }
-        }
+  function safeNumber(value) {
+    return Number.isFinite(value) ? value : Number(value) || 0;
+  }
+
+  function buildLineChart(canvasId, labels, data, label, color) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label,
+          data,
+          borderColor: color,
+          backgroundColor: `${color}33`,
+          pointBorderColor: color,
+          pointBackgroundColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          fill: true,
+          tension: 0.4,
+        }],
       },
-      scales: {
-        x: { grid: { color:'#f1f5f9' } },
-        y: { beginAtZero:true, ticks:{ callback:v=>`KES ${v.toLocaleString()}` } }
-      }
-    }
-  });
-}
-
-function renderPaidPending(collected, pending){
-  const ctx = document.getElementById('paidPendingChart').getContext('2d');
-  if (paidPendingChart) paidPendingChart.destroy();
-  paidPendingChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Paid', 'Pending'],
-      datasets: [{ data: [collected, pending], backgroundColor: ['#10b981','#ef4444'] }]
-    },
-    options: { 
-      plugins: { 
-        legend: { position:'bottom' },
-        tooltip: { callbacks: { label: (ctx)=> `${ctx.label}: ${fmtKes(ctx.parsed)}` } }
-      } 
-    }
-  });
-}
-
-function updateCollectionOverview(monthly){
-  const bestMonthEl = document.getElementById('co_best_month');
-  const bestValEl   = document.getElementById('co_best_value');
-  const avgEl       = document.getElementById('co_avg_value');
-  const totEl       = document.getElementById('co_total_12m');
-  const medEl       = document.getElementById('co_median_value');
-
-  if (!monthly || !monthly.length){
-    bestMonthEl.innerText = '—';
-    [bestValEl, avgEl, totEl, medEl].forEach(el=> el.innerText = fmtKes(0));
-    return;
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+          y: { grid: { color: '#e5e7eb' }, beginAtZero: true, ticks: { color: '#6b7280' } },
+        },
+      },
+    });
   }
-  const vals = monthly.map(m=>Number(m.total||0));
-  const sum = vals.reduce((a,b)=>a+b,0);
-  const avg = sum / vals.length;
-  const sorted = vals.slice().sort((a,b)=>a-b);
-  const mid = Math.floor(sorted.length/2);
-  const median = sorted.length % 2 === 0 ? (sorted[mid-1]+sorted[mid])/2 : sorted[mid];
-  let bestIdx = 0; let bestVal = -Infinity;
-  vals.forEach((v,i)=>{ if (v>bestVal){ bestVal=v; bestIdx=i; } });
 
-  bestMonthEl.innerText = monthly[bestIdx]?.month || '—';
-  bestValEl.innerText = fmtKes(bestVal);
-  avgEl.innerText = fmtKes(avg);
-  totEl.innerText = fmtKes(sum);
-  medEl.innerText = fmtKes(median);
-}
-
-function renderDaily(daily){
-  const ctx = document.getElementById('dailyChart').getContext('2d');
-  const labels = daily.map(d=>d.day);
-  const totals = daily.map(d=>Number(d.total||0));
-  if (dailyChart) dailyChart.destroy();
-  dailyChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets:[{ label:'Daily', data: totals, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.14)', fill:true, tension:.35 }]},
-    options: { 
-      plugins: { tooltip: { callbacks: { label: (ctx)=> `${ctx.dataset.label}: ${fmtKes(ctx.parsed.y)}` } } },
-      scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>`KES ${v.toLocaleString()}` } } } 
-    }
-  });
-}
-
-function renderMethods(rows){
-  const ctx = document.getElementById('methodChart').getContext('2d');
-  const labels = rows.map(r=>r.method || 'Other');
-  const totals = rows.map(r=>Number(r.total||0));
-  if (methodChart) methodChart.destroy();
-  methodChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels, datasets:[{ data: totals, backgroundColor:['#60a5fa','#34d399','#fbbf24','#f472b6','#93c5fd','#a7f3d0'] }] },
-    options: { plugins: { legend: { position:'bottom' }, tooltip: { callbacks: { label: (ctx)=> `${ctx.label}: ${fmtKes(ctx.parsed)}` }}}} 
-  });
-}
-
-function renderClassPerformance(rows){
-  const ctx = document.getElementById('classChart').getContext('2d');
-  const labels = rows.map(r=>r.class_name||'-');
-  const perc = rows.map(r=>Number(r.percent_paid||0));
-  if (classChart) classChart.destroy();
-  classChart = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets:[{ label:'% Paid', data: perc, backgroundColor:'#f59e0b', borderRadius:6 }]},
-    options: { 
-      indexAxis:'y', 
-      scales:{ x:{ suggestedMax: 100, ticks:{ callback:v=>v+'%' } } }, 
-      plugins:{ legend:{ display:false }, tooltip: { callbacks: { label: (ctx)=> `${ctx.parsed.x}%` } } } 
-    }
-  });
-}
-
-function updateDebtors(rows){
-  const tbody = document.getElementById('debtors_tbody');
-  tbody.innerHTML = '';
-  if (!rows || rows.length === 0){ tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-3">No data</td></tr>'; return; }
-  rows.forEach(r=>{
-    tbody.innerHTML += `<tr class="border-b last:border-0">
-      <td class="py-2 px-3 font-medium">${r.name}</td>
-      <td class="py-2 px-3">${r.class_name||'-'}</td>
-      <td class="py-2 px-3 text-right text-rose-600 font-semibold">${fmtKes(r.balance)}</td>
-    </tr>`
-  });
-}
-
-async function refreshSummary(){
-  const res = await fetch('/api/dashboard_data');
-  const s = await res.json();
-  document.getElementById('kpi_students').innerText = s.total_students?.toLocaleString();
-  document.getElementById('kpi_collected').innerText = fmtKes(s.total_collected);
-  document.getElementById('kpi_pending').innerText = fmtKes(s.total_balance);
-  document.getElementById('kpi_credit').innerText = fmtKes(s.total_credit);
-  if (window.fitKpis) window.fitKpis();
-  const collectionRate = (s.total_collected + s.total_balance) > 0 ? Math.round((s.total_collected/(s.total_collected+s.total_balance))*100) : 0;
-  document.getElementById('kpi_collection_rate').innerText = collectionRate + '%';
-  return s;
-}
-
-async function updateAnalytics(){
-  try {
-    const [s, resp] = await Promise.all([
-      refreshSummary(),
-      fetch('/api/analytics_data')
-    ]);
-    const data = await resp.json();
-
-    // KPIs derived
-    const arpu = s.total_students > 0 ? (s.total_collected / s.total_students) : 0;
-    document.getElementById('kpi_arpu').innerText = fmtKes(arpu.toFixed(0));
-    document.getElementById('kpi_classes').innerText = data.meta?.active_classes ?? '—';
-    if (window.fitKpis) window.fitKpis();
-
-    // MoM label
-    const mom = data.mom || { percent_change: 0 };
-    const momEl = document.getElementById('kpi_mom');
-    momEl.innerText = (mom.percent_change>=0? '▲ ':'▼ ') + Math.abs(mom.percent_change).toLocaleString() + '%';
-    momEl.className = 'font-medium ' + (mom.percent_change>=0? 'text-emerald-600':'text-rose-600');
-
-    // Charts
-    renderMonthlyChart(data.monthly_data || []);
-    updateCollectionOverview(data.monthly_data || []);
-    renderPaidPending(Number(s.total_collected||0), Number(s.total_balance||0));
-    renderDaily(data.daily_trend || []);
-    renderMethods(data.method_breakdown || []);
-    renderClassPerformance(data.class_summary || []);
-    updateDebtors(data.top_debtors || []);
-
-    document.getElementById('lastUpdated').innerText = nowString();
-  } catch (e){
-    console.error('Analytics update failed', e);
+  function buildBarChart(canvasId, labels, data) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Collected',
+          data,
+          backgroundColor: '#2563eb',
+          borderRadius: 8,
+          maxBarThickness: 30,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+          y: { grid: { color: '#e5e7eb' }, beginAtZero: true, ticks: { color: '#6b7280' } },
+        },
+      },
+    });
   }
-}
 
-// Wire up timeframe (placeholder UI)
-document.getElementById('timeframe').addEventListener('change', ()=>{
-  // For future: can pass query params to backend to filter
-  updateAnalytics();
-});
+  function buildPieChart(canvasId, labels, data, colors) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'pie',
+      data: { labels, datasets: [{ data, backgroundColor: colors }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+      },
+    });
+  }
 
-// Export CSV (re-uses existing payments export)
-document.getElementById('exportCsv').addEventListener('click', ()=>{ window.location.href = '/export_payments'; });
+  function buildDoughnutChart(canvasId, cleared, pending) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Cleared', 'Pending'],
+        datasets: [{ data: [cleared, pending], backgroundColor: ['#22c55e', '#f97316'] }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: { legend: { position: 'bottom' } },
+      },
+    });
+  }
 
-setInterval(updateAnalytics, 15000);
-document.addEventListener('DOMContentLoaded', updateAnalytics);
-</script>
-
-<script>
-// Post-process UI text to remove any mojibake remnants
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-    const momEl = document.getElementById('kpi_mom');
-    if (momEl) {
-      const num = parseFloat(momEl.innerText.replace(/[^0-9\.-]/g,''));
-      const signUp = !isNaN(num) && num >= 0;
-      momEl.innerText = `${signUp ? '↑' : '↓'} ${Math.abs(num || 0).toLocaleString()}%`;
+  function populateRecentPayments() {
+    const body = document.getElementById('recentPaymentsBody');
+    if (!body) return;
+    if (!recentPayments.length) {
+      body.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-center text-sm text-gray-400">No payments yet.</td></tr>';
+      return;
     }
-  } catch (e) {}
-  try {
-    const kc = document.getElementById('kpi_classes');
-    if (kc && (kc.innerText.trim() === '' || kc.innerText.includes('?'))) kc.innerText = '-';
-  } catch (e) {}
-  try {
-    const lu = document.getElementById('lastUpdated');
-    if (lu && (lu.innerText.trim() === '' || lu.innerText.includes('?'))) lu.innerText = '-';
-  } catch (e) {}
-});
+    body.innerHTML = recentPayments.map(payment => {
+      const dateValue = new Date(payment.date);
+      const readableDate = Number.isNaN(dateValue)
+        ? payment.date
+        : dateFormatter.format(dateValue);
+      return `
+        <tr class="border-b border-gray-100">
+          <td class="px-4 py-3 font-medium text-gray-900">${payment.student}</td>
+          <td class="px-4 py-3 text-gray-700">${payment.class_name}</td>
+          <td class="px-4 py-3 text-gray-700">KES ${safeNumber(payment.amount).toLocaleString()}</td>
+          <td class="px-4 py-3 text-gray-600">${payment.method}</td>
+          <td class="px-4 py-3 text-gray-500">${readableDate}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const weeklyLabels = weeklyTrend.map(row => dateFormatter.format(new Date(row.day)));
+    const weeklyTotals = weeklyTrend.map(row => safeNumber(row.total));
+    buildLineChart('weeklyRevenueChart', weeklyLabels, weeklyTotals, 'Daily collections', '#2563eb');
+
+    const classLabels = classSummary.map(row => row.class_name || 'Class');
+    const classTotals = classSummary.map(row => safeNumber(row.total_paid));
+    buildBarChart('classCollectionChart', classLabels, classTotals);
+
+    const methodLabels = methodBreakdown.map(row => row.method || 'Method');
+    const methodTotals = methodBreakdown.map(row => safeNumber(row.total));
+    buildPieChart('paymentMethodChart', methodLabels, methodTotals, palette);
+
+    buildDoughnutChart('feeClearanceChart', safeNumber(totals.collected), safeNumber(totals.pending));
+
+    const monthlyLabels = monthlyTrend.map(row => row.month ? row.month.replace('-', ' ') : '');
+    const monthlyTotals = monthlyTrend.map(row => safeNumber(row.total));
+    buildLineChart('monthlyTrendChart', monthlyLabels, monthlyTotals, 'Revenue trend', '#10b981');
+
+    const paymentsClassLabels = classSummary.map(row => row.class_name || 'Class');
+    const paymentsClassTotals = classSummary.map(row => safeNumber(row.total_paid));
+    buildBarChart('paymentsPerClassChart', paymentsClassLabels, paymentsClassTotals);
+
+    populateRecentPayments();
+  });
 </script>
 
 {% endblock %}

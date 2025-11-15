@@ -11,7 +11,7 @@
     <h1 class="text-3xl font-extrabold tracking-tight text-slate-800">404 - Page Not Found</h1>
     <p class="mt-2 text-sm text-slate-600">Oops! The page you're looking for doesn’t exist or was moved.</p>
     <div class="mt-6">
-      <a href="{{ url_for('index') }}" class="btn-brand inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
+      <a href="{{ url_for('index') }}" class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
         <i data-lucide="arrow-left"></i>
         Back to Dashboard
       </a>
@@ -20,4 +20,3 @@
   <p class="mt-6 text-xs text-slate-500">If this keeps happening, contact support: <a class="underline" href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}">WhatsApp</a></p>
 </section>
 {% endblock %}
-

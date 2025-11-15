@@ -31,12 +31,13 @@
   <script>
     function doPrint() { window.print(); }
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <div class="invoice">
     <div class="top">
       <div>
-        <div class="brand">{{ SCHOOL_NAME or BRAND_NAME or 'Invoice' }}</div>
+        <div class="brand"><img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="Logo" style="height:36px;width:36px;border-radius:8px;vertical-align:middle;margin-right:8px;" onerror="this.style.display='none'" />{{ SCHOOL_NAME or BRAND_NAME or 'Invoice' }}</div>
         <div class="sub">
           {% if SCHOOL_ADDRESS %}{{ SCHOOL_ADDRESS }}{% endif %}
           {% if SCHOOL_PHONE %}{% if SCHOOL_ADDRESS %} • {% endif %}{{ SCHOOL_PHONE }}{% endif %}
@@ -90,6 +91,22 @@
         </tr>
       </tfoot>
     </table>
+
+    {% if auth_qr_data %}
+    <div class="divider"></div>
+    <div style="text-align:center;">
+      <div style="font-size:12px; color:#6b7280; margin-bottom:6px;">Invoice authenticity QR (signed)</div>
+      <div style="display:inline-block; padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#fafafa;">
+        <div id="qr-invoice"></div>
+      </div>
+    </div>
+    <script>
+      try {
+        var q = {{ auth_qr_data|tojson }};
+        new QRCode(document.getElementById('qr-invoice'), { text: q, width: 220, height: 220 });
+      } catch (e) {}
+    </script>
+    {% endif %}
 
     {% if SCHOOL_WEBSITE %}
     <div class="divider"></div>

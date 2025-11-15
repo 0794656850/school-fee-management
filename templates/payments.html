@@ -76,19 +76,23 @@
         <label class="block text-sm font-medium text-gray-700 mb-2">Method</label>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" id="method_segment">
           {% set methods = [
-            ('Cash', 'dollar-sign', 'from-amber-500 to-yellow-500'),
-            ('M-Pesa', 'smartphone', 'from-emerald-500 to-teal-500'),
-            ('Bank Transfer', 'banknote', 'from-indigo-500 to-blue-500'),
-            ('Cheque', 'receipt', 'from-cyan-500 to-sky-500'),
+            {'label': 'Cash', 'icon': 'coins', 'grad': 'from-amber-500 to-yellow-500'},
+            {'label': 'M-Pesa', 'icon': 'smartphone', 'grad': 'from-emerald-500 to-teal-500', 'asset': 'images/mpesa_logo.svg'},
+            {'label': 'Bank Transfer', 'icon': 'bank', 'grad': 'from-indigo-500 to-blue-500'},
+            {'label': 'Cheque', 'icon': 'receipt', 'grad': 'from-cyan-500 to-sky-500'},
           ] %}
-          {% for label, icon, grad in methods %}
-          <button type="button" data-value="{{ label }}"
+          {% for method in methods %}
+          <button type="button" data-value="{{ method.label }}"
                   class="seg-btn group w-full rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 transition p-2.5 flex items-center justify-center gap-2">
             <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-white shadow"
                   style="background-image: linear-gradient(135deg, var(--brand-grad-from), var(--brand-grad-to))">
-              <i data-lucide="{{ icon }}" class="w-4 h-4"></i>
+              {% if method.asset %}
+                <img src="{{ url_for('static', filename=method.asset) }}" alt="{{ method.label }} logo" class="h-4 w-auto" />
+              {% else %}
+                <i data-lucide="{{ method.icon }}" class="w-4 h-4"></i>
+              {% endif %}
             </span>
-            <span class="text-sm text-gray-700 font-medium">{{ label }}</span>
+            <span class="text-sm text-gray-700 font-medium">{{ method.label }}</span>
           </button>
           {% endfor %}
         </div>
@@ -114,7 +118,7 @@
       <!-- Buttons -->
       <div class="flex items-center justify-end gap-3 pt-2">
         <button type="reset" class="px-4 py-2 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition">Clear</button>
-        <button type="submit" class="px-5 py-2.5 rounded-xl text-white text-sm font-semibold btn-brand shadow-md">
+        <button type="submit" class="px-5 py-2.5 rounded-xl text-white text-sm font-semibold btn-primary shadow-md">
           <span class="inline-flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4"></i> Save Payment</span>
         </button>
       </div>
@@ -145,8 +149,9 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="min-w-full border border-gray-200 text-sm rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        {% set method_icons = {'Cash': 'coins', 'Bank Transfer': 'bank', 'Cheque': 'receipt'} %}
+        <table class="min-w-full border border-gray-200 text-sm rounded-xl overflow-hidden">
         <thead class="bg-gray-50 sticky top-0">
           <tr>
             <th class="px-4 py-2 text-left font-medium text-gray-700 border-b">#</th>
@@ -177,7 +182,12 @@
             </td>
             <td class="px-4 py-2 border-b">
               <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border {{ badge }}">
-                <i data-lucide="dollar-sign" class="w-3.5 h-3.5"></i>{{ method }}
+                {% if method == 'M-Pesa' %}
+                  <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="M-Pesa" class="h-4 w-auto" />
+                {% else %}
+                  <i data-lucide="{{ method_icons.get(method, 'credit-card') }}" class="w-3.5 h-3.5"></i>
+                {% endif %}
+                {{ method }}
               </span>
             </td>
             <td class="px-4 py-2 border-b text-gray-600">
@@ -200,6 +210,12 @@
                 <i data-lucide="download" class="w-4 h-4"></i>
                 Download PDF
               </a>
+              <form method="post" action="{{ url_for('delete_payment', payment_id=p.id) }}" class="inline ml-3">
+                <button type="submit" class="inline-flex items-center gap-1 text-red-600 hover:underline text-xs" onclick="return confirm('Delete this payment?');">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  Delete
+                </button>
+              </form>
             </td>
           </tr>
           {% else %}
@@ -334,6 +350,41 @@ document.addEventListener("DOMContentLoaded", () => {
     const rows = tableBody?.querySelectorAll('tr') || [];
     rows.forEach(row => row.style.display = '');
   });
+
+  // Subtle toast for portal payments
+  const toast = document.createElement('div');
+  toast.style.position = 'fixed';
+  toast.style.right = '16px';
+  toast.style.bottom = '16px';
+  toast.style.zIndex = '50';
+  toast.style.display = 'none';
+  toast.innerHTML = '<div id="portalToast" class="px-4 py-2 rounded-lg shadow-md border border-emerald-200 bg-white text-sm text-emerald-700">New portal payment recorded.</div>';
+  document.body.appendChild(toast);
+
+  function showPortalToast(text){
+    const el = document.getElementById('portalToast');
+    if(!el) return;
+    el.textContent = text || 'New portal payment recorded.';
+    toast.style.display = 'block';
+    setTimeout(()=>{ toast.style.display = 'none'; }, 4000);
+  }
+
+  async function pollPortal(){
+    try{
+      const r = await fetch('/portal/latest');
+      const j = await r.json();
+      if(j && j.ok && j.found && j.updated_at){
+        const key = 'portal_latest_seen';
+        const prev = localStorage.getItem(key) || '';
+        if(j.updated_at > prev){
+          localStorage.setItem(key, j.updated_at);
+          showPortalToast('Portal payment posted. Refresh to see it.');
+        }
+      }
+    }catch(_){ }
+    setTimeout(pollPortal, 15000);
+  }
+  setTimeout(pollPortal, 8000);
 });
 </script>
 

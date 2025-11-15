@@ -8,9 +8,19 @@ from flask import current_app
 import os
 import subprocess
 from pathlib import Path
+from utils.pro import is_pro_enabled
 
 def daily_job(app):
     with app.app_context():
+        # Skip sending reminders entirely when in FREE mode (no Pro license)
+        try:
+            if not is_pro_enabled(current_app):
+                print("[scheduler] Skipping reminders: Pro not enabled (FREE mode).")
+                return
+        except Exception:
+            # If detection fails, be conservative and skip to avoid sending in FREE mode
+            print("[scheduler] Skipping reminders: unable to determine plan (treat as FREE).")
+            return
         days = current_app.config.get('REMINDER_DAYS', 3)
         today = date.today()
         threshold = today + timedelta(days=days)

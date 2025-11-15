@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Student Portal - {{ student.name }}{% endblock %}
+{% block page_title %}Student Portal{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800">{{ student.name }}</h3>
+          <div class="text-sm text-gray-500">Adm No: {{ student.regNo or student.admission_no or 'N/A' }} • Class: {{ student.class_name or 'N/A' }}</div>
+          {% if student.phone %}<div class="text-sm text-gray-500">Phone: {{ student.phone }}</div>{% endif %}
+        </div>
+        <div class="text-right">
+          <div class="text-sm text-gray-600">Current Balance</div>
+          <div class="text-2xl font-semibold text-red-600">KES {{ "{:,.2f}".format(student.balance or 0) }}</div>
+          <div class="text-xs text-gray-500">Year {{ year }}, Term {{ term }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="wallet"></i> Pay via M‑Pesa</h4>
+      <div id="pay_status" class="hidden mb-3 text-sm"></div>
+      <form id="pay_form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm text-gray-700 mb-1">Phone</label>
+          <input type="tel" id="phone" class="w-full border border-gray-300 rounded-xl p-2.5 text-sm" placeholder="07xx xxx xxx" required>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-700 mb-1">Amount (KES)</label>
+          <input type="number" id="amount" min="1" step="1" class="w-full border border-gray-300 rounded-xl p-2.5 text-sm" required>
+        </div>
+        <div class="flex items-end">
+          <button class="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+            <i data-lucide="send"></i> Send STK
+          </button>
+        </div>
+      </form>
+      <div class="text-xs text-gray-500 mt-2">You will receive a prompt on your phone to authorize the payment.</div>
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="receipt"></i> Payment History</h4>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-2 text-left">Date</th>
+              <th class="px-4 py-2 text-left">Amount</th>
+              <th class="px-4 py-2 text-left">Method</th>
+              <th class="px-4 py-2 text-left">Reference</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for p in payments %}
+            <tr class="border-b last:border-0">
+              <td class="px-4 py-2">{{ p.date.strftime('%Y-%m-%d') if p.date and p.date.__class__.__name__ != 'str' else (p.date or '') }}</td>
+              <td class="px-4 py-2 text-green-600 font-medium">{{ "{:,.2f}".format(p.amount or 0) }}</td>
+              <td class="px-4 py-2">{{ p.method }}</td>
+              <td class="px-4 py-2">{{ p.reference or '' }}</td>
+              <td class="px-4 py-2 text-right">
+                <a href="{{ url_for('payment_receipt', payment_id=p.id) }}" target="_blank" class="text-indigo-600 hover:underline">View Receipt</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="px-4 py-3 text-center text-gray-500">No payments yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-2">Downloads</h4>
+      <div class="space-y-2 text-sm">
+        {% if invoice_id %}
+          <a class="block px-3 py-2 rounded-lg border hover:bg-gray-50" href="{{ url_for('terms.invoice_view', invoice_id=invoice_id) }}" target="_blank">Current Term Invoice</a>
+        {% else %}
+          <div class="px-3 py-2 rounded-lg border bg-gray-50 text-gray-500">Invoice not available</div>
+        {% endif %}
+        <a class="block px-3 py-2 rounded-lg border hover:bg-gray-50" href="{{ url_for('export_payments') }}">Download Payments CSV</a>
+        <a class="block px-3 py-2 rounded-lg border hover:bg-gray-50" href="{{ url_for('student_portal.statement_pdf', token=token) }}">Download Statement (PDF)</a>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2"><i data-lucide="mail"></i> Contact School</h4>
+      <p class="text-xs text-gray-500 mb-3">Have a question? Send a message to the school accounts office.</p>
+      <form id="contact_form" class="space-y-3">
+        <input type="hidden" name="token" value="{{ token }}">
+        <div class="grid grid-cols-1 gap-3">
+          <input class="border border-gray-300 rounded-xl p-2 text-sm" name="name" placeholder="Your Name (optional)">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input class="border border-gray-300 rounded-xl p-2 text-sm" name="email" placeholder="Email (optional)">
+            <input class="border border-gray-300 rounded-xl p-2 text-sm" name="phone" placeholder="Phone (optional)">
+          </div>
+          <select name="category" class="border border-gray-300 rounded-xl p-2 text-sm">
+            <option value="Billing">Billing</option>
+            <option value="Receipt">Receipt</option>
+            <option value="Account">Account</option>
+            <option value="General" selected>General</option>
+          </select>
+          <input class="border border-gray-300 rounded-xl p-2 text-sm" name="subject" placeholder="Subject (optional)">
+          <textarea class="border border-gray-300 rounded-xl p-2 text-sm" name="message" placeholder="Write your message..." required rows="4"></textarea>
+        </div>
+        <button class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"><i data-lucide="send"></i> Send</button>
+        <div id="contact_status" class="text-xs mt-2 hidden"></div>
+      </form>
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-2">Share Link</h4>
+      <div class="text-xs text-gray-500 mb-2">Use this link to access the portal again.</div>
+      <input type="text" readonly class="w-full border border-gray-300 rounded-xl p-2 text-sm" value="{{ request.url }}">
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+      <h4 class="text-lg font-semibold text-gray-800 mb-2">Account</h4>
+      <a class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm" href="{{ url_for('student_auth.change_password') }}">
+        <i data-lucide=\"lock\"></i> Change Password
+      </a>
+    </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  try { lucide.createIcons(); } catch(e){}
+  const form = document.getElementById('pay_form');
+  const status = document.getElementById('pay_status');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    status.className = 'mb-3 text-sm text-gray-700';
+    status.textContent = 'Sending STK push...';
+    status.classList.remove('hidden');
+    try {
+      const res = await fetch('{{ url_for('student_portal.initiate') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: '{{ token }}', phone: document.getElementById('phone').value, amount: document.getElementById('amount').value })
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        status.className = 'mb-3 text-sm text-emerald-700';
+        status.textContent = data.message || 'STK sent.';
+        if (data.checkout_request_id) {
+          // Start polling for callback success and auto-recording
+          const checkoutId = data.checkout_request_id;
+          let tries = 0;
+          const poll = async () => {
+            tries += 1;
+            try {
+              const u = new URL('{{ url_for('student_portal.status') }}', window.location.origin);
+              u.searchParams.set('token', '{{ token }}');
+              u.searchParams.set('checkout_request_id', checkoutId);
+              const r = await fetch(u);
+              const d = await r.json();
+              if (r.ok && d.ok && d.result_code !== null && d.result_code !== undefined) {
+                if (String(d.result_code) === '0') {
+                  status.className = 'mb-3 text-sm text-emerald-700';
+                  status.textContent = 'Payment successful' + (d.recorded ? ' and recorded.' : '.');
+                  if (d.recorded) {
+                    // Reload to update history and balance
+                    setTimeout(() => window.location.reload(), 1500);
+                  }
+                  return;
+                } else {
+                  status.className = 'mb-3 text-sm text-red-700';
+                  status.textContent = d.result_desc || 'Payment failed.';
+                  return;
+                }
+              }
+            } catch (_) {}
+            if (tries < 30) setTimeout(poll, 4000);
+          };
+          setTimeout(poll, 4000);
+        }
+      } else {
+        throw new Error(data.error || 'Failed to send STK');
+      }
+    } catch (err) {
+      status.className = 'mb-3 text-sm text-red-700';
+      status.textContent = err.message;
+    }
+  });
+});
+</script>
+
+<script>
+// Contact form send
+document.addEventListener('DOMContentLoaded', () => {
+  const cform = document.getElementById('contact_form');
+  const cstatus = document.getElementById('contact_status');
+  if (!cform) return;
+  cform.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(cform);
+    const payload = Object.fromEntries(fd.entries());
+    cstatus.className='text-xs mt-2 text-gray-600';
+    cstatus.textContent='Sending...'; cstatus.classList.remove('hidden');
+    try {
+      const res = await fetch('{{ url_for('student_portal.contact_school') }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        cstatus.className='text-xs mt-2 text-emerald-700';
+        cstatus.textContent=data.message || 'Message sent.';
+        cform.reset();
+      } else {
+        throw new Error(data.error || 'Failed to send');
+      }
+    } catch (err) {
+      cstatus.className='text-xs mt-2 text-red-700';
+      cstatus.textContent=err.message;
+    }
+  });
+});
+</script>
+
+{% endblock %}
+

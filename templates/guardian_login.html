@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parent / Guardian Login - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <script>window.__flash__ = {{ messages|tojson }};</script>
+  {% endif %}
+  {% endwith %}
+ </head>
+ <body class="bg-white min-h-screen text-[var(--text)]">
+  <!-- Floating back button -->
+  <button id="backBtn" class="fixed top-3 left-3 z-40 p-2 rounded-full nav-button" title="Back">
+    <i data-lucide="arrow-left"></i>
+  </button>
+  <header class="bg-white">
+    <div class="brand-hero">
+      <div class="brand-hero__row">
+        <div class="app-badge">
+          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+        </div>
+        <div>
+          <div class="brand-title text-3xl md:text-4xl">{{ BRAND_NAME }}</div>
+          <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="text-center pb-4">
+      <a href="{{ url_for('auth.entry') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline">
+        <i data-lucide="grid"></i>
+        <span>All Login Options</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 pb-10">
+    <div id="flash" class="mb-4"></div>
+    <div class="glass rounded-2xl p-6 md:p-8 border border-gray-100">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-blue-600/90 text-white grid place-items-center"><i data-lucide="user-round"></i></div>
+        <h2 class="text-xl font-semibold">Student / Guardian Login</h2>
+      </div>
+      <p class="text-sm text-gray-500 mb-4">Please log in securely to access your fee details, receipts, and payments.</p>
+      <form method="post" class="space-y-4" id="pgForm" autocomplete="on">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Student Full Name</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="users"></i></span>
+            <input id="student_full_name" name="student_full_name" placeholder="e.g., Akillius Vincent" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Admission Number</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="key-round"></i></span>
+            <input id="admission_no" name="admission_no" type="password" placeholder="Enter your official Admission No." class="w-full mt-1 pl-9 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+            <button type="button" id="toggleAdm" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-600" title="Show/Hide"><i data-lucide="eye"></i></button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">School Name</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="school"></i></span>
+            <input id="school" name="school" placeholder="Enter your school name" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-lg w-full rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="arrow-right"></i> Login Now</button>
+        <div class="flex items-center justify-between text-xs text-gray-600">
+          <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-4 h-4"></i> Secure: We only use your Admission No. to verify your identity.</span>
+        </div>
+      </form>
+    </div>
+
+    <div class="text-center mt-6 text-sm">
+      <div class="text-gray-600">Trusted by schools. Loved by parents.</div>
+      <div class="text-gray-500">Powered by <span class="font-semibold text-indigo-700">Lovato_Tech</span> | Smart School Solutions</div>
+      <div class="mt-1 text-xs text-gray-400">Education made simpler — one login away.</div>
+    </div>
+  </main>
+
+  <script>
+    lucide.createIcons();
+    // Back button: prefer history, fallback to Admin Login
+    (function(){
+      const btn = document.getElementById('backBtn');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        try {
+          const ref = document.referrer || '';
+          const same = ref && new URL(ref).origin === window.location.origin;
+          if (same) { history.back(); return; }
+        } catch(_) {}
+        window.location.assign('{{ url_for('auth.login') }}');
+      });
+    })();
+    // Render flashes
+    (function(){
+      const flash = window.__flash__ || [];
+      const box = document.getElementById('flash');
+      if (!flash.length || !box) return;
+      for (const [cat, msg] of flash) {
+        const d = document.createElement('div');
+        d.className = 'mb-2 px-3 py-2 rounded-xl text-sm ' + (cat==='success'?'bg-emerald-50 text-emerald-700 border border-emerald-200':(cat==='error'?'bg-rose-50 text-rose-700 border border-rose-200':'bg-amber-50 text-amber-700 border border-amber-200'));
+        d.textContent = msg; box.appendChild(d);
+      }
+    })();
+
+    // Show/hide admission number
+    (function(){
+      const a = document.getElementById('admission_no');
+      const t = document.getElementById('toggleAdm');
+      if (!a || !t) return;
+      t.addEventListener('click', () => {
+        const typ = a.getAttribute('type') === 'password' ? 'text' : 'password';
+        a.setAttribute('type', typ);
+        t.innerHTML = '';
+        const i=document.createElement('i'); i.setAttribute('data-lucide', typ==='password' ? 'eye' : 'eye-off'); t.appendChild(i); lucide.createIcons();
+      });
+    })();
+
+    // Remember fields locally
+    (function(){
+      try{
+        const s = document.getElementById('school');
+        const a = document.getElementById('admission_no');
+        const n = document.getElementById('student_full_name');
+        const lastSchool = localStorage.getItem('pg_last_school');
+        const lastAdm = localStorage.getItem('pg_last_adm');
+        const lastName = localStorage.getItem('pg_last_name');
+        if (lastSchool) s.value = lastSchool; if (lastAdm) a.value = lastAdm; if (lastName) n.value = lastName;
+        s.addEventListener('change', ()=> localStorage.setItem('pg_last_school', s.value||''));
+        a.addEventListener('change', ()=> localStorage.setItem('pg_last_adm', a.value||''));
+        n.addEventListener('change', ()=> localStorage.setItem('pg_last_name', n.value||''));
+      }catch(_){ }
+    })();
+
+    // Deep link to student password login with prefill
+    (function(){
+      const btn = document.getElementById('toStudentPwd');
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        const s = document.getElementById('school')?.value || '';
+        const r = document.getElementById('admission_no')?.value || '';
+        if (!s && !r) return; // normal navigation
+        e.preventDefault();
+        const u = new URL(btn.getAttribute('href') || '#', window.location.origin);
+        if (s) u.searchParams.set('school', s);
+        if (r) u.searchParams.set('regNo', r);
+        window.location.assign(u.toString());
+      });
+    })();
+  </script>
+</body>
+</html>

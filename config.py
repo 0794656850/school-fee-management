@@ -6,6 +6,7 @@ except Exception:
     # If python-dotenv isn't installed, continue; env vars can still come from OS
     pass
 
+
 class Config:
     # --------------------------
     # 🔹 Flask Configuration
@@ -18,6 +19,10 @@ class Config:
     SESSION_COOKIE_SECURE = (os.environ.get("SESSION_COOKIE_SECURE", "1").lower() not in ("0", "false", "no"))
     PERMANENT_SESSION_LIFETIME = int(os.environ.get("SESSION_LIFETIME_SECONDS", "1209600"))  # 14 days
     PREFERRED_URL_SCHEME = os.environ.get("PREFERRED_URL_SCHEME", "https" if SESSION_COOKIE_SECURE else "http")
+    # Enforce HTTPS redirects (bypass on localhost). Recommended in production.
+    ENFORCE_HTTPS = (os.environ.get("ENFORCE_HTTPS", "1").lower() not in ("0", "false", "no"))
+    # Trust X-Forwarded-* headers when running behind a reverse proxy (nginx/caddy/traefik)
+    TRUST_PROXY = (os.environ.get("TRUST_PROXY", "1").lower() not in ("0", "false", "no"))
 
     # --------------------------
     # 🔹 MySQL Database (SQLAlchemy)
@@ -69,11 +74,9 @@ class Config:
     SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "+254794656850")
 
     # --------------------------
-    # Monetization / Billing
+    # Licensing & billing helpers
     # --------------------------
-    # Simple license toggle; set via env for now. Advanced checks in utils.pro
     LICENSE_KEY = os.environ.get("LICENSE_KEY", "")
-    PRO_ENABLED = bool(os.environ.get("PRO_ENABLED", "").strip() or LICENSE_KEY)
     BILLING_UPGRADE_URL = os.environ.get("BILLING_UPGRADE_URL", "https://buy.stripe.com/test_4gw6qk9Wg3oG3qYcMM")
 
     # --------------------------
@@ -82,6 +85,14 @@ class Config:
     # If set, we render a QR code on receipts pointing to this payment link.
     # Example: a PayBill/Bank/M-Pesa/UPI checkout page you control.
     PAYMENT_LINK = os.environ.get("PAYMENT_LINK", "")
+
+    # --------------------------
+    # PayPal (Guardian Portal)
+    # --------------------------
+    PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
+    PAYPAL_SECRET = os.environ.get("PAYPAL_SECRET", "")
+    PAYPAL_ENV = os.environ.get("PAYPAL_ENV", "sandbox")  # sandbox or live
+    PAYPAL_CURRENCY = os.environ.get("PAYPAL_CURRENCY", "USD")  # e.g., KES, USD
 
     # --------------------------
     # M-Pesa Daraja (STK Push)

@@ -1,11 +1,14 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
+        
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}{{ APP_TITLE }}{% endblock %}</title>
   <meta name="theme-color" content="{{ BRAND_COLOR or '#2563eb' }}" />
   <link rel="manifest" href="/static/manifest.webmanifest" />
+
+  
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,108 +24,13 @@
 
   
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
-  <style>
-    /* Disable animations/transitions across the app (except login/signup pages which don't use base.html) */
-    .no-anim *, .no-anim *::before, .no-anim *::after { transition: none !important; animation: none !important; }
-    .no-anim .sidebar a:hover, .no-anim .kpi:hover, .no-anim .btn-brand:hover { transform: none !important; }
-    .no-anim .sidebar { transition: none !important; }
-    .no-anim .sidebar a { transition: none !important; }
-    /* Premium, universal theme */
-    :root {
-      /* Brand (restore original blue/purple accents) */
-      --brand-600: #2563eb; /* blue-600 */
-      --brand-700: #1d4ed8; /* blue-700 */
-      --brand-50:  #eff6ff; /* blue-50 */
-      --brand-100: #dbeafe; /* blue-100 */
-      --brand-200: #bfdbfe; /* blue-200 */
-      --brand-grad-from: #2563eb; /* blue-600 */
-      --brand-grad-to: #7c3aed;   /* violet-600 */
-      /* Accents + states */
-      --accent-500: #2563eb; /* blue-600 */
-      --success-500: #10b981; /* emerald-500 */
-      --warn-500: #f59e0b;   /* amber-500 */
-      --danger-500: #ef4444; /* red-500 */
-      /* Surfaces + text */
-      --bg-app: #ffffff;
-      --surface: rgba(255,255,255,0.88);
-      --surface-strong: rgba(255,255,255,0.95);
-      --text: #0f172a; /* slate-900 */
-      --text-muted: #475569; /* slate-600 */
-      --border: #e2e8f0; /* slate-200 */
-      --ring: rgba(37,99,235,.35); /* blue ring */
-    }
-    /* Dark theme */
-    [data-theme='dark'] {
-      --bg-app: #0b1220;
-      --surface: rgba(17,24,39,0.9);
-      --surface-strong: rgba(17,24,39,0.95);
-      --text: #e5e7eb;
-      --text-muted: #9ca3af;
-      --border: #1f2937;
-      --ring: rgba(20,184,166,.35);
-    }
-
-    /* Moved styles to static/css/theme.css */
-
-    
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg-app);
-      color: var(--text);
-      overflow: hidden;
-      --tw-ring-color: var(--ring);
-    }
-
-    /* Global surface helpers */
-    main > section { background: #ffffff; }
-
-    .sidebar {
-      background-color: #ffffff;
-      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.05);
-      transition: all 0.3s ease;
-      border-right: 1px solid var(--border);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .sidebar a { color: var(--text-muted); transition: all 0.25s ease; }
-    .sidebar a:hover { transform: translateX(4px); background: rgba(79,70,229,.08); }
-
-    /* Hide any legacy brand text in anchor group */
-    .sidebar a.group h1:first-of-type { display: none; }
-
-    .active-link {
-      background: linear-gradient(90deg, rgba(37,99,235,.12), rgba(79,70,229,.10));
-      color: var(--brand-700);
-      font-weight: 600;
-      border: 1px solid rgba(37,99,235,.18);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
-    }
-
-    main { background: #ffffff; }
-    
-
-    header {
-      background-color: #ffffff;
-      border-bottom: 1px solid var(--border);
-    }
-    
-
-    .nav-button:hover { background-color: rgba(15,23,42,.06); }
-
-    /* Icon color inherits current color; nudge default */
-    i[data-lucide] { color: var(--text-muted); }
-
-    /* KPI cards */
-  </style>
 
   <!-- App Icon / Favicon -->
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename=FAVICON) }}">
 </head>
 
-<body class="flex h-screen overflow-hidden no-anim" data-plan="{{ (plan_status.plan_code if plan_status else 'FREE') }}">
+<body class="flex h-screen overflow-hidden no-anim" data-plan="PRO">
   <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-white focus:border focus:border-gray-200 focus:shadow">Skip to content</a>
 
   <!-- Sidebar -->
@@ -148,92 +56,84 @@
       </button>
     </div>
 
-    <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-      <a href="{{ url_for('dashboard') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if request.path == '/' %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="home"></i> <span>Dashboard</span>
-      </a>
+    <nav class="flex-1 px-4 py-6 space-y-4 overflow-y-auto">
+      <div class="nav-section">
+        <p class="nav-section__label">Core</p>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path == '/' %}active-link{% endif %}">
+          <i data-lucide="home"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{{ url_for('students') }}" class="nav-link {% if '/students' in request.path %}active-link{% endif %}">
+          <i data-lucide="users"></i>
+          <span>Students</span>
+        </a>
+        <a href="{{ url_for('payments') }}" class="nav-link {% if '/payments' in request.path %}active-link{% endif %}">
+          <i data-lucide="dollar-sign"></i>
+          <span>Add Payment</span>
+        </a>
+        <a href="{{ url_for('ai.ai_home') }}" class="nav-link {% if '/ai' in request.path %}active-link{% endif %}">
+          <i data-lucide="bot"></i>
+          <span>AI Assistant</span>
+        </a>
+      </div>
 
-      <a href="{{ url_for('students') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/students' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="users"></i> <span>Students</span>
-      </a>
+      <div class="nav-section">
+        <p class="nav-section__label">Operations</p>
+        <a href="{{ url_for('credit.credit_home') }}" class="nav-link {% if '/credit' in request.path %}active-link{% endif %}">
+          <i data-lucide="coins"></i>
+          <span>Credit Ops</span>
+        </a>
+        <a href="{{ url_for('terms.manage_terms') }}" class="nav-link {% if '/terms' in request.path %}active-link{% endif %}">
+          <i data-lucide="calendar"></i>
+          <span>Terms</span>
+        </a>
+        <a href="{{ url_for('terms.invoices_list') }}" class="nav-link {% if '/terms/invoices' in request.path %}active-link{% endif %}">
+          <i data-lucide="receipt"></i>
+          <span>Invoices</span>
+        </a>
+        <a href="{{ url_for('reminders.reminders_home') }}" class="nav-link {% if '/reminders' in request.path %}active-link{% endif %}">
+          <i data-lucide="bell"></i>
+          <span>Reminders</span>
+        </a>
+        <a href="{{ url_for('analytics_dashboard') }}" class="nav-link {% if '/analytics' in request.path %}active-link{% endif %}">
+          <i data-lucide="activity"></i>
+          <span>Analytics</span>
+        </a>
+      </div>
 
-      <a href="#" 
-         onclick="openAddPaymentModal()" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-blue-50 text-gray-700">
-        <i data-lucide="dollar-sign"></i> <span>Add Payment</span>
-      </a>
+      <div class="nav-section">
+        <p class="nav-section__label">Engagement</p>
+        <a href="{{ url_for('newsletters.index') }}" class="nav-link {% if '/newsletters' in request.path %}active-link{% endif %}">
+          <i data-lucide="megaphone"></i>
+          <span>Newsletters</span>
+        </a>
+        <a href="{{ url_for('recovery.dashboard') }}" class="nav-link {% if '/recovery' in request.path %}active-link{% endif %}">
+          <i data-lucide="phone-call"></i>
+          <span>Recovery</span>
+        </a>
+        <a href="{{ url_for('docs') }}" class="nav-link {% if '/docs' in request.path %}active-link{% endif %}">
+          <i data-lucide="book-open"></i>
+          <span>Documentation</span>
+        </a>
+      </div>
 
-      <a href="{{ url_for('analytics') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/analytics' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="bar-chart-2"></i> <span>Analytics</span>
-      </a>
-
-      <a href="{{ url_for('ai.ai_home') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/ai' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="bot"></i> <span>AI Assistant</span>
-      </a>
-
-      <!-- ✅ NEW: Reminders Page -->
-      
-
-      
-
-      <a href="{{ url_for('credit.credit_home') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/credit' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="coins"></i> <span>Credit Ops</span>
-      </a>
-
-      <a href="{{ url_for('terms.manage_terms') }}" 
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/terms' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="calendar"></i> <span>Terms</span>
-      </a>
-
-      <a href="{{ url_for('terms.invoices_list') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/terms/invoices' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="receipt"></i> <span>Invoices</span>
-      </a>
-
-      <a href="{{ url_for('reminders.reminders_home') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/reminders' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="bell"></i> <span>Reminders</span>
-      </a>
-
-      <a href="{{ url_for('newsletters.index') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/newsletters' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="megaphone"></i> <span>Newsletters</span>
-      </a>
-
-      <a href="{{ url_for('recovery.dashboard') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/recovery' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="phone-call"></i> <span>Recovery</span>
-      </a>
-
-      <a href="{{ url_for('docs') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/docs' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="book-open"></i> <span>Documentation</span>
-      </a>
-
-      <a href="{{ url_for('admin.school_profile') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/admin/school' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="building-2"></i> <span>School Profile</span>
-      </a>
-
-      <a href="{{ url_for('admin.access_settings') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if ('/admin/settings' in request.path) or ('/admin/security' in request.path) %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="shield"></i> <span>Access &amp; Security</span>
-      </a>
-
-      <a href="{{ url_for('monetization.index') }}"
-         class="flex items-center gap-3 px-4 py-2.5 rounded-lg {% if '/admin/monetization' in request.path %}active-link{% else %}hover:bg-blue-50{% endif %}">
-        <i data-lucide="briefcase"></i> <span>Monetization</span>
-      </a>
-
-      
-
-      
+      <div class="nav-section">
+        <p class="nav-section__label">Admin</p>
+        <a href="{{ url_for('admin.school_profile') }}" class="nav-link {% if '/admin/school' in request.path %}active-link{% endif %}">
+          <i data-lucide="building-2"></i>
+          <span>School Profile</span>
+        </a>
+        <a href="{{ url_for('admin.access_settings') }}" class="nav-link {% if ('/admin/settings' in request.path) or ('/admin/security' in request.path) %}active-link{% endif %}">
+          <i data-lucide="shield"></i>
+          <span>Access &amp; Security</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="nav-link {% if '/admin/audit' in request.path %}active-link{% endif %}">
+          <i data-lucide="list-check"></i>
+          <span>Audit Logs</span>
+        </a>
+      </div>
     </nav>
+
 
     <div class="p-4 border-t border-gray-100 text-center text-gray-500 text-xs">
       <p>© 2025 <span class="font-semibold text-blue-600">Fee_Management_System</span></p>
@@ -247,10 +147,10 @@
     <!-- Header -->
     <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <button onclick="neoBack()" class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back">
+        <a href="{{ url_for('students') }}" data-back class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
           <i data-lucide="arrow-left"></i>
           <span class="text-sm">Back</span>
-        </button>
+        </a>
         <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}" class="h-7 w-7 rounded-sm ring-1 ring-blue-100/60 shadow-sm"/>
         <h2 class="text-lg font-semibold text-gray-800 tracking-tight">
           {% block page_title %}{% endblock %}
@@ -271,7 +171,7 @@
         <a href="{{ url_for('reminders.reminders_home') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Reminders">
           <i data-lucide="bell"></i>
         </a>
-        <button id="themeToggle" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Toggle theme"><i data-lucide="moon"></i></button>
+        
         <a href="{{ url_for('auth.logout') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Sign out">
           <i data-lucide="log-out"></i>
         </a>
@@ -299,7 +199,7 @@
                   {% if category == 'info' %}<i data-lucide="info" class="w-4 h-4"></i>{% endif %}
                 </span>
                 <div class="flex-1 text-sm">{{ message }}</div>
-                <button class="dismiss text-gray-400 hover:text-gray-600">
+                <button type="button" class="dismiss p-1 -m-1 text-gray-400 hover:text-gray-600" aria-label="Dismiss">
                   <i data-lucide="x"></i>
                 </button>
               </div>
@@ -352,6 +252,7 @@
     (function(){
       function fitOne(el){
         if (!el) return;
+        const isWrap = el.classList.contains('fit-wrap');
         // Reset to computed size first so we can shrink predictably
         el.style.fontSize = '';
         const style = getComputedStyle(el);
@@ -361,7 +262,13 @@
         let size = max;
         // Ensure the element has a width basis
         el.style.maxWidth = '100%';
-        el.style.whiteSpace = 'nowrap';
+        el.style.whiteSpace = isWrap ? 'normal' : 'nowrap';
+        // For wrapped fit-text, we don't shrink; CSS handles clamping elegantly
+        if (isWrap) {
+          el.style.overflow = 'hidden';
+          el.style.textOverflow = 'ellipsis';
+          return;
+        }
         let guard = 0;
         // Shrink until it fits its own box
         while (el.scrollWidth > el.clientWidth && size > min && guard < 60){
@@ -415,7 +322,7 @@
         }
       } catch (e) {}
       // Fallback to Students list, else Dashboard
-      try { window.location.href = "{{ url_for('students') }}"; } catch(e) { window.location.href = "{{ url_for('dashboard') }}"; }
+      try { window.location.href = "{{ url_for('dashboard') }}"; } catch(e) { window.location.href = "{{ url_for('students') }}"; }
     }
 
     // Flash close + auto-dismiss
@@ -428,7 +335,9 @@
         container.classList.remove('mb-4');
       } catch (e) {}
       container.querySelectorAll('.dismiss').forEach(btn => {
-        btn.addEventListener('click', () => btn.closest('.flash-item')?.remove());
+        const handler = () => btn.closest('.flash-item')?.remove();
+        btn.addEventListener('click', handler);
+        btn.addEventListener('keydown', (e) => { if (e.key==='Enter' || e.key===' ') { e.preventDefault(); handler(); }});
       });
       setTimeout(() => {
         container.querySelectorAll('.flash-item').forEach(el => el.remove());
@@ -443,7 +352,7 @@
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         const replacePairs = [
           ['â€¢', ', '],
-          ['�?�', ', '],
+          ['???', ', '],
           ['•', ', ']
         ];
         let node;
@@ -487,7 +396,7 @@
           container.querySelectorAll('.flash-item').forEach(item => {
             item.childNodes.forEach(n => {
               if (n.nodeType === Node.TEXT_NODE) {
-                n.nodeValue = n.nodeValue.replace(/^�o\.\s*/, '');
+                n.nodeValue = n.nodeValue.replace(/^?o\.\s*/, '');
               }
             });
           });
@@ -519,12 +428,20 @@
       if (e.key === 'Escape') hideSearch();
     });
     let searchTimer;
+    const balanceClassName = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return "balance-value balance-neutral";
+      if (num > 0) return "balance-value balance-negative";
+      if (num < 0) return "balance-value balance-positive";
+      return "balance-value balance-neutral";
+    };
+
     function renderSearch(data) {
       if (!results) return;
       const students = (data.students||[]).map(s => `
         <a class="block px-4 py-3 hover:bg-indigo-50" href="/student/${s.id}">
           <div class="text-sm font-medium text-gray-900">${s.name} <span class="text-xs text-gray-500">(${s.class_name||''}${s.admission_no? ' • '+s.admission_no:''})</span></div>
-          <div class="text-xs text-gray-500">Balance: KES ${(Number(s.balance||0)).toLocaleString()} • Credit: KES ${(Number(s.credit||0)).toLocaleString()}</div>
+        <div class="${balanceClassName(s.balance||0)} text-xs">Balance: KES ${(Number(s.balance||0)).toLocaleString()} • Credit: KES ${(Number(s.credit||0)).toLocaleString()}</div>
         </a>`).join('');
       const pays = (data.payments||[]).map(p => `
         <a class="block px-4 py-3 hover:bg-indigo-50" href="/payments?ref=${encodeURIComponent(p.reference||'')}">
@@ -556,26 +473,7 @@
       });
     }
   
-    // Theme: load preference early
-  (function(){
-    try {
-      const pref = localStorage.getItem("theme") || "light";
-      if (pref === "dark") document.documentElement.setAttribute("data-theme","dark");
-    } catch(e){}
-  })();
-
-  // Theme toggle
-  (function(){
-    const btn = document.getElementById("themeToggle");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-      const next = cur === "dark" ? "light" : "dark";
-      if (next === "dark") document.documentElement.setAttribute("data-theme","dark"); else document.documentElement.removeAttribute("data-theme");
-      try { localStorage.setItem("theme", next); } catch(e){}
-      try { lucide.createIcons(); } catch(_){}
-    });
-  })();
+  
 
   // Register service worker
   if ("serviceWorker" in navigator) {
@@ -584,6 +482,44 @@
     });
   }
 
+  // Sanitize stray mojibake characters across the UI
+  (function(){
+    const MAP = new Map([
+      ['â€“','–'],['â€”','—'],['â€˜','‘'],['â€™','’'],['â€œ','“'],['â€�','”'],['â€¦','…'],
+      ['â€“Â','–'],['Â ',''],['Ã—','×'],['Ã·','÷'],['Ã©','é'],['Ã',''],
+      ['â–²','▲'],['â–¼','▼'],['â†’','→'],['â†�','←'],['â—�','•']
+    ]);
+    function fixText(s){
+      if (!s) return s;
+      let out = s;
+      MAP.forEach((to,from)=>{ out = out.split(from).join(to); });
+      // Generic cleanup for replacement char
+      out = out.replace(/�+/g,'-');
+      return out;
+    }
+
+    // Delegate [data-back] clicks to neoBack for consistent behavior
+    document.addEventListener('click', function(e){
+      const t = e.target.closest('[data-back]');
+      if (!t) return;
+      e.preventDefault();
+      try { neoBack(); } catch(_) {}
+    });
+    function walk(node){
+      if (node.nodeType === Node.TEXT_NODE) {
+        const fixed = fixText(node.nodeValue);
+        if (fixed !== node.nodeValue) node.nodeValue = fixed;
+        return;
+      }
+      for (let c=node.firstChild; c; c=c.nextSibling) walk(c);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', ()=>walk(document.body));
+    } else {
+      walk(document.body);
+    }
+  })();
+
 </script>
 
 </body>
@@ -591,4 +527,8 @@
 
 
 
+
+
+
+      
 

@@ -1,0 +1,859 @@
+{% extends "base.html" %}
+{% block title %}Audit Trail • {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Audit Trail{% endblock %}
+
+{% block content %}
+<div class="space-y-6 audit-page" style="--audit-brand: {{ BRAND_COLOR or '#2563eb' }};">
+  <style>
+    .audit-page .range-btn[data-active="true"] {
+      border-color: var(--audit-brand, #2563eb);
+      background: color-mix(in srgb, var(--audit-brand, #2563eb) 15%, #ffffff);
+      color: var(--audit-brand, #2563eb);
+    }
+    .audit-page .range-btn[data-active="true"] i {
+      color: var(--audit-brand, #2563eb);
+    }
+    .audit-page .brand-ghost {
+      border-color: color-mix(in srgb, var(--audit-brand, #2563eb) 60%, #ffffff);
+      background: color-mix(in srgb, var(--audit-brand, #2563eb) 10%, #ffffff);
+      color: var(--audit-brand, #2563eb);
+    }
+    .audit-page .brand-ghost:hover {
+      background: color-mix(in srgb, var(--audit-brand, #2563eb) 20%, #ffffff);
+    }
+    .audit-page .brand-ghost:active {
+      background: color-mix(in srgb, var(--audit-brand, #2563eb) 25%, #ffffff);
+    }
+    .audit-page .brand-contained {
+      background: var(--audit-brand, #2563eb);
+      color: #fff;
+      border-color: transparent;
+    }
+    .audit-page .brand-contained:hover {
+      filter: brightness(1.05);
+    }
+    .audit-page .brand-text {
+      color: var(--audit-brand, #2563eb);
+    }
+    .audit-page .brand-border {
+      border-color: color-mix(in srgb, var(--audit-brand, #2563eb) 35%, #ffffff);
+    }
+  </style>
+  <section class="bg-white/95 dark:bg-slate-900/80 border border-gray-200/70 dark:border-slate-700/70 rounded-3xl shadow-xl px-6 py-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div class="max-w-2xl">
+        <p class="text-xs uppercase tracking-[0.5em] brand-text">Security</p>
+        <h1 class="text-2xl md:text-3xl font-semibold brand-text">Audit Trail</h1>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">
+          Every sensitive action is captured with a timestamp, actor, status, and infrastructure metadata to keep the school fee system compliant and ready for reviews.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <button id="exportCsvBtn" class="brand-ghost inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition">
+          <i data-lucide="download"></i>
+          Export CSV
+        </button>
+        <button id="exportPdfBtn" class="brand-ghost inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition">
+          <i data-lucide="file-text"></i>
+          Export PDF
+        </button>
+        <button id="downloadHistoryBtn" class="brand-ghost inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition">
+          <i data-lucide="archive"></i>
+          Download full history
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-6 grid gap-4 md:grid-cols-3">
+      <div class="rounded-2xl border border-gray-100 brand-border bg-slate-50/70 dark:border-slate-700/70 dark:bg-slate-800/70 p-5">
+        <p class="text-[11px] uppercase tracking-[0.4em] brand-text">Total events</p>
+        <p id="statTotal" class="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">0</p>
+        <p class="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <i data-lucide="shield-check" class="w-4 h-4" style="color: var(--audit-brand, #2563eb)"></i>
+          Tamper-proof · read-only + append-only
+        </p>
+      </div>
+      <div class="rounded-2xl border border-gray-100 brand-border bg-slate-50/70 dark:border-slate-700/70 dark:bg-slate-800/70 p-5">
+        <p class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Successes</p>
+        <p id="statSuccess" class="mt-2 text-3xl font-semibold text-emerald-600 dark:text-emerald-300">0</p>
+        <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Completed events</p>
+      </div>
+      <div class="rounded-2xl border border-gray-100 brand-border bg-slate-50/70 dark:border-slate-700/70 dark:bg-slate-800/70 p-5">
+        <p class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Failures</p>
+        <p id="statFailed" class="mt-2 text-3xl font-semibold text-rose-600 dark:text-rose-300">0</p>
+        <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Failed / blocked attempts</p>
+      </div>
+    </div>
+
+    <div class="mt-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <i data-lucide="refresh-cw" class="w-4 h-4" style="color: var(--audit-brand, #2563eb);"></i>
+        Real-time audit stream updates every 5s
+      </div>
+      <div class="text-xs font-semibold brand-text" id="liveIndicator">Awaiting the next refresh...</div>
+    </div>
+  </section>
+
+  <section class="bg-white/90 dark:bg-slate-900/80 border border-gray-200/70 dark:border-slate-700/70 rounded-3xl shadow-lg px-6 py-6 space-y-5">
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div class="space-y-2">
+        <p class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Date range</p>
+        <div id="dateRangeButtons" class="flex flex-wrap gap-2">
+          <button class="range-btn rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-range="all">All</button>
+          <button class="range-btn rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-range="today">Today</button>
+          <button class="range-btn rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-range="week">This Week</button>
+          <button class="range-btn rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-range="month">This Month</button>
+          <button class="range-btn rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-range="custom">Custom</button>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+            From
+            <input id="customRangeFrom" type="date" class="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+            To
+            <input id="customRangeTo" type="date" class="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
+          </label>
+        </div>
+      </div>
+      <div class="space-y-3">
+        <label class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Search</label>
+        <input id="globalSearch" type="search" placeholder="Search by user, action, description..." class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
+      </div>
+    </div>
+    <div class="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+      <label class="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+        Action type
+        <select id="filterActionType" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <option value="">All</option>
+          <option value="payment">Payment</option>
+          <option value="student">Student</option>
+          <option value="settings">Settings</option>
+          <option value="login">Login</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+        Module
+        <select id="filterModule" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <option value="">All</option>
+          <option value="Students">Students</option>
+          <option value="Payments">Payments</option>
+          <option value="Analytics">Analytics</option>
+          <option value="Admin">Admin</option>
+          <option value="Settings">Settings</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+        Status
+        <select id="filterStatus" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <option value="">All</option>
+          <option value="Success">Success</option>
+          <option value="Failed">Failed</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+        User / Staff
+        <input id="filterUser" type="text" placeholder="Name, email, ID..." class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
+      </label>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <button id="resetFilters" class="px-4 py-2 rounded-2xl bg-slate-50 text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">Reset filters</button>
+      <span class="text-xs text-slate-500 dark:text-slate-400">Filters apply instantly for a conversational experience.</span>
+    </div>
+  </section>
+  <section class="bg-white/95 dark:bg-slate-900/80 border border-gray-200/70 dark:border-slate-700/70 rounded-3xl shadow-xl px-6 py-6 space-y-4">
+    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Audit Stream</p>
+        <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Audit Logs</h3>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+        Sortable · Searchable · Exportable
+      </div>
+    </div>
+    <div class="overflow-x-auto rounded-3xl border border-slate-100/70 dark:border-slate-800 shadow-sm">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">
+          <tr>
+            <th class="px-4 py-3 text-left">
+              <button type="button" data-sort-key="timestamp" class="flex items-center gap-1 text-left">
+                Timestamp
+                <i data-lucide="calendar-clock" class="w-4 h-4 text-slate-400"></i>
+              </button>
+            </th>
+            <th class="px-4 py-3 text-left">
+              <button type="button" data-sort-key="user" class="flex items-center gap-1 text-left">
+                User
+                <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+              </button>
+            </th>
+            <th class="px-4 py-3 text-left">
+              <button type="button" data-sort-key="action" class="flex items-center gap-1 text-left">
+                Action
+                <i data-lucide="activity" class="w-4 h-4 text-slate-400"></i>
+              </button>
+            </th>
+            <th class="px-4 py-3 text-left">Description</th>
+            <th class="px-4 py-3 text-left">Affected record</th>
+            <th class="px-4 py-3 text-left">
+              <button type="button" data-sort-key="status" class="flex items-center gap-1 text-left">
+                Status
+                <i data-lucide="check-circle" class="w-4 h-4 text-slate-400"></i>
+              </button>
+            </th>
+            <th class="px-4 py-3 text-left">IP Address</th>
+          </tr>
+        </thead>
+        <tbody id="auditTableBody" class="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+          <tr>
+            <td colspan="7" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">Loading audit logs…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <p class="text-xs text-slate-500 dark:text-slate-400" id="paginationSummary">Showing 0 of 0</p>
+      <div class="flex items-center gap-2">
+        <button id="prevPage" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-500 dark:border-slate-700 dark:text-slate-200">Previous</button>
+        <span class="text-xs text-slate-500 dark:text-slate-400" id="pageLabel">Page 1</span>
+        <button id="nextPage" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-500 dark:border-slate-700 dark:text-slate-200">Next</button>
+        <select id="rowsPerPageSelect" class="rounded-full border border-slate-200 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <option value="10">10 / page</option>
+          <option value="20">20 / page</option>
+          <option value="35">35 / page</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-white/90 dark:bg-slate-900/80 border border-gray-200/70 dark:border-slate-700/70 rounded-3xl shadow-lg px-6 py-6">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-[11px] uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">Sample entries</p>
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Dummy logs for design clarity</h3>
+      </div>
+      <span class="text-[11px] text-slate-500 dark:text-slate-400">Only viewable internally</span>
+    </div>
+    <div id="sampleEvents" class="grid gap-4 md:grid-cols-3"></div>
+  </section>
+</div>
+
+<div id="activityDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-[11px] uppercase tracking-[0.5em] text-slate-400">Activity details</p>
+        <h4 class="text-xl font-semibold text-slate-900 dark:text-white" id="modalAction">Loading…</h4>
+      </div>
+      <button id="modalClose" class="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-red-300 hover:text-red-500 dark:border-slate-700 dark:text-slate-300">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      <div>
+        <p class="text-[11px] text-slate-400">Timestamp</p>
+        <p id="modalTimestamp" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Status</p>
+        <p id="modalStatus" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Performed by</p>
+        <p id="modalUser" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Role</p>
+        <p id="modalRole" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">User ID</p>
+        <p id="modalUserId" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Student ID</p>
+        <p id="modalStudentId" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Module</p>
+        <p id="modalModule" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Action type</p>
+        <p id="modalActionType" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Device / Browser</p>
+        <p id="modalDevice" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">IP Address</p>
+        <p id="modalIp" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-400">Affected record</p>
+        <p id="modalRecord" class="text-sm font-medium text-slate-600 dark:text-slate-300">—</p>
+      </div>
+    </div>
+    <div class="mt-5">
+      <p class="text-[11px] text-slate-400">Description</p>
+      <p id="modalDescription" class="mt-1 text-sm text-slate-700 dark:text-slate-200">—</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const serverLogs = {{ logs | tojson }};
+  const sampleAuditLogs = [
+    {
+      id: "sample-1",
+      user_id: "U-4532",
+      username: "Nia Mora",
+      user_role: "Owner",
+      action: "Added Payment",
+      description: "Payment KES 10,000 recorded for Student ID 4532.",
+      target: "Payment #4312",
+      affected_record: "Payment #4312",
+      status: "Success",
+      module: "Payments",
+      action_type: "payment",
+      ip: "41.77.13.212",
+      device: "Chrome (Windows 11)",
+      student_id: "4532",
+      detail: "Payment verified and receipt queued.",
+      timestamp: "2025-11-13T09:12:44"
+    },
+    {
+      id: "sample-2",
+      user_id: "U-3211",
+      username: "Maya Otieno",
+      user_role: "Admin",
+      action: "Updated Fee Structure",
+      description: "Term 1 fees bumped before new intake.",
+      target: "Fee structure 2026",
+      affected_record: "Fee structure 2026",
+      status: "Success",
+      module: "Settings",
+      action_type: "settings",
+      ip: "154.120.43.32",
+      device: "Safari (MacOS)",
+      student_id: "N/A",
+      detail: "New grade-based fee tiers published.",
+      timestamp: "2025-11-12T14:40:01"
+    },
+    {
+      id: "sample-3",
+      user_id: "U-2103",
+      username: "Tobias Kimani",
+      user_role: "Bursar",
+      action: "Applied Discount",
+      description: "Applied 15% staff discount for Student #998.",
+      target: "Discount entry #558",
+      affected_record: "Student #998",
+      status: "Success",
+      module: "Payments",
+      action_type: "payment",
+      ip: "41.77.90.101",
+      device: "Edge (Windows 10)",
+      student_id: "998",
+      detail: "Discount approved by principal.",
+      timestamp: "2025-11-07T17:01:29"
+    },
+    {
+      id: "sample-4",
+      user_id: "U-7788",
+      username: "Emilia Waweru",
+      user_role: "Security",
+      action: "Failed Login Attempt",
+      description: "Failed login to admin portal (wrong OTP).",
+      target: "Auth portal",
+      affected_record: "Admin login",
+      status: "Failed",
+      module: "Admin",
+      action_type: "login",
+      ip: "13.88.90.12",
+      device: "Firefox (Ubuntu)",
+      student_id: "N/A",
+      detail: "Account locked for 15 minutes.",
+      timestamp: "2025-11-10T07:25:40"
+    }
+  ];
+
+  const normalizeLog = (source) => {
+    const timestampSource = source.timestamp || source.created_at;
+    const timestamp = timestampSource ? new Date(timestampSource) : new Date();
+    const formatDate = new Intl.DateTimeFormat("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
+    const determineModule = (value) => {
+      const candidate = (value || "").toLowerCase();
+      if (candidate.includes("student") || candidate.includes("enroll")) return "Students";
+      if (candidate.includes("payment") || candidate.includes("invoice") || candidate.includes("fee") || candidate.includes("discount")) return "Payments";
+      if (candidate.includes("analytics") || candidate.includes("report") || candidate.includes("export")) return "Analytics";
+      if (candidate.includes("admin") || candidate.includes("role") || candidate.includes("permission") || candidate.includes("security") || candidate.includes("settings")) return "Admin";
+      return "Settings";
+    };
+    const determineActionType = (value) => {
+      const candidate = (value || "").toLowerCase();
+      if (candidate.includes("payment") || candidate.includes("invoice") || candidate.includes("discount") || candidate.includes("fee")) return "payment";
+      if (candidate.includes("student") || candidate.includes("enroll") || candidate.includes("class")) return "student";
+      if (candidate.includes("login") || candidate.includes("logout") || candidate.includes("account")) return "login";
+      return "settings";
+    };
+    const parseStudentId = (value) => {
+      if (!value) return "N/A";
+      const match = value.match(/\d{3,6}/);
+      return match ? match[0] : "N/A";
+    };
+    return {
+      id: source.id || crypto.randomUUID?.() || `row-${Math.random().toString(16).slice(2)}`,
+      timestampISO: timestamp.toISOString(),
+      displayTimestamp: formatDate.format(timestamp),
+      user: source.username || source.user || "System",
+      role: source.user_role || source.role || "System",
+      action: source.action || "System change",
+      description: source.detail || source.description || "—",
+      affected_record: source.affected_record || source.target || "—",
+      status: (source.status || "Success").charAt(0).toUpperCase() + (source.status || "Success").slice(1),
+      module: source.module || determineModule(source.action),
+      action_type: source.action_type || determineActionType(source.action),
+      ip: source.ip || source.ip_address || "Unknown",
+      device: source.device || source.device_info || "Unknown device",
+      user_id: source.user_id || "N/A",
+      student_id: source.student_id || parseStudentId(source.target),
+      demo: Boolean(source.demo || false)
+    };
+  };
+
+  const normalizedServerLogs = Array.isArray(serverLogs)
+    ? serverLogs.map((log) => normalizeLog({ ...log, timestamp: log.timestamp }))
+    : [];
+  const normalizedSampleLogs = sampleAuditLogs.map((log) => normalizeLog({ ...log, demo: true }));
+
+  let dataPool = normalizedServerLogs.length ? normalizedServerLogs : normalizedSampleLogs;
+  let filteredLogs = [...dataPool];
+  const auditApiUrl = "/admin/audit/logs";
+  let currentPage = 0;
+  let rowsPerPage = Number(document.getElementById("rowsPerPageSelect").value);
+  const filters = {
+    search: "",
+    actionType: "",
+    module: "",
+    status: "",
+    user: "",
+    dateRange: "all",
+    customFrom: "",
+    customTo: ""
+  };
+  const sortState = { key: "timestamp", direction: "desc" };
+
+  const el = {
+    tableBody: document.getElementById("auditTableBody"),
+    stats: {
+      total: document.getElementById("statTotal"),
+      success: document.getElementById("statSuccess"),
+      failed: document.getElementById("statFailed")
+    },
+    liveIndicator: document.getElementById("liveIndicator"),
+    paginationSummary: document.getElementById("paginationSummary"),
+    pageLabel: document.getElementById("pageLabel"),
+    prevPage: document.getElementById("prevPage"),
+    nextPage: document.getElementById("nextPage"),
+    rowsPerPageSelect: document.getElementById("rowsPerPageSelect")
+  };
+
+  const rangeButtons = document.querySelectorAll("#dateRangeButtons .range-btn");
+  const actionTypeSelect = document.getElementById("filterActionType");
+  const moduleSelect = document.getElementById("filterModule");
+  const statusSelect = document.getElementById("filterStatus");
+  const userInput = document.getElementById("filterUser");
+  const searchInput = document.getElementById("globalSearch");
+  const customFromInput = document.getElementById("customRangeFrom");
+  const customToInput = document.getElementById("customRangeTo");
+  const resetButton = document.getElementById("resetFilters");
+  const exportCsvBtn = document.getElementById("exportCsvBtn");
+  const exportPdfBtn = document.getElementById("exportPdfBtn");
+  const downloadHistoryBtn = document.getElementById("downloadHistoryBtn");
+  const sortButtons = document.querySelectorAll("[data-sort-key]");
+  const sampleEventsContainer = document.getElementById("sampleEvents");
+  const modal = document.getElementById("activityDetailModal");
+  const modalFields = {
+    action: document.getElementById("modalAction"),
+    timestamp: document.getElementById("modalTimestamp"),
+    status: document.getElementById("modalStatus"),
+    user: document.getElementById("modalUser"),
+    role: document.getElementById("modalRole"),
+    userId: document.getElementById("modalUserId"),
+    studentId: document.getElementById("modalStudentId"),
+    module: document.getElementById("modalModule"),
+    actionType: document.getElementById("modalActionType"),
+    device: document.getElementById("modalDevice"),
+    ip: document.getElementById("modalIp"),
+    record: document.getElementById("modalRecord"),
+    description: document.getElementById("modalDescription")
+  };
+
+  const updateStatistics = () => {
+    const successCount = filteredLogs.filter((log) => log.status === "Success").length;
+    const failedCount = filteredLogs.filter((log) => log.status === "Failed").length;
+    el.stats.total.textContent = filteredLogs.length.toString().padStart(2, "0");
+    el.stats.success.textContent = successCount.toString().padStart(2, "0");
+    el.stats.failed.textContent = failedCount.toString().padStart(2, "0");
+  };
+
+  const highlightRangeButton = (range) => {
+    rangeButtons.forEach((button) => {
+      if (button.dataset.range === range) {
+        button.dataset.active = "true";
+      } else {
+        delete button.dataset.active;
+      }
+    });
+  };
+
+  const applyDateFilters = (logs) => {
+    if (filters.customFrom || filters.customTo) {
+      const from = filters.customFrom ? new Date(`${filters.customFrom}T00:00:00`) : null;
+      const to = filters.customTo ? new Date(`${filters.customTo}T23:59:59`) : null;
+      return logs.filter((log) => {
+        const created = new Date(log.timestampISO);
+        if (from && created < from) return false;
+        if (to && created > to) return false;
+        return true;
+      });
+    }
+    const now = new Date();
+    let startDate = null;
+    if (filters.dateRange === "today") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (filters.dateRange === "week") {
+      const diff = now.getDay();
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+    } else if (filters.dateRange === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    if (!startDate || filters.dateRange === "all") return logs;
+    return logs.filter((log) => new Date(log.timestampISO) >= startDate);
+  };
+
+  const matchesFilters = (log) => {
+    if (filters.actionType && log.action_type.toLowerCase() !== filters.actionType) return false;
+    if (filters.module && log.module !== filters.module) return false;
+    if (filters.status && log.status !== filters.status) return false;
+    if (filters.user && !log.user.toLowerCase().includes(filters.user.toLowerCase())) return false;
+    if (filters.search) {
+      const query = filters.search.toLowerCase();
+      const haystack = `${log.user} ${log.role} ${log.action} ${log.description} ${log.affected_record}`.toLowerCase();
+      return haystack.includes(query);
+    }
+    return true;
+  };
+
+  const sortLogs = (list) => {
+    const direction = sortState.direction === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (sortState.key === "timestamp") {
+        return direction * (new Date(a.timestampISO) - new Date(b.timestampISO));
+      }
+      const left = (a[sortState.key] || "").toString().toLowerCase();
+      const right = (b[sortState.key] || "").toString().toLowerCase();
+      return direction * left.localeCompare(right, undefined, { numeric: true });
+    });
+  };
+
+  const applyFilters = (resetPage = true) => {
+    if (resetPage) currentPage = 0;
+    filteredLogs = sortLogs(applyDateFilters(dataPool).filter((log) => matchesFilters(log)));
+    renderTable();
+    updateStatistics();
+  };
+
+  const renderTable = () => {
+    const start = currentPage * rowsPerPage;
+    const end = start + rowsPerPage;
+    const pageItems = filteredLogs.slice(start, end);
+    el.tableBody.innerHTML = pageItems.length
+      ? pageItems
+          .map((log, index) => {
+            const badgeColor = log.status === "Success" ? "bg-emerald-50 text-emerald-700 dark:text-emerald-300" : "bg-rose-50 text-rose-600 dark:text-rose-300";
+            return `
+              <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/60">
+                <td class="px-4 py-4 text-xs font-semibold text-slate-600 dark:text-slate-200">${log.displayTimestamp}</td>
+                <td class="px-4 py-4">
+                  <div class="font-semibold text-slate-900 dark:text-white">${log.user}</div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400">${log.role}</div>
+                  <div class="text-[11px] text-slate-400 dark:text-slate-500">${log.device}</div>
+                </td>
+                <td class="px-4 py-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="font-semibold text-slate-800 dark:text-white">${log.action}</p>
+                      <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">${log.action_type} · ${log.module}</p>
+                    </div>
+                    <button type="button" data-log-index="${start + index}" class="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300">
+                      <i data-lucide="eye" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </td>
+                <td class="px-4 py-4 text-xs text-slate-600 dark:text-slate-300">${log.description}</td>
+                <td class="px-4 py-4 text-xs text-slate-600 dark:text-slate-300">${log.affected_record}</td>
+                <td class="px-4 py-4">
+                  <span class="inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${badgeColor}">${log.status}</span>
+                </td>
+                <td class="px-4 py-4 text-xs text-slate-600 dark:text-slate-300">${log.ip}</td>
+              </tr>
+            `;
+          })
+          .join("")
+      : `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No audit events match the current filters.</td></tr>`;
+    el.paginationSummary.textContent = `Showing ${Math.min(filteredLogs.length, end)} of ${filteredLogs.length}`;
+    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
+    el.pageLabel.textContent = `Page ${currentPage + 1}`;
+    el.prevPage.disabled = currentPage === 0;
+    el.nextPage.disabled = currentPage >= totalPages - 1;
+  };
+
+  const openModal = (log) => {
+    if (!log) return;
+    modalFields.action.textContent = log.action;
+    modalFields.timestamp.textContent = log.displayTimestamp;
+    modalFields.status.textContent = log.status;
+    modalFields.user.textContent = log.user;
+    modalFields.role.textContent = log.role;
+    modalFields.userId.textContent = log.user_id;
+    modalFields.studentId.textContent = log.student_id;
+    modalFields.module.textContent = log.module;
+    modalFields.actionType.textContent = log.action_type;
+    modalFields.device.textContent = log.device;
+    modalFields.ip.textContent = log.ip;
+    modalFields.record.textContent = log.affected_record;
+    modalFields.description.textContent = log.description;
+    modal.classList.remove("hidden");
+  };
+
+  const closeModal = () => modal.classList.add("hidden");
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal();
+  });
+
+  el.tableBody.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-log-index]");
+    if (!button) return;
+    const index = Number(button.dataset.logIndex);
+    openModal(filteredLogs[index]);
+  });
+
+  sortButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sortKey;
+      if (sortState.key === key) {
+        sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+      } else {
+        sortState.key = key;
+        sortState.direction = "desc";
+      }
+      applyFilters(false);
+    });
+  });
+
+  rangeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      filters.dateRange = button.dataset.range || "all";
+      filters.customFrom = "";
+      filters.customTo = "";
+      customFromInput.value = "";
+      customToInput.value = "";
+      highlightRangeButton(filters.dateRange);
+      applyFilters();
+    });
+  });
+
+  searchInput.addEventListener("input", (event) => {
+    filters.search = event.target.value.trim();
+    applyFilters();
+  });
+
+  actionTypeSelect.addEventListener("change", (event) => {
+    filters.actionType = event.target.value;
+    applyFilters();
+  });
+  moduleSelect.addEventListener("change", (event) => {
+    filters.module = event.target.value;
+    applyFilters();
+  });
+  statusSelect.addEventListener("change", (event) => {
+    filters.status = event.target.value;
+    applyFilters();
+  });
+  userInput.addEventListener("input", (event) => {
+    filters.user = event.target.value.trim();
+    applyFilters();
+  });
+  customFromInput.addEventListener("change", (event) => {
+    filters.customFrom = event.target.value;
+    filters.dateRange = "custom";
+    highlightRangeButton("custom");
+    applyFilters();
+  });
+  customToInput.addEventListener("change", (event) => {
+    filters.customTo = event.target.value;
+    filters.dateRange = "custom";
+    highlightRangeButton("custom");
+    applyFilters();
+  });
+  el.rowsPerPageSelect.addEventListener("change", (event) => {
+    rowsPerPage = Number(event.target.value);
+    applyFilters();
+  });
+
+  resetButton.addEventListener("click", () => {
+    filters.search = "";
+    filters.actionType = "";
+    filters.module = "";
+    filters.status = "";
+    filters.user = "";
+    filters.dateRange = "all";
+    filters.customFrom = "";
+    filters.customTo = "";
+    searchInput.value = "";
+    actionTypeSelect.value = "";
+    moduleSelect.value = "";
+    statusSelect.value = "";
+    userInput.value = "";
+    customFromInput.value = "";
+    customToInput.value = "";
+    highlightRangeButton("all");
+    applyFilters();
+  });
+
+  el.prevPage.addEventListener("click", () => {
+    if (currentPage > 0) {
+      currentPage -= 1;
+      renderTable();
+    }
+  });
+  el.nextPage.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
+    if (currentPage < totalPages - 1) {
+      currentPage += 1;
+      renderTable();
+    }
+  });
+
+  const downloadCsv = (dataset, filename) => {
+    if (!dataset || !dataset.length) return;
+    const headers = ["Timestamp", "User", "Role", "Action", "Description", "Record", "Status", "IP", "Device", "Module"];
+    const rows = dataset.map((log) => [
+      log.displayTimestamp,
+      log.user,
+      log.role,
+      log.action,
+      log.description,
+      log.affected_record,
+      log.status,
+      log.ip,
+      log.device,
+      log.module
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((value) => `"${(value || "").toString().replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  downloadHistoryBtn.addEventListener("click", () => downloadCsv(dataPool, "audit-history-full.csv"));
+  exportCsvBtn.addEventListener("click", () => downloadCsv(filteredLogs, "audit-history.csv"));
+  exportPdfBtn.addEventListener("click", () => {
+    const printable = window.open("", "_blank");
+    printable.document.write("<html><head><title>Audit History</title><style>body{font-family: Inter, system-ui; padding:24px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #e5e7eb;padding:12px;text-align:left;font-size:12px;}</style></head><body>");
+    printable.document.write("<h2>Audit History Snapshot</h2>");
+    printable.document.write("<table><thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Description</th><th>Status</th></tr></thead><tbody>");
+    filteredLogs.slice(0, 20).forEach((log) => {
+      printable.document.write(`<tr><td>${log.displayTimestamp}</td><td>${log.user}</td><td>${log.action}</td><td>${log.description}</td><td>${log.status}</td></tr>`);
+    });
+    printable.document.write("</tbody></table></body></html>");
+    printable.document.close();
+    printable.focus();
+    printable.print();
+  });
+
+  const renderSampleEvents = () => {
+    sampleEventsContainer.innerHTML = sampleAuditLogs
+      .slice(0, 3)
+      .map(
+        (log) => `
+        <article class="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400">${log.module}</p>
+              <h4 class="text-base font-semibold text-slate-900 dark:text-white">${log.action}</h4>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-300">${log.status}</span>
+          </div>
+          <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">${log.description}</p>
+          <div class="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span>${log.displayTimestamp || log.timestamp}</span>
+            <span>${log.user}</span>
+          </div>
+        </article>
+      `
+      )
+      .join("");
+  };
+
+  const updateLiveIndicator = (success = true) => {
+    if (!success) {
+      el.liveIndicator.textContent = "Unable to refresh audit stream";
+      return;
+    }
+    const now = new Date();
+    el.liveIndicator.textContent = `Last refresh at ${now.toLocaleTimeString("en-GB", { hour12: false })}`;
+  };
+
+  const refreshFromServer = async () => {
+    try {
+      const response = await fetch(`${auditApiUrl}?_=${Date.now()}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch audit logs");
+      }
+      const payload = await response.json();
+      const payloadLogs = Array.isArray(payload.logs) ? payload.logs : [];
+      dataPool = payloadLogs.map((log) => normalizeLog(log));
+      filteredLogs = [...dataPool];
+      applyFilters();
+      updateLiveIndicator(true);
+    } catch (error) {
+      console.error("Audit refresh failed:", error);
+      updateLiveIndicator(false);
+    }
+  };
+
+  highlightRangeButton("all");
+  renderSampleEvents();
+  applyFilters();
+  refreshFromServer();
+  setInterval(refreshFromServer, 5000);
+});
+</script>
+{% endblock %}

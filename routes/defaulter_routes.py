@@ -18,7 +18,6 @@ import os
 import mysql.connector
 
 from utils.gmail_api import send_email as gmail_send_email
-from utils.monetization import plan_status as _plan_status
 
 
 recovery_bp = Blueprint("recovery", __name__, url_prefix="/recovery")
@@ -244,15 +243,6 @@ def log_action(student_id: int):
 
 @recovery_bp.route("/export")
 def export_csv():
-    # Premium guard: require non-FREE plan
-    sid = session.get("school_id")
-    try:
-        status = _plan_status(int(sid)) if sid else {"plan_code": "FREE"}
-    except Exception:
-        status = {"plan_code": "FREE"}
-    if status.get("plan_code") == "FREE":
-        flash("Upgrade to Pro to export defaulters.", "warning")
-        return redirect(url_for("monetization.index"))
     db = _db_from_config()
     cur = db.cursor(dictionary=True)
     try:

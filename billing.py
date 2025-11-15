@@ -177,7 +177,7 @@ def _issue_license_for_request(req: "LicenseRequest", admin_name: str, admin_not
     <strong>Expires:</strong> {expires_label}</p>
     <p>To activate:</p>
     <ol>
-      <li>Go to <a href="{base}/monetization">{base}/monetization</a> and paste the key, or</li>
+      <li>Go to <a href="{base}/admin/billing">{base}/admin/billing</a> and paste the key, or</li>
       <li>Open <a href="{base}/activate">{base}/activate</a> and follow the steps below.</li>
     </ol>
     <p>Keep this key private.</p>
@@ -494,7 +494,7 @@ ACTIVATION_RESULT_PAGE = """
       <p>Email: <strong>{{ email }}</strong></p>
       <p>License Key: <code>{{ license_key }}</code></p>
       <p>Expires: <strong>{{ expires }}</strong></p>
-      <p><a href="{{ base_url }}/admin/monetization">Continue to Monetization</a></p>
+      <p><a href="{{ base_url }}/admin/billing">Continue to billing</a></p>
     {% else %}
       <div class="err">Activation failed: {{ error }}</div>
       <p>Please double-check your email and license key. If the problem persists, contact support.</p>
@@ -780,7 +780,7 @@ def verify_action(verify_token: str):
         <strong>Expires:</strong> {expires_label}</p>
         <p>To activate:</p>
         <ol>
-          <li>Go to <a href="{base}/monetization">{base}/monetization</a> and paste the key, or</li>
+      <li>Go to <a href="{base}/admin/billing">{base}/admin/billing</a> and paste the key, or</li>
           <li>Open <a href="{base}/activate">{base}/activate</a> and follow the steps below.</li>
         </ol>
         <p>Keep this key private.</p>

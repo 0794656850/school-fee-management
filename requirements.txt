@@ -20,3 +20,5 @@ transformers
 torch
 sentencepiece
 safetensors
+Pillow
+qrcode

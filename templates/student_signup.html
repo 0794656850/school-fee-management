@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Student Sign Up{% endblock %}
+{% block page_title %}Create Student Account{% endblock %}
+{% block content %}
+<div class="brand-hero">
+  <div class="brand-hero__row">
+    <div class="app-badge">
+      <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+    </div>
+    <div>
+      <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
+      <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
+    </div>
+  </div>
+</div>
+<!-- Floating back button for sign up flow -->
+<button id="stdSignBackBtn" class="fixed top-4 left-4 z-40 p-2 rounded-full nav-button" title="Back">
+  <i data-lucide="arrow-left"></i>
+</button>
+
+<div class="max-w-xl mx-auto bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+  {% if stage == 'start' %}
+    <h3 class="text-xl font-semibold mb-2">Find Your Record</h3>
+    <p class="text-sm text-gray-600 mb-4">We will verify your identity using Date of Birth if available, or send a code to your email on file.</p>
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="action" value="start" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">School Name or Code</label>
+        <input name="school" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. Greenfield High" required />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Admission Number</label>
+        <input name="regNo" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. ADM1234" required />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Date of Birth (if required)</label>
+        <input type="date" name="dob" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" />
+      </div>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">Continue</button>
+    </form>
+  {% elif stage == 'verify' %}
+    <h3 class="text-xl font-semibold mb-2">Verify Email</h3>
+    <p class="text-sm text-gray-600 mb-4">Enter the 6‑digit code we sent to your email. The code expires in 10 minutes.</p>
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="action" value="verify" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Verification Code</label>
+        <input name="code" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. 123456" required />
+      </div>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">Verify</button>
+    </form>
+  {% elif stage == 'setpwd' %}
+    <h3 class="text-xl font-semibold mb-2">Set Password</h3>
+    <p class="text-sm text-gray-600 mb-4">Create a secure password for your account. You’ll use this to log in next time.</p>
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="action" value="setpwd" />
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        <input type="password" name="password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" required />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
+        <input type="password" name="confirm_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" required />
+      </div>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">Create Account</button>
+    </form>
+  {% endif %}
+  <div class="text-sm text-gray-600 mt-4">Already have an account? <a href="{{ url_for('student_auth.student_login') }}" class="text-emerald-700 hover:underline">Log in</a></div>
+  <div class="mt-4">
+    <a href="{{ url_for('student_auth.student_login') }}" class="inline-flex items-center gap-1 text-emerald-700 hover:underline">
+      <i data-lucide="arrow-left"></i>
+      <span>Back to Student Login</span>
+    </a>
+    <span class="mx-2 text-gray-400">•</span>
+    <a href="{{ url_for('auth.entry') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline"><i data-lucide="grid"></i> <span>All Login Options</span></a>
+  </div>
+</div>
+<script>
+  // Back behavior for signup
+  (function(){
+    const btn = document.getElementById('stdSignBackBtn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      try {
+        const ref = document.referrer || '';
+        if (ref && new URL(ref).origin === window.location.origin) { history.back(); return; }
+      } catch(_) {}
+      window.location.assign('{{ url_for('student_auth.student_login') }}');
+    });
+  })();
+</script>
+{% endblock %}
+

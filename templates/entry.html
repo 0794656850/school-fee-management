@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Login - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+</head>
+<body class="bg-white min-h-screen flex items-center justify-center p-6">
+  <div class="w-full max-w-6xl">
+    <div class="brand-hero mb-8">
+      <div class="brand-hero__row">
+        <div class="app-badge">
+          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+        </div>
+        <div>
+          <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
+          <div class="text-sm brand-subtitle">{{ PORTAL_TITLE }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- School/Admin card -->
+      <div class="entry-card p-8">
+        <div class="icon-badge"><i data-lucide="school" class="w-8 h-8"></i></div>
+        <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">School Login</h2>
+        <p class="mt-1 text-gray-500 text-lg">Admin & Staff Access</p>
+        <a href="{{ url_for('auth.login') }}" class="mt-8 block w-full">
+          <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
+            <i data-lucide="arrow-right" class="mr-2"></i>
+            Login to Dashboard
+          </span>
+        </a>
+        <p class="mt-4 text-gray-500">Manage your school's digital fee system</p>
+      </div>
+
+      <!-- Parent/Guardian card -->
+      <div class="entry-card p-8">
+        <div class="icon-badge"><i data-lucide="users" class="w-8 h-8"></i></div>
+        <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">Parent Login</h2>
+        <p class="mt-1 text-gray-500 text-lg">Guardian & Family Access</p>
+        <a href="{{ url_for('guardian.guardian_login') }}" class="mt-8 block w-full">
+          <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
+            <i data-lucide="arrow-right" class="mr-2"></i>
+            Login Now
+          </span>
+        </a>
+        <p class="mt-4 text-gray-500">Track progress and make secure payments</p>
+      </div>
+    </div>
+  </div>
+  <script>try { lucide.createIcons(); } catch(_) {}</script>
+</body>
+</html>
