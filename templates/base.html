@@ -26,31 +26,49 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
 
   <!-- App Icon / Favicon -->
-  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename=FAVICON) }}">
 </head>
 
 <body class="flex h-screen overflow-hidden no-anim" data-plan="PRO">
   <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-white focus:border focus:border-gray-200 focus:shadow">Skip to content</a>
 
-  <!-- Sidebar -->
-  <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
-    <div class="p-6 border-b border-gray-100 flex items-center justify-between">
-            <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 group" aria-label="Go to dashboard">
-        <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }} Logo" class="h-10 w-10 rounded-xl shadow-md ring-2 ring-blue-200/70 ring-offset-1 ring-offset-white group-hover:scale-105 transition-transform"/>
-        <div class="leading-tight select-none">
-          <div class="font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600">
-            {% for word in (BRAND_NAME or '').split() %}
-              <div class="leading-5 text-lg">{{ word }}</div>
-            {% endfor %}
-          </div>
-          <div class="mt-1 text-[11px] text-gray-600 tracking-wide flex items-center gap-1.5">
-            <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-blue-600"></i>
-            <span class="font-medium">{{ PORTAL_TITLE }}</span>
+  <section class="top-banner" aria-label="Institutional banner"
+    style="background: linear-gradient(180deg, {{ BRAND_COLOR or '#0f60d1' }} 0%, #0b3c94 60%, #060f36 100%); border-bottom-color: {{ BRAND_COLOR or '#0f60d1' }};">
+    <div class="top-banner__inner">
+      <div class="top-banner__stitial">
+        <div class="top-banner__crest">
+          <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="Lovato_Tech" />
+        </div>
+        <div class="top-banner__school">
+          <div class="top-banner__brand">{{ BRAND_NAME or 'Lovato_Tech' }}</div>
+          <div class="top-banner__caption">
+            <span>{{ SCHOOL_NAME or 'SmartEduPay Portal' }}</span>
+            <span class="dot-separator">•</span>
+            <span>School: {{ SCHOOL_NAME or BRAND_NAME or 'Lovato_Tech' }}</span>
           </div>
         </div>
-      </a>
+      </div>
+      <div class="top-banner__hero">
+        <p class="top-banner__title">SmartEduPay</p>
+        <p class="top-banner__tagline">Fostering Equity in Access to Education | Powered by SmartEduPay and Lovato_Tech</p>
+      </div>
+      <div class="top-banner__meta">
+        <div class="top-banner__cta">
+          <span class="top-banner__pill">Premium</span>
+          <span>Term {{ CURRENT_TERM or 'N/A' }} · {{ CURRENT_YEAR or 'Year' }}</span>
+        </div>
+        <div class="top-banner__pill top-banner__pill--mini">Live</div>
+      </div>
+    </div>
+  </section>
 
+  <!-- Sidebar -->
+  <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
+    <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="leading-tight select-none text-xs text-gray-500">
+        <span class="hidden md:inline">SmartEduPay Portal</span>
+      </div>
       <button id="toggleSidebar" class="md:hidden p-1 text-gray-600 hover:text-blue-600">
         <i data-lucide="menu"></i>
       </button>
@@ -143,6 +161,32 @@
 
   <!-- Main Content -->
   <main id="main" class="flex-1 flex flex-col overflow-y-auto">
+    {% set flashed_messages = get_flashed_messages(with_categories=true) %}
+    <div id="flash-container" class="space-y-2 mb-4" role="status" aria-live="polite" aria-atomic="true">
+      {% if flashed_messages %}
+        {% set flash_variants = {
+          'success': 'flash-success text-green-900',
+          'error': 'flash-error text-rose-900',
+          'warning': 'flash-warning text-amber-900',
+          'info': 'flash-info text-sky-900'
+        } %}
+        {% for category, message in flashed_messages %}
+          {% set variant = flash_variants.get(category, flash_variants['info']) %}
+          <div class="flash-item border rounded-lg px-4 py-3 shadow-sm flex items-start gap-2 {{ variant }}">
+            <span class="mt-0.5">
+              {% if category == 'success' %}<i data-lucide="check-circle" class="w-4 h-4"></i>{% endif %}
+              {% if category == 'error' %}<i data-lucide="alert-octagon" class="w-4 h-4"></i>{% endif %}
+              {% if category == 'warning' %}<i data-lucide="alert-triangle" class="w-4 h-4"></i>{% endif %}
+              {% if category == 'info' %}<i data-lucide="info" class="w-4 h-4"></i>{% endif %}
+            </span>
+            <div class="flex-1 text-sm flash-text">{{ message }}</div>
+            <button type="button" class="dismiss p-1 -m-1 text-gray-400 hover:text-gray-600" aria-label="Dismiss">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
 
     <!-- Header -->
     <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
@@ -180,34 +224,6 @@
 
     <!-- Content Area -->
     <section class="p-8 flex-1">
-      <!-- Flash Messages -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div id="flash-container" class="space-y-2 mb-4">
-            {% for category, message in messages %}
-              {% set styles = {
-                'success': 'bg-green-50 text-green-800 border-green-200',
-                'error': 'bg-red-50 text-red-800 border-red-200',
-                'warning': 'bg-yellow-50 text-yellow-800 border-yellow-200',
-                'info': 'bg-blue-50 text-blue-800 border-blue-200'
-              } %}
-              <div class="flash-item border {{ styles.get(category, 'bg-gray-50 text-gray-800 border-gray-200') }} rounded-lg px-4 py-3 shadow-sm flex items-start gap-2">
-                <span class="mt-0.5">
-                  {% if category == 'success' %}<i data-lucide="check-circle" class="w-4 h-4"></i>{% endif %}
-                  {% if category == 'error' %}<i data-lucide="alert-octagon" class="w-4 h-4"></i>{% endif %}
-                  {% if category == 'warning' %}<i data-lucide="alert-triangle" class="w-4 h-4"></i>{% endif %}
-                  {% if category == 'info' %}<i data-lucide="info" class="w-4 h-4"></i>{% endif %}
-                </span>
-                <div class="flex-1 text-sm">{{ message }}</div>
-                <button type="button" class="dismiss p-1 -m-1 text-gray-400 hover:text-gray-600" aria-label="Dismiss">
-                  <i data-lucide="x"></i>
-                </button>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-
       {% block content %}{% endblock %}
     </section>
 
@@ -325,25 +341,75 @@
       try { window.location.href = "{{ url_for('dashboard') }}"; } catch(e) { window.location.href = "{{ url_for('students') }}"; }
     }
 
-    // Flash close + auto-dismiss
+    // Flash close + auto-dismiss (supports future flash injections)
     (function() {
       const container = document.getElementById('flash-container');
-      if (!container) return;
-      // Pin flash container to the very top center
-      try {
-        container.classList.add('fixed','top-3','left-1/2','-translate-x-1/2','w-full','max-w-2xl','z-50','px-4');
-        container.classList.remove('mb-4');
-      } catch (e) {}
-      container.querySelectorAll('.dismiss').forEach(btn => {
-        const handler = () => btn.closest('.flash-item')?.remove();
-        btn.addEventListener('click', handler);
-        btn.addEventListener('keydown', (e) => { if (e.key==='Enter' || e.key===' ') { e.preventDefault(); handler(); }});
+      const AUTO_DISMISS_MS = 15000;
+
+      const cancelAutoDismiss = (item) => {
+        if (!item) return;
+        const current = item.dataset.flashTimerId;
+        if (current) {
+          clearTimeout(Number(current));
+          delete item.dataset.flashTimerId;
+        }
+      };
+
+      const animateRemoval = (item) => {
+        if (!item) return;
+        cancelAutoDismiss(item);
+        item.style.transition = 'opacity .25s ease, transform .25s ease';
+        void item.offsetHeight;
+        item.style.opacity = '0';
+        item.style.transform = 'translateY(-4px)';
+        setTimeout(() => item.remove(), 260);
+      };
+
+      const scheduleAutoDismiss = (item) => {
+        if (!item || item.dataset.flashTimerId) return;
+        const timer = setTimeout(() => animateRemoval(item), AUTO_DISMISS_MS);
+        item.dataset.flashTimerId = timer.toString();
+      };
+
+      const handleDismiss = (btn) => {
+        if (!btn) return;
+        const item = btn.closest('.flash-item');
+        if (!item) return;
+        animateRemoval(item);
+      };
+
+      if (container) {
+        try {
+          container.classList.add('fixed','top-3','left-1/2','-translate-x-1/2','w-full','max-w-2xl','z-50','px-4');
+          container.classList.remove('mb-4');
+        } catch (e) {}
+        const initFlashItems = () => {
+          container.querySelectorAll('.flash-item').forEach(scheduleAutoDismiss);
+        };
+        initFlashItems();
+        const observer = new MutationObserver(initFlashItems);
+        observer.observe(container, { childList: true, subtree: true });
+        lucide.createIcons();
+      }
+
+      document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const btn = target.closest('.dismiss');
+        if (!btn) return;
+        event.preventDefault();
+        handleDismiss(btn);
       });
-      setTimeout(() => {
-        container.querySelectorAll('.flash-item').forEach(el => el.remove());
-      }, 4500);
-      // Refresh icons
-      lucide.createIcons();
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const btn = target.closest('.dismiss');
+        if (!btn) return;
+        event.preventDefault();
+        handleDismiss(btn);
+      });
     })();
 
     // Replace stray bullet mojibake with a clean separator

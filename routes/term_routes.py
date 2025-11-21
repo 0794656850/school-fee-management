@@ -1,10 +1,12 @@
 ﻿from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
+import csv
 import json
 import hmac
 import hashlib
 import mysql.connector
+from io import StringIO
 from urllib.parse import urlparse
 from datetime import date, datetime
 import os
@@ -15,6 +17,14 @@ from utils.classes import promote_class_name
 from utils.settings import get_setting, set_school_setting
 from routes.newsletter_routes import ensure_newsletters_table
 from utils.ai import ai_is_configured, chat_anything
+from markupsafe import escape
+
+try:
+    from flask_mail import Message
+    from extensions import mail
+except Exception:
+    Message = None  # type: ignore
+    mail = None  # type: ignore
 
 term_bp = Blueprint("terms", __name__, url_prefix="/terms")
 
@@ -174,6 +184,19 @@ def _resolve_email_column(cursor) -> str | None:
     return None
 
 
+def _detect_balance_column(conn) -> str:
+    cur = conn.cursor()
+    try:
+        cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+        has_balance = bool(cur.fetchone())
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+    return "balance" if has_balance else "fee_balance"
+
+
 def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]:
     """Send premium term memo emails to all students for the specified year/term.
 
@@ -256,9 +279,108 @@ def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]
             else:
                 skipped += 1
         return (sent, skipped)
-    except Exception:
-        return (0, 0)
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
 
+
+def _apply_term_fee_amount(db, student_id, year, term, fee_amount, bal_col, school_id):
+    cur = db.cursor(dictionary=True)
+    pcur = db.cursor()
+    try:
+        cur.execute(
+            "SELECT fee_amount, initial_fee, adjusted_fee, discount, final_fee FROM term_fees WHERE student_id=%s AND year=%s AND term=%s",
+            (student_id, year, term),
+        )
+        prev = cur.fetchone() or {}
+        prev_final = float(prev.get("final_fee") if prev.get("final_fee") is not None else prev.get("fee_amount") or 0.0)
+
+        new_initial = None
+        new_adjusted = None
+        if prev:
+            new_adjusted = float(fee_amount)
+        else:
+            new_initial = float(fee_amount)
+
+        row_discount = float(prev.get("discount") or 0.0)
+        effective_fee = (
+            new_adjusted
+            if new_adjusted is not None
+            else (prev.get("adjusted_fee") if prev.get("adjusted_fee") is not None else None)
+        )
+        if effective_fee is None:
+            effective_fee = new_initial if new_initial is not None else (prev.get("initial_fee") or 0.0)
+        effective_fee = float(effective_fee or 0.0)
+
+        discount_exceeded = False
+        if row_discount and row_discount > effective_fee:
+            discount_exceeded = True
+            row_discount = effective_fee
+
+        new_final = max(float(effective_fee) - float(row_discount or 0.0), 0.0)
+
+        if prev:
+            pcur.execute(
+                "UPDATE term_fees SET fee_amount=%s, final_fee=%s, adjusted_fee=%s WHERE student_id=%s AND year=%s AND term=%s",
+                (new_final, new_final, new_adjusted, student_id, year, term),
+            )
+        else:
+            pcur.execute(
+                "INSERT INTO term_fees (student_id, year, term, fee_amount, initial_fee, final_fee) VALUES (%s,%s,%s,%s,%s,%s)",
+                (student_id, year, term, new_final, new_initial, new_final),
+            )
+
+        delta = float(new_final) - float(prev_final)
+        if abs(delta) > 0:
+            pcur.execute(
+                f"UPDATE students SET {bal_col} = COALESCE({bal_col},0) + %s WHERE id=%s AND school_id=%s",
+                (delta, student_id, school_id),
+            )
+
+        try:
+            cur.execute(
+                "SELECT COALESCE(credit,0) AS credit, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE id=%s AND school_id=%s",
+                (student_id, school_id),
+            )
+            row = cur.fetchone() or {"credit": 0, "bal": 0}
+            avail = float(row.get("credit") or 0)
+            bal_now = float(row.get("bal") or 0)
+            apply = min(avail, max(bal_now, 0))
+            if apply > 0:
+                pcur.execute(
+                    f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
+                    (apply, apply, student_id, school_id),
+                )
+                try:
+                    payment_cur = db.cursor()
+                    payment_cur.execute(
+                        "INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id) VALUES (%s,%s,%s,%s,NOW(),%s,%s,%s)",
+                        (student_id, apply, 'Credit Transfer', 'Auto-apply starting term credit', year, term, school_id),
+                    )
+                    payment_cur.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return {
+            "delta": delta,
+            "new_final": new_final,
+            "prev_final": prev_final,
+            "is_adjustment": bool(prev),
+            "discount_exceeded": discount_exceeded,
+        }
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            pcur.close()
+        except Exception:
+            pass
 
 def _auto_compose_term_comms(db, year: int, term: int) -> None:
     """Create premium-ready draft newsletter and memo when a term is set/opened.
@@ -272,6 +394,188 @@ def _auto_compose_term_comms(db, year: int, term: int) -> None:
     except Exception:
         # If table missing and cannot be created, skip silently
         return
+
+
+TERM_EVENT_CONFIG = {
+    "flat_fee": {
+        "headline": "Fees published",
+        "subject": "{school} • Term {term} {year} flat fees are live",
+        "summary": "The flat fee schedule for Term {term} {year} has been published and invoices were generated.",
+        "category": "term_event",
+    },
+    "open": {
+        "headline": "Term opened",
+        "subject": "{school} • Term {term} {year} is now open",
+        "summary": "Term {term} {year} is officially open for learning, and we look forward to a successful term.",
+        "category": "term_event",
+    },
+    "close": {
+        "headline": "Term closed",
+        "subject": "{school} • Term {term} {year} has closed",
+        "summary": "Term {term} {year} has been closed. Thank you for the support and the timely payments.",
+        "category": "term_event",
+    },
+}
+
+
+def _smtp_ready() -> bool:
+    try:
+        cfg = current_app.config
+        server = (cfg.get("MAIL_SERVER") or "").strip()
+        username = (cfg.get("MAIL_USERNAME") or "").strip()
+        password = (cfg.get("MAIL_PASSWORD") or "").strip()
+        return bool(server and username and password)
+    except Exception:
+        return False
+
+
+def _term_event_email_sender() -> str | None:
+    sender = (
+        get_setting("SCHOOL_EMAIL")
+        or current_app.config.get("MAIL_SENDER")
+        or current_app.config.get("MAIL_DEFAULT_SENDER")
+        or current_app.config.get("MAIL_USERNAME")
+    )
+    return sender.strip() if sender else None
+
+
+def _collect_guardian_emails(db, school_id: int | None = None) -> list[str]:
+    emails: set[str] = set()
+    cur = None
+    try:
+        cur = db.cursor(dictionary=True)
+        email_col = _resolve_email_column(cur)
+        if not email_col:
+            return []
+        where = f"{email_col} IS NOT NULL AND {email_col} <> ''"
+        params: list = []
+        if school_id is not None:
+            where += " AND school_id=%s"
+            params.append(school_id)
+        cur.execute(f"SELECT DISTINCT {email_col} AS email FROM students WHERE {where}", tuple(params))
+        for row in cur.fetchall() or []:
+            value = (row.get("email") or "").strip()
+            if value:
+                emails.add(value)
+    except Exception:
+        pass
+    finally:
+        if cur:
+            try:
+                cur.close()
+            except Exception:
+                pass
+    return sorted(emails)
+
+
+def _send_term_event_emails(emails: list[str], subject: str, html: str) -> int:
+    if not emails:
+        return 0
+    sent = 0
+    smtp_ok = _smtp_ready() and Message and mail
+    sender = _term_event_email_sender()
+    if smtp_ok and not sender:
+        smtp_ok = False
+    for to_addr in emails:
+        address = to_addr.strip()
+        if not address:
+            continue
+        ok = False
+        try:
+            ok = gmail_send_email_html(address, subject, html)
+        except Exception:
+            ok = False
+        if not ok and smtp_ok and Message and mail and sender:
+            try:
+                msg = Message(subject=subject, sender=sender, recipients=[address], html=html)
+                mail.send(msg)
+                ok = True
+            except Exception:
+                ok = False
+        if ok:
+            sent += 1
+    return sent
+
+
+def _term_event_html(full_title: str, summary: str, details: dict[str, str | int | None], portal_url: str) -> str:
+    parts = [
+        "<div style=\"font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;color:#0f172a;\">",
+        f"<h2 style=\"margin-bottom:8px;font-size:1.25rem;\">{escape(full_title)}</h2>",
+        f"<p style=\"margin-bottom:6px;font-size:1rem;\">{escape(summary)}</p>",
+    ]
+    due = details.get("due_date")
+    if due:
+        parts.append(f"<p style=\"margin-bottom:4px;\"><strong>Due date:</strong> {escape(str(due))}</p>")
+    invoices = details.get("invoice_count")
+    if invoices:
+        parts.append(f"<p style=\"margin-bottom:4px;\"><strong>Invoices:</strong> {escape(str(invoices))} generated</p>")
+    event_time = details.get("timestamp")
+    if event_time:
+        if hasattr(event_time, "strftime"):
+            timestamp = event_time.strftime("%Y-%m-%d %H:%M")
+        else:
+            timestamp = str(event_time)
+        parts.append(f"<p style=\"margin-bottom:4px;\"><strong>Updated:</strong> {escape(timestamp)}</p>")
+    parts.append(
+        f"<p style=\"margin-top:12px;font-size:0.95rem;\">"
+        f"Visit the <a href=\"{escape(portal_url)}\" style=\"color:#4f46e5;\">SmartEduPay portal</a> to view invoices, receipts, and term communication.</p>"
+    )
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _publish_term_event(
+    db,
+    year: int,
+    term: int,
+    event_kind: str,
+    details: dict[str, str | int | datetime | None] | None = None,
+) -> None:
+    cfg = TERM_EVENT_CONFIG.get(event_kind)
+    if not cfg:
+        return
+    details = details or {}
+    school = (get_setting("SCHOOL_NAME") or "School").strip()
+    subject = cfg["subject"].format(school=school, year=year, term=term)
+    title = f"{school}: Term {term} {year} • {cfg['headline']}"
+    portal_url = url_for("dashboard", _external=True)
+    html = _term_event_html(title, cfg["summary"].format(year=year, term=term), details, portal_url)
+
+    try:
+        ensure_newsletters_table(db)
+    except Exception:
+        return
+    cur = None
+    try:
+        cur = db.cursor()
+        sid = session.get("school_id") if session else None
+        params = [title, sid, sid]
+        cur.execute(
+            "SELECT COUNT(*) AS c FROM newsletters WHERE title=%s AND (school_id=%s OR (school_id IS NULL AND %s IS NULL))",
+            tuple(params),
+        )
+        if (cur.fetchone() or {}).get("c", 0):
+            return
+        cat = cfg.get("category") or "term_event"
+        cur.execute(
+            "INSERT INTO newsletters (school_id, category, title, subject, html, audience_type, audience_value, created_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (sid, cat, title, subject, html, "all", None, None),
+        )
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        if cur:
+            try:
+                cur.close()
+            except Exception:
+                pass
+    emails = _collect_guardian_emails(db, session.get("school_id") if session else None)
+    if emails:
+        _send_term_event_emails(emails, subject, html)
 
     try:
         cur = db.cursor(dictionary=True)
@@ -872,8 +1176,9 @@ def set_current():
         db.commit()
         # Persist explicit user selection to per-school settings (used as authoritative source)
         try:
-            set_school_setting("CURRENT_YEAR", str(year))
-            set_school_setting("CURRENT_TERM", str(term))
+            if sid:
+                set_school_setting("CURRENT_YEAR", str(year), school_id=sid)
+                set_school_setting("CURRENT_TERM", str(term), school_id=sid)
         except Exception:
             # Non-fatal; DB marks still apply
             pass
@@ -957,6 +1262,10 @@ def open_term_route():
             _auto_compose_term_comms(db, year, term)
         except Exception:
             pass
+        try:
+            _publish_term_event(db, year, term, "open", {"timestamp": datetime.utcnow()})
+        except Exception:
+            pass
         flash("Term opened.", "success")
     except Exception as e:
         try:
@@ -998,6 +1307,10 @@ def close_term_route():
         db.commit()
         # Audit removed
         flash("Term closed.", "success")
+        try:
+            _publish_term_event(db, year, term, "close", {"timestamp": datetime.utcnow()})
+        except Exception:
+            pass
         # TODO: apply rollover credits into next term (future enhancement)
     except Exception as e:
         try:
@@ -1220,105 +1533,24 @@ def set_term_fee():
     db = _db()
     try:
         ensure_term_fees_table(db)
-        cur = db.cursor(dictionary=True)
-        cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
-        has_balance = bool(cur.fetchone())
-        bal_col = "balance" if has_balance else "fee_balance"
-
-        # Fetch existing to determine whether this is an initial set or an adjustment
-        cur.execute(
-            "SELECT fee_amount, initial_fee, adjusted_fee, discount, final_fee FROM term_fees WHERE student_id=%s AND year=%s AND term=%s",
-            (student_id, year, term),
+        bal_col = _detect_balance_column(db)
+        result = _apply_term_fee_amount(
+            db,
+            student_id,
+            year,
+            term,
+            fee_amount,
+            bal_col,
+            session.get("school_id") if session else None,
         )
-        prev = cur.fetchone() or {}
-        prev_final = float(
-            prev.get("final_fee") if prev.get("final_fee") is not None else prev.get("fee_amount") or 0.0
-        )
-
-        # Determine new state:
-        # - If a record exists, treat input as an adjustment (adjusted_fee)
-        # - Otherwise, set as initial_fee
-        new_initial = None
-        new_adjusted = None
-        if prev:
-            new_adjusted = float(fee_amount)
-        else:
-            new_initial = float(fee_amount)
-
-        # Resolve any discount from term_fees row; if using Pro discounts table,
-        # the invoice generator will still apply those. Here, we only consider the
-        # per-row discount column for legacy flat logic.
-        row_discount = float(prev.get("discount") or 0.0)
-
-        # Compute effective fee (adjusted if present, else initial)
-        effective_fee = (
-            new_adjusted if new_adjusted is not None else
-            (prev.get("adjusted_fee") if prev.get("adjusted_fee") is not None else None)
-        )
-        if effective_fee is None:
-            effective_fee = (
-                new_initial if new_initial is not None else
-                (prev.get("initial_fee") if prev.get("initial_fee") is not None else 0.0)
-            )
-
-        # Final fee after discount (clamped at zero)
-        if row_discount and effective_fee is not None and row_discount > effective_fee:
-            # Warn if discount exceeds fee
-            flash("Discount exceeds adjusted/initial fee; final set to 0.", "warning")
-        new_final = max(float(effective_fee) - float(row_discount or 0.0), 0.0)
-
-        # For backward compatibility, mirror into fee_amount column
-        if prev:
-            cur.execute(
-                "UPDATE term_fees SET fee_amount=%s, final_fee=%s, adjusted_fee=%s WHERE student_id=%s AND year=%s AND term=%s",
-                (new_final, new_final, new_adjusted, student_id, year, term),
-            )
-        else:
-            cur.execute(
-                "INSERT INTO term_fees (student_id, year, term, fee_amount, initial_fee, final_fee) VALUES (%s,%s,%s,%s,%s,%s)",
-                (student_id, year, term, new_final, new_initial, new_final),
-            )
-
-        # Balance delta is based on change in FINAL amount
-        delta = float(new_final) - float(prev_final)
-
-        if abs(delta) > 0:
-            cur.execute(
-                f"UPDATE students SET {bal_col} = COALESCE({bal_col},0) + %s WHERE id = %s AND school_id=%s",
-                (delta, student_id, session.get("school_id") if session else None),
-            )
-
-        # Auto-apply any existing student credit to the new term balance
-        # so overpayments from previous terms reduce the opening debt.
-        try:
-            cur.execute("SELECT COALESCE(credit,0) AS credit, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE id=%s AND school_id=%s",
-                        (student_id, session.get("school_id")))
-            row = cur.fetchone() or {"credit": 0, "bal": 0}
-            avail = float(row.get("credit") or 0)
-            bal_now = float(row.get("bal") or 0)
-            apply = min(avail, max(bal_now, 0))
-            if apply > 0:
-                # Reduce balance and credit
-                cur.execute(f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
-                            (apply, apply, student_id, session.get("school_id")))
-                # Record as a visible payment with method 'Credit Transfer'
-                try:
-                    pcur = db.cursor()
-                    pcur.execute(
-                        "INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id) VALUES (%s,%s,%s,%s,NOW(),%s,%s,%s)",
-                        (student_id, apply, 'Credit Transfer', 'Auto-apply starting term credit', year, term, session.get("school_id")),
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            # Non-fatal if schema differs
-            pass
-
         db.commit()
-        if prev:
-            flash(f"Adjusted fee saved. Final: KES {new_final:,.2f}. Balance delta: KES {delta:,.2f}", "success")
+        if result.get("discount_exceeded"):
+            flash("Discount exceeds adjusted/initial fee; final set to 0.", "warning")
+        delta = result.get("delta", 0.0)
+        if result.get("is_adjustment"):
+            flash(f"Adjusted fee saved. Final: KES {result.get('new_final', 0):,.2f}. Balance delta: KES {delta:,.2f}", "success")
         else:
-            flash(f"Initial fee saved. Final: KES {new_final:,.2f}. Applied to balance.", "success")
+            flash(f"Initial fee saved. Final: KES {result.get('new_final', 0):,.2f}. Applied to balance.", "success")
     except Exception as e:
         try:
             db.rollback()
@@ -1367,7 +1599,7 @@ def set_term_fee():
                         items = []
                     if not items:
                         # Fallback to legacy flat fee
-                        total_due = float(new_final or 0.0)
+                        total_due = float(fee_amount or 0.0)
                         items = [{"description": "Term Fee", "amount": total_due}]
                     # Try to fetch due date from invoice if present
                     due_str = None
@@ -1407,6 +1639,138 @@ def set_term_fee():
     finally:
         db.close()
 
+    return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+
+@term_bp.route("/fees/import", methods=["POST"])
+def import_term_fees():
+    year = request.form.get("year", type=int)
+    term = request.form.get("term", type=int)
+    csv_file = request.files.get("tuition_csv")
+    if not (year and term in (1, 2, 3)):
+        flash("Provide a valid year and term before importing.", "warning")
+        return redirect(url_for("terms.manage_term_fees", year=year or "", term=term or ""))
+    if not csv_file or not csv_file.filename:
+        flash("Please upload a CSV file with tuition rows.", "warning")
+        return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+    try:
+        decoded = csv_file.read().decode("utf-8-sig")
+    except Exception:
+        flash("Unable to read the uploaded file. Ensure it is a UTF-8 encoded CSV.", "error")
+        return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+    try:
+        reader = csv.DictReader(StringIO(decoded))
+    except csv.Error as exc:
+        flash(f"Invalid CSV format: {exc}", "error")
+        return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+    if not reader.fieldnames:
+        flash("The CSV file must include a header row.", "warning")
+        return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+    school_id = session.get("school_id") if session else None
+    db = _db()
+    imported = 0
+    errors: list[str] = []
+    try:
+        ensure_term_fees_table(db)
+        bal_col = _detect_balance_column(db)
+        lookup_cur = db.cursor(dictionary=True)
+        try:
+            def _extract_amount(row):
+                for key in ("amount", "fee", "tuition", "tuition_fee", "term_fee"):
+                    raw = (row.get(key) or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        return float(raw)
+                    except ValueError:
+                        continue
+                return None
+
+            def _find_student_id(row):
+                for key in ("student_id", "id"):
+                    raw = (row.get(key) or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        candidate = int(raw)
+                    except ValueError:
+                        continue
+                    query = "SELECT id FROM students WHERE id=%s"
+                    params = [candidate]
+                    if school_id is not None:
+                        query += " AND school_id=%s"
+                        params.append(school_id)
+                    lookup_cur.execute(query, tuple(params))
+                    found = lookup_cur.fetchone()
+                    if found:
+                        return found["id"]
+                for key in ("reg_no", "regNo", "admission_no"):
+                    raw = (row.get(key) or "").strip()
+                    if not raw:
+                        continue
+                    query = "SELECT id FROM students WHERE admission_no=%s"
+                    params = [raw]
+                    if school_id is not None:
+                        query += " AND school_id=%s"
+                        params.append(school_id)
+                    lookup_cur.execute(query, tuple(params))
+                    found = lookup_cur.fetchone()
+                    if found:
+                        return found["id"]
+                return None
+
+            has_data = any((col.strip() for col in reader.fieldnames if col))
+            if not has_data:
+                flash("CSV header row appears empty.", "warning")
+                return redirect(url_for("terms.manage_term_fees", year=year, term=term))
+
+            for idx, row in enumerate(reader, start=1):
+                if not any(str(v or "").strip() for v in row.values()):
+                    continue
+                amount = _extract_amount(row)
+                if amount is None or amount < 0:
+                    errors.append(f"Row {idx}: invalid fee amount.")
+                    continue
+                student_id = _find_student_id(row)
+                if not student_id:
+                    errors.append(f"Row {idx}: student not found.")
+                    continue
+                try:
+                    _apply_term_fee_amount(db, student_id, year, term, amount, bal_col, school_id)
+                    imported += 1
+                except Exception as exc:
+                    errors.append(f"Row {idx}: {exc}")
+        finally:
+            try:
+                lookup_cur.close()
+            except Exception:
+                pass
+
+        db.commit()
+        summary = f"Imported tuition fees for {imported} student(s)."
+        level = "success"
+        if errors:
+            note = "; ".join(errors[:3])
+            if len(errors) > 3:
+                note += " …"
+            summary += f" Skipped {len(errors)} row(s): {note}"
+            level = "warning" if imported else "error"
+        flash(summary, level)
+    except Exception as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        flash(f"Failed to import tuition fees: {exc}", "error")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
     return redirect(url_for("terms.manage_term_fees", year=year, term=term))
 
 
@@ -2136,6 +2500,16 @@ def generate_invoices():
                 flash(f"Term memos emailed to {sent} students (skipped {skipped}).", "success")
             else:
                 flash("No term memos sent (no emails found or email not configured).", "warning")
+        try:
+            _publish_term_event(
+                db,
+                year,
+                term,
+                "flat_fee",
+                {"invoice_count": created, "due_date": due_date},
+            )
+        except Exception:
+            pass
     except Exception as e:
         try: db.rollback()
         except Exception: pass

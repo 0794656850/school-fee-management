@@ -51,6 +51,16 @@
         </li>
         {% endfor %}
       </ul>
+      <div class="mt-6 rounded-2xl border border-gray-100 bg-white/90 p-4 shadow-sm space-y-3">
+        <div class="flex items-center gap-2 text-xs uppercase tracking-[0.4em] text-gray-400">
+          <i data-lucide="sparkles" class="w-4 h-4 text-emerald-500"></i>
+          Family inspiration
+        </div>
+        <p id="quoteText" class="text-sm text-gray-600 leading-relaxed" aria-live="polite"></p>
+        <div class="h-1 w-full rounded-full bg-gray-200 overflow-hidden">
+          <div id="quoteProgress" class="h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+        </div>
+      </div>
     </aside>
     <div id="overlay" class="fixed inset-0 bg-black/30 z-30 hidden md:hidden"></div>
     <section class="space-y-6">
@@ -59,7 +69,7 @@
           <div>
             <div class="text-xs text-gray-500">Student</div>
             <div class="text-xl font-bold">{{ student.name }}</div>
-            <div class="text-sm text-gray-500">Admission: {{ student.regNo }} · Class: {{ student.class or student.class_name or '—' }}</div>
+            <div class="text-sm text-gray-500">SmartEduPay Enterprise EDU_PAY: {{ student.regNo }} · Class: {{ student.class or student.class_name or '-' }}</div>
             <div class="text-xs text-gray-500">Year/Term: {{ year }}/{{ term }}</div>
           </div>
           <div class="kpi__icon" aria-hidden="true"><i data-lucide="id-card"></i></div>
@@ -73,12 +83,205 @@
           {% endif %}
         </div>
       </div>
-      <div class="glass rounded-2xl p-5 border border-gray-100">
-        <div class="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div class="text-xs text-gray-500">Total Fee</div>
-            <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(expected or 0) }}</div>
+    <section class="glass rounded-2xl p-6 border border-gray-100 space-y-5">
+      <div class="grid gap-6 lg:grid-cols-[320px,1fr]">
+        <div class="rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-emerald-500 to-cyan-500 text-white overflow-hidden relative">
+          <div class="flex items-center gap-4">
+            <div class="h-16 w-16 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-2xl font-bold tracking-wider">{{ ((student.name or 'Child')[:2])|upper }}</div>
+            <div>
+              <div class="text-xs uppercase tracking-[0.4em] text-white/70">Child record</div>
+              <div class="text-2xl font-semibold">{{ student.name }}</div>
+              <div class="text-sm text-white/70">{{ student.class or student.class_name or 'Class TBD' }} · Adm No: {{ student.admission_no or student.regNo or '—' }}</div>
+            </div>
           </div>
+          <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div class="rounded-2xl bg-white/20 p-3">
+              <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Year/term</div>
+              <div class="text-lg font-semibold">{{ year }}/{{ term }}</div>
+            </div>
+            <div class="rounded-2xl bg-white/20 p-3">
+              <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Balance</div>
+              <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+            </div>
+          </div>
+          <div class="mt-4">
+            <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Family roster</div>
+            <div class="flex items-end gap-2 text-sm">
+              <span class="text-lg font-semibold">{{ (siblings|length) + 1 }} child{% if (siblings|length) + 1 != 1 %}ren{% endif %}</span>
+              <span class="text-white/70">connected</span>
+            </div>
+            {% if percent is not none %}
+            <div class="mt-3 h-2 rounded-full bg-white/20">
+              <div class="h-2 rounded-full bg-white" style="width: {{ percent|default(0) }}%"></div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="grid gap-4">
+          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Financial health</div>
+              <div class="text-xs font-semibold text-emerald-600">{{ balance and 'Due now' or 'On track' }}</div>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-3 text-sm text-gray-600">
+              <div class="space-y-1">
+                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Paid</div>
+                <div class="text-lg font-semibold text-emerald-600">Ksh {{ '%.0f'|format(paid or 0) }}</div>
+              </div>
+              <div class="space-y-1">
+                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Balance</div>
+                <div class="text-lg font-semibold text-rose-600">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+              </div>
+              <div class="space-y-1">
+                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Progress</div>
+                <div class="text-lg font-semibold text-gray-800">{{ percent is not none and percent ~ '%' or '—' }}</div>
+              </div>
+            </div>
+            <p class="mt-4 text-xs text-gray-500">
+              {% if balance and balance > 0 %}
+                Settle the outstanding balance to keep the ledger updated instantly.
+              {% else %}
+                All clear for this term. New invoices appear here as soon as they are posted.
+              {% endif %}
+            </p>
+          </div>
+          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
+            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">School support hub</div>
+            <div class="mt-3 text-sm text-gray-600 space-y-2">
+              <div class="flex items-center justify-between">
+                <span>Accounts email</span>
+                <span class="font-semibold text-gray-900">{{ bursar_email or 'Not provided' }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>Accounts phone</span>
+                <span class="font-semibold text-gray-900">{{ bursar_phone or 'Not provided' }}</span>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              {% if bursar_email %}
+              <a href="mailto:{{ bursar_email }}" class="btn-secondary px-3 py-2 text-xs rounded-xl">Email bursar</a>
+              {% endif %}
+              {% if bursar_phone %}
+              <a href="tel:{{ bursar_phone }}" class="btn-secondary px-3 py-2 text-xs rounded-xl">Call bursar</a>
+              {% endif %}
+              <a href="#aiForm" class="btn-secondary px-3 py-2 text-xs rounded-xl">Ask SmartBot</a>
+            </div>
+          </div>
+          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
+            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Sibling focus</div>
+            <div class="mt-3 space-y-2 text-sm">
+              {% if siblings %}
+                {% for s in siblings %}
+                <div class="grid grid-cols-[1fr,auto] items-center gap-2">
+                  <div class="text-gray-700 font-medium">{{ s.name }}</div>
+                  <div class="text-xs text-gray-500">Class {{ s.class_name or 'n/a' }}</div>
+                </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-gray-500">No other family members registered yet.</p>
+              {% endif %}
+            </div>
+          </div>
+          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
+            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Quick actions</div>
+            <div class="mt-3 space-y-2 text-sm">
+              <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
+                <span>Download latest statement</span>
+                <i data-lucide="download" class="text-sm text-gray-500"></i>
+              </a>
+              <a href="#recent-payments" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
+                <span>Review recent receipts</span>
+                <i data-lucide="list-check" class="text-sm text-gray-500"></i>
+              </a>
+              <a href="#guardian-analytics" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
+                <span>See spending analytics</span>
+                <i data-lucide="bar-chart-2" class="text-sm text-gray-500"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Child Journey Board</h3>
+        <span class="text-xs text-gray-500">Everything you need at a glance</span>
+      </div>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div id="recent-payments" class="rounded-2xl border border-gray-100 bg-white/80 p-4 space-y-3 text-sm text-gray-600">
+          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Latest ledger hits</div>
+          {% for p in payments[:3] %}
+          <div class="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+            <div class="flex items-center justify-between text-gray-900 font-semibold">
+              <span>{{ p.date }}</span>
+              <span class="text-xs text-gray-500">{{ p.method or 'M-Pesa' }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span>Ref {{ p.reference or '—' }}</span>
+              <span class="font-semibold">KES {{ '%.0f'|format(p.amount or 0) }}</span>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-xs text-gray-500">No payments recorded yet. Use the Pay Now card above to initiate a new checkout.</p>
+          {% endfor %}
+        </div>
+        <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 space-y-3 text-sm text-gray-600">
+          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Upcoming tasks & updates</div>
+          {% for note in announcements[:3] %}
+          <div class="flex items-start gap-3">
+            <div class="w-2 h-2 mt-1 rounded-full bg-emerald-500"></div>
+            <div>
+              <div class="font-semibold text-gray-900">{{ note.title or note.subject or 'Update' }}</div>
+              <p class="text-xs text-gray-500">{{ note.category|default('notice') }} · {{ note.created_at }}</p>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-xs text-gray-500">No announcements yet. The school will post timely notices and deadlines here.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    <section class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">Parent Playbook</h3>
+        <span class="text-xs text-gray-500">Tips to make every term smoother</span>
+      </div>
+      <div class="grid gap-4 md:grid-cols-3 text-sm text-gray-600">
+        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
+          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Stay informed</div>
+          <p class="text-gray-800 font-semibold">Turn on SMS/email alerts</p>
+          <p class="text-xs text-gray-500">Enable WhatsApp or email reminders so we ping you when invoices are posted or receipts are available.</p>
+        </div>
+        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
+          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Track progress</div>
+          <p class="text-gray-800 font-semibold">Use Smart summary</p>
+          <p class="text-xs text-gray-500">The Smart summary above tallies fee completion; refresh after each payment to keep the percentage current.</p>
+        </div>
+        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
+          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Ask SmartBot</div>
+          <p class="text-gray-800 font-semibold">Questions? Ask away</p>
+          <p class="text-xs text-gray-500">Use the SmartEduPay SmartBot (top of the page) to ask anything about balances, invoices, or receipts—no queue, instant replies.</p>
+        </div>
+      </div>
+      <div class="mt-4 text-xs text-gray-500 space-y-2">
+        <p class="flex items-center gap-2"><i data-lucide="check-circle" class="text-emerald-500"></i> Keep admission and class details up to date with the school office so the portal reflects the right child.</p>
+        <p class="flex items-center gap-2"><i data-lucide="shield" class="text-sky-500"></i> Log out after use and never share your token so your child’s fee information stays safe.</p>
+        <p class="flex items-center gap-2"><i data-lucide="clock-3" class="text-indigo-500"></i> Pay at your convenience—the balance card shows exactly what is overdue and automatically posts once Daraja confirms.</p>
+      </div>
+    </section>
+    <div class="glass rounded-2xl p-5 border border-gray-100">
+      <div class="flex items-center gap-3 mb-4">
+        <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="M-Pesa" class="h-9 w-auto object-contain">
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-[0.4em] text-gray-500">Pay via</div>
+          <div class="text-xl font-semibold text-gray-800">M-Pesa</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 text-center">
+        <div>
+          <div class="text-xs text-gray-500">Total Fee</div>
+          <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(expected or 0) }}</div>
+        </div>
           <div>
             <div class="text-xs text-gray-500">Paid</div>
             <div class="text-lg font-semibold text-emerald-600">Ksh {{ '%.0f'|format(paid or 0) }}</div>
@@ -87,6 +290,13 @@
             <div class="text-xs text-gray-500">Balance</div>
             <div class="text-lg font-semibold text-rose-600">Ksh {{ '%.0f'|format(balance or 0) }}</div>
           </div>
+        </div>
+        <div class="mt-3 text-xs text-gray-500">
+          {% if balance and balance > 0 %}
+          <span class="font-semibold text-rose-600">Overdue: Ksh {{ '{:,.2f}'.format(balance) }}</span> · Pay this amount to record it against the student fee ledger.
+          {% else %}
+          <span class="font-semibold text-emerald-600">No outstanding balance.</span> Payments appear on the fee record immediately after Daraja confirms.
+          {% endif %}
         </div>
         <form id="payForm" class="mt-4 grid md:grid-cols-3 gap-3 items-end">
           <input type="hidden" name="token" value="{{ token }}" />
@@ -99,12 +309,15 @@
               <span>Amount (KES)</span>
               <button type="button" id="fillFull" class="text-[11px] text-indigo-700 hover:underline">Use full balance</button>
             </label>
-            <input name="amount" type="number" min="10" step="10" placeholder="e.g. 500" class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
+            <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
           </div>
           <button type="submit" class="btn-primary rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="smartphone"></i> Pay Now with M-Pesa</button>
         </form>
         <div id="payMsg" class="text-sm mt-2"></div>
-        <div id="payTrack" class="hidden mt-2 text-xs text-gray-600"></div>
+        <div id="payTrackWrapper" class="hidden mt-2 flex items-center gap-2 text-xs text-gray-600">
+          <span id="payTrack"></span>
+          <button type="button" id="payTrackCancel" class="hidden text-[11px] text-rose-600 hover:text-rose-900 focus:outline-none focus:underline">Cancel</button>
+        </div>
         {% if paypal_client_id %}
         <div class="mt-4">
           <div class="text-xs text-gray-500 mb-1">Or pay securely with PayPal</div>
@@ -157,7 +370,7 @@
     </section>
 
     <!-- Premium: Spending Analytics -->
-    <section class="glass rounded-2xl p-5 border border-gray-100 guardian-analytics-panel">
+    <section id="guardian-analytics" class="glass rounded-2xl p-5 border border-gray-100 guardian-analytics-panel">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-lg font-semibold">Spending Analytics</h3>
         <div class="text-xs text-gray-500" id="termSummary"></div>
@@ -170,15 +383,15 @@
         <div class="guardian-analytics-metrics grid gap-3">
           <div class="guardian-analytics-metric">
             <p class="text-[0.65rem] uppercase tracking-[0.4em]">Paid term</p>
-            <p class="text-xl font-semibold text-white">KES {{ '{:,.0f}'.format(paid or 0) }}</p>
+            <p class="text-xl font-semibold text-slate-900">KES {{ '{:,.0f}'.format(paid or 0) }}</p>
           </div>
           <div class="guardian-analytics-metric">
             <p class="text-[0.65rem] uppercase tracking-[0.4em]">Balance</p>
-            <p class="text-xl font-semibold text-white">KES {{ '{:,.0f}'.format(balance or 0) }}</p>
+            <p class="text-xl font-semibold text-slate-900">KES {{ '{:,.0f}'.format(balance or 0) }}</p>
           </div>
           <div class="guardian-analytics-metric">
             <p class="text-[0.65rem] uppercase tracking-[0.4em]">Progress</p>
-            <p class="text-xl font-semibold text-white">{{ percent or 0 }}%</p>
+            <p class="text-xl font-semibold text-slate-900">{{ percent or 0 }}%</p>
           </div>
         </div>
       </div>
@@ -244,7 +457,7 @@
 
     <!-- Premium: AI Assistant -->
     <section class="glass rounded-2xl p-5 border border-gray-100">
-      <h3 class="text-lg font-semibold mb-3">Lovato SmartBot</h3>
+      <h3 class="text-lg font-semibold mb-3">SmartEduPay SmartBot</h3>
       <div class="grid md:grid-cols-[1fr,220px] gap-3">
         <div>
           <div id="aiLog" class="text-sm p-3 rounded-xl border border-gray-100 bg-white/70 min-h-[80px]"></div>
@@ -327,10 +540,58 @@
       const form = document.getElementById('payForm');
       const box = document.getElementById('payMsg');
       const track = document.getElementById('payTrack');
+      const trackWrapper = document.getElementById('payTrackWrapper');
+      const cancelBtn = document.getElementById('payTrackCancel');
       const fill = document.getElementById('fillFull');
-      const amt = form?.querySelector('input[name="amount"]');
+      const amt = form ? form.querySelector('input[name="amount"]') : null;
+      let trackInterval = null;
+
+      const stopTracking = (message) => {
+        if (trackInterval) { clearInterval(trackInterval); trackInterval = null; }
+        if (typeof message === 'string' && track) { track.textContent = message; }
+        if (cancelBtn) { cancelBtn.classList.add('hidden'); }
+      };
+
+      const startTracking = (checkoutId) => {
+        if (!track || !trackWrapper || !checkoutId) { return; }
+        stopTracking();
+        trackWrapper.classList.remove('hidden');
+        if (cancelBtn) { cancelBtn.classList.remove('hidden'); }
+        track.textContent = 'Awaiting confirmation...';
+        let tries = 0;
+        trackInterval = setInterval(async () => {
+          tries += 1;
+          const u = new URL('{{ url_for('guardian.guardian_payment_status') }}', window.location.origin);
+          u.searchParams.set('crid', checkoutId);
+          u.searchParams.set('token', {{ token|tojson }});
+          try {
+            const r = await fetch(u.toString());
+            const s = await r.json();
+            if (s && s.status === 'success') {
+              stopTracking('Payment confirmed. Reloading...');
+              setTimeout(()=>window.location.reload(), 1000);
+              return;
+            } else if (s && s.status === 'failed') {
+              stopTracking('Payment failed. ' + (s.message||'Try again.'));
+              return;
+            }
+            track.textContent = 'Awaiting confirmation...';
+          } catch(e) { /* ignore */ }
+          if (tries > 30) {
+            stopTracking('No confirmation yet. You can refresh later.');
+            return;
+          }
+        }, 3000);
+      };
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          stopTracking('Tracking canceled. You can refresh later.');
+        });
+      }
+
       if (fill && amt) {
-        fill.addEventListener('click', ()=>{ try{ const bal = Number({{ (balance or 0)|tojson }}); amt.value = String(Math.max(10, Math.ceil(bal))); }catch(_){ } });
+        fill.addEventListener('click', ()=>{ try{ const bal = Number({{ (balance or 0)|tojson }}); amt.value = String(Math.max(1, Math.ceil(bal))); }catch(_){ } });
       }
       if (!form) return;
       form.addEventListener('submit', async (e) => {
@@ -343,28 +604,46 @@
         if (j.ok) {
           box.textContent = j.message || 'Request sent. Check your phone.'; box.className='text-sm text-emerald-600';
           if (j.checkout_request_id) {
-            track.classList.remove('hidden');
-            let tries = 0; track.textContent = 'Awaiting confirmation…';
-            const iv = setInterval(async () => {
-              tries += 1;
-              const u = new URL('{{ url_for('guardian.guardian_payment_status') }}', window.location.origin);
-              u.searchParams.set('crid', j.checkout_request_id);
-              u.searchParams.set('token', {{ token|tojson }});
-              try {
-                const r = await fetch(u.toString());
-                const s = await r.json();
-                if (s && s.status === 'success') { track.textContent = 'Payment confirmed. Reloading…'; clearInterval(iv); setTimeout(()=>window.location.reload(), 1000); }
-                else if (s && s.status === 'failed') { track.textContent = 'Payment failed. ' + (s.message||'Try again.'); clearInterval(iv); }
-                else { track.textContent = 'Awaiting confirmation…'; }
-              } catch(e) { /* ignore */ }
-              if (tries > 30) { clearInterval(iv); track.textContent = 'No confirmation yet. You can refresh later.'; }
-            }, 3000);
+            startTracking(j.checkout_request_id);
           }
         } else {
           box.textContent = j.error || 'Payment failed.'; box.className='text-sm text-rose-600';
         }
       });
     })();
+
+    (function(){
+      const quotes = [
+        "Great tuition stories are paid on time and tracked in SmartEduPay.",
+        "Consistent payments today fund tomorrow's educational triumphs.",
+        "Every fee cleared is a promise kept between school, parent, and child.",
+        "SmartEduPay keeps you informed so you can focus on your child’s classroom wins.",
+        "Balance clarity builds confidence—focus on progress, not paperwork.",
+        "Timely confirmations mean no more guessing whether the school got the funds.",
+        "Family teamwork includes keeping ledgers, receipts, and stories in sync.",
+        "Parents who know their status start the term in command.",
+        "A smooth payment is a high-five to the bursar and the child alike.",
+        "Seeing the ledger at a glance sparks smarter conversations with teachers."
+      ];
+      const quoteEl = document.getElementById("quoteText");
+      const progress = document.getElementById("quoteProgress");
+      if(!quoteEl || !progress) { return; }
+      const duration = 7000;
+      let idx = 0;
+      const showQuote = () => {
+        quoteEl.textContent = quotes[idx];
+        progress.style.transition = "none";
+        progress.style.width = "0%";
+        // Force reflow before animating
+        void progress.offsetWidth;
+        progress.style.transition = `width ${duration}ms linear`;
+        progress.style.width = "100%";
+        idx = (idx + 1) % quotes.length;
+      };
+      showQuote();
+      setInterval(showQuote, duration);
+    })();
+
     // PayPal Buttons
     {% if paypal_client_id %}
     (function(){
@@ -472,7 +751,7 @@
         log.appendChild(p);
         log.scrollTop = log.scrollHeight;
       };
-      append('Hi, I am Lovato SmartBot. Ask me about fees or exams.','Bot','text-gray-400');
+      append('Hi, I am SmartEduPay SmartBot. Ask me about fees or exams.','Bot','text-gray-400');
       f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const val = (q.value||'').trim();
