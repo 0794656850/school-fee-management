@@ -435,11 +435,15 @@ body {
 /* Premium brand hero (centered logo + title with soft halo) */
 .brand-hero {
   display: grid; place-items: center;
-  padding-top: 1.0rem; padding-bottom: .75rem;
+  padding: 1.25rem 1rem;
   background:
     radial-gradient(1300px 450px at 50% -20%, rgba(14,165,233,.25), transparent 55%),
     radial-gradient(1100px 380px at 85% 10%, rgba(86,212,255,.25), transparent 65%),
     linear-gradient(180deg, rgba(217,235,255,.92), rgba(235,247,255,.92));
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 30px 50px rgba(3, 52, 103, 0.25);
+  backdrop-filter: blur(12px);
 }
 .brand-hero__row { display: inline-flex; align-items: center; gap: 14px; }
 .app-badge {
