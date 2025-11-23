@@ -32,8 +32,31 @@ A modern, multi-tenant school fee management web application for small and mediu
 
 ## Governance & Admin Workflows
 - **Approval workbench**: `/admin/approvals` lets staff submit OTP-secured requests for write-offs, discounts, or credit transfers. Requests are hashed, emailed via `utils/notifications`, recorded in `approval_requests`, and resolved with QR-signed documents from `utils/document_qr` so auditors can verify summaries.
-- **Insights & alerts**: `/admin/insights` surfaces anomalies (collections drop, failed callbacks, unused credits) calculated in `utils/alerts`. A “Send alert” button notifies configured recipients via Gmail and logs the attempt for oversight.
+- **Insights & alerts**: `/admin/insights` surfaces anomalies (collections drop, failed callbacks, unused credits) calculated in `utils/alerts`. A "Send alert" button notifies configured recipients via Gmail and logs the attempt for oversight.
 - **Guardian receipts**: guardians can upload payment proofs through the new upload page, and supporting helpers in `utils/db_helpers` persist and track status so admins can verify before reconciliation.
+
+## Interfaces
+
+### School portal (admin + staff)
+- **Dashboard (`/`)**: High-level KPIs for totals collected, outstanding balances, credits, and failed payments sit alongside a timeline of recent receipts so admins can spot trends at a glance. A floating "Add Payment" action opens the payment form used by staff to log cash, bank transfers, or imported M-Pesa/STK callbacks without leaving the dashboard.
+- **Students & payments (`/students` et al.)**: Student profiles surface class, guardian contacts, credit balances, invoices, and ledger rows; clicking a student reveals historical payments, attached documents, and an "Add Payment" shortcut to settle balances faster.
+- **Credit Ops**: The credit workspace (`/credit`) hosts overpayments, sibling transfers, and the audit trail for reversals so excess funds stay transparent while being reallocated where needed.
+- **Terms & invoices (`/terms`, `/terms/invoices`)**: Term planners manage fee components, discounts, class defaults, and printable invoices; invoicing pages include bulk actions, PDF exports, and email dispatch that references the selected term and guardian.
+- **Reminders & recovery**: The reminders module generates templated Gmail reminders, while the recovery dashboard tracks defaulters, logged contacts, promises to pay, and CSV exports for outreach.
+- **Insights (`/admin/insights`)**: Anomaly detection compares two weeks of collections, failed callbacks, and unused credits, surfaces the delta, and lets admins fire alert emails to configured recipients from the same screen.
+- **Approvals (`/admin/approvals`)**: Staff can request write-offs, discounts, or credit transfers; each submission sends a hashed OTP via Gmail and records the approval request for approvers to confirm before the change touches live data.
+- **Guardian receipts (`/admin/guardian_receipts`)**: Uploaded receipts show guardian details, file links, verification status, and admin notes so finance teams can release funds only after manually vetting uploads.
+- **Billing & Upgrade (`/admin/billing`)**: This page accepts M-Pesa references to toggle Pro features (multi-user, exports, WhatsApp receipts) and shows the activation key so the same entry point drives manual or webhook-backed upgrades.
+- **AI assistant & documentation**: The Vertex/Gemini-backed assistant (`/ai`) climbs the RAG index for last payment details, defaulter summaries, and architectural Q&A while the docs page surfaces guides stored under `docs/`.
+
+### Guardian portal (parents)
+- **Login & child switching (`/guardian/login`, `/guardian/switch`)**: Guardians authenticate with email/phone or tokens; once signed in they can switch between enrolled children without reauthentication.
+- **Dashboard (`/guardian/dashboard`)**: The portal lists each child's balance, recent payments, remaining term dues, and contextual actions (print receipt, open payment modal, upload proof). Native filters surface pending invoices, pending STK pushes, and guardian analytics in one scrollable page.
+- **Payments (`/guardian/make_payment`, PayPal integration)**: Guardians trigger STK Push requests, manually confirm references, or use PayPal buttons; status refresh buttons poll `/guardian/status` and highlight success before the admin ledger is updated.
+- **Receipt printing & verification (`/guardian/receipt/<id>`)**: Receipts are fully branded, printable, and QR-signed for guard verification; the same view surfaces current balance, credit, and action buttons for reprinting or emailing to other guardians.
+- **Receipt upload (`/guardian/upload-receipt`)**: Upload forms accept PNG/JPG/PDF proof, capture guardian metadata, and queue each file for admin verification using the `utils/db_helpers` workflow described above.
+- **Analytics, events, and notifications (`/guardian/analytics`, `/guardian/events`, `/guardian/notifications`)**: Spending analytics chart payments across time, show progress toward targets, and pair with scheduled events/notification feeds so guardians never miss due dates.
+- **Guardian AI assistant (`/guardian/ai_assistant`)**: A limited version of the RAG assistant answers balance queries or clarifies invoice line items right from the guardian dashboard.
 
 ## Quickstart (Local)
 Prerequisites:
@@ -152,10 +175,10 @@ Set your envs via Compose or a `.env` file before running.
 - Secure the endpoint by setting `EMAIL_INBOUND_SECRET` and passing it via header `X-Email-Secret`, form field `secret`, or query param `?secret=`.
 
 ## Scripts
-- `scripts/seed_students.py` – seed example student data
-- `scripts/read_app_settings.py` – view app settings
-- `scripts/test_daraja_token.py` – test Daraja token/config
-- `scripts/ai_index.py` / `scripts/ai_ask.py` – AI index and Q&A
+- `scripts/seed_students.py` - seed example student data
+- `scripts/read_app_settings.py` - view app settings
+- `scripts/test_daraja_token.py` - test Daraja token/config
+- `scripts/ai_index.py` / `scripts/ai_ask.py` - AI index and Q&A
 
 ## Screenshots
 Drop your screenshots into `docs/screenshots/` using the filenames below and they will render here automatically on GitHub.

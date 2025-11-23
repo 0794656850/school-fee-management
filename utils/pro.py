@@ -35,10 +35,10 @@ def set_license_key(key: str) -> None:
 
 
 def is_pro_enabled(app=None) -> bool:
-    """Monetization feature flag has been removed; always return True."""
+    """Legacy Pro gate always resolves to enabled for this deployment."""
     return True
 
 
 def upgrade_url(app=None) -> str:
-    """Fallback upgrade URL stub (no monetization portal anymore)."""
+    """Fallback upgrade URL stub that returns the root view."""
     return "/"

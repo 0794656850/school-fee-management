@@ -73,4 +73,4 @@ if __name__ == "__main__":
 
     print("\n✅ LICENSE KEY GENERATED:")
     print(key)
-    print("\nPaste this key in the Monetization > Activate License section of the system.")
+    print("\nPaste this key in the Billing & Upgrade page (enter it as an M-Pesa reference) to activate the license.")
