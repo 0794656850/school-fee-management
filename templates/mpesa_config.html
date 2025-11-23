@@ -46,6 +46,43 @@
           <input type="text" name="DARAJA_TRANSACTION_DESC" value="{{ values.DARAJA_TRANSACTION_DESC or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
         </div>
       </div>
+      <div class="h-px bg-gray-100 my-4"></div>
+      <div class="text-xs font-semibold uppercase tracking-[0.4em] text-gray-400 mb-2">B2C Refund Settings</div>
+      <p class="text-xs text-gray-500 mb-3">Provide these when you want the dashboard refund form to push money directly to a guardian's M-Pesa number. You only need Result/Timeout URLs if you expect Daraja to call back; otherwise leave blank and the app will try to infer safe defaults.</p>
+      <div>
+        <label class="block text-sm font-medium">Outgoing ShortCode</label>
+        <input type="text" name="DARAJA_B2C_SHORT_CODE" value="{{ values.DARAJA_B2C_SHORT_CODE or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium">Initiator Name</label>
+          <input type="text" name="DARAJA_B2C_INITIATOR_NAME" value="{{ values.DARAJA_B2C_INITIATOR_NAME or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Security Credential</label>
+          <input type="text" name="DARAJA_B2C_SECURITY_CREDENTIAL" value="{{ values.DARAJA_B2C_SECURITY_CREDENTIAL or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium">Result URL</label>
+          <input type="url" name="DARAJA_B2C_RESULT_URL" value="{{ values.DARAJA_B2C_RESULT_URL or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Timeout URL</label>
+          <input type="url" name="DARAJA_B2C_TIMEOUT_URL" value="{{ values.DARAJA_B2C_TIMEOUT_URL or '' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium">Command ID</label>
+          <input type="text" name="DARAJA_B2C_COMMAND" value="{{ values.DARAJA_B2C_COMMAND or 'BusinessPayment' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Occasion</label>
+          <input type="text" name="DARAJA_B2C_OCCASION" value="{{ values.DARAJA_B2C_OCCASION or 'Credit refund' }}" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+      </div>
       <div class="mt-2 flex items-center gap-2">
         <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm">Save Settings</button>
         <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-600 hover:underline">Back to Admin</a>

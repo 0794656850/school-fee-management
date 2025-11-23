@@ -5,11 +5,17 @@ from extensions import limiter
 import os
 import mysql.connector
 from urllib.parse import urlparse
+import uuid
+from pathlib import Path
+from datetime import datetime
 
 from utils.tenant import slugify_code
-from routes.student_portal import _sign_token, ensure_mpesa_student_table  # reuse same token scheme
+from routes.student_portal import _sign_token, ensure_mpesa_student_table, _verify_token  # reuse same token scheme
 from routes.term_routes import get_or_seed_current_term, ensure_academic_terms_table
 from utils.security import verify_password, hash_password
+from utils.document_qr import build_document_qr
+from utils.db_helpers import ensure_guardian_receipts_table
+from werkzeug.utils import secure_filename
 import base64
 import requests
 
@@ -36,6 +42,20 @@ def _db():
         except Exception:
             pass
     return mysql.connector.connect(host=host, user=user, password=password, database=database)
+
+
+def _guardian_upload_path(school_id: int) -> Path:
+    relative = current_app.config.get("GUARDIAN_RECEIPT_UPLOADS_DIR", "uploads/guardian_receipts")
+    root = Path(current_app.root_path) / "static" / relative
+    target = root / str(school_id)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _allowed_receipt_file(filename: str) -> bool:
+    allowed = {".png", ".jpg", ".jpeg", ".pdf"}
+    ext = Path(filename).suffix.lower()
+    return ext in allowed
 
 
 @guardian_bp.route("", strict_slashes=False)
@@ -429,6 +449,32 @@ def guardian_receipt(payment_id: int):
         verify_url = None
     except Exception:
         verify_url = None
+    date_str = ""
+    try:
+        pdate = payment.get("date")
+        if hasattr(pdate, "strftime"):
+            date_str = pdate.strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = str(pdate or "")
+    except Exception:
+        date_str = ""
+    auth_qr_data = build_document_qr(
+        "guardian_receipt",
+        {
+            "rid": int(payment.get("id")),
+            "sid": int(payment.get("sid")),
+            "amt": round(float(payment.get("amount") or 0.0), 2),
+            "cur": "KES",
+            "name": payment.get("student_name") or "",
+            "cls": payment.get("class_name") or "",
+            "dt": date_str,
+            "m": payment.get("method") or "",
+            "ref": payment.get("reference") or "",
+            "term": payment.get("term") or "",
+            "year": payment.get("year") or "",
+            "school_id": session.get("school_id"),
+        },
+    )
     return render_template(
         "guardian_receipt.html",
         brand=brand,
@@ -437,7 +483,69 @@ def guardian_receipt(payment_id: int):
         current_credit=cred,
         payment_link=None,
         verify_url=verify_url,
+        auth_qr_data=auth_qr_data,
     )
+
+
+@guardian_bp.route("/upload-receipt", methods=["GET", "POST"])
+def guardian_receipt_upload():
+    token = (request.args.get("token") or session.get("guardian_token") or "").strip()
+    if not token:
+        return redirect(url_for("guardian.guardian_login"))
+    student_id = _verify_token(token)
+    if not student_id:
+        return redirect(url_for("guardian.guardian_login"))
+
+    if request.method == "POST":
+        file = request.files.get("receipt")
+        if not file or not file.filename:
+            flash("Select a file to upload.", "warning")
+            return redirect(url_for("guardian.guardian_receipt_upload"))
+        if not _allowed_receipt_file(file.filename):
+            flash("Unsupported file type. Use PNG/JPG/PDF.", "error")
+            return redirect(url_for("guardian.guardian_receipt_upload"))
+        school_id = session.get("school_id") or 0
+        dest_dir = _guardian_upload_path(int(school_id))
+        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+        target_path = dest_dir / filename
+        db_conn = None
+        try:
+            file.save(target_path)
+            db_conn = _db()
+            ensure_guardian_receipts_table(db_conn)
+            now = datetime.utcnow()
+            rel = os.path.join(str(current_app.config.get("GUARDIAN_RECEIPT_UPLOADS_DIR", "uploads/guardian_receipts")), str(school_id), filename).replace("\\", "/")
+            cur = db_conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO guardian_receipts
+                    (school_id, student_id, guardian_name, guardian_email, guardian_phone, description, file_path, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    int(school_id),
+                    student_id,
+                    (request.form.get("guardian_name") or "").strip(),
+                    (request.form.get("guardian_email") or "").strip(),
+                    (request.form.get("guardian_phone") or "").strip(),
+                    (request.form.get("description") or "").strip(),
+                    rel,
+                    now,
+                    now,
+                ),
+            )
+            db_conn.commit()
+            flash("Receipt uploaded and pending verification.", "success")
+            return redirect(url_for("guardian.guardian_receipt_upload"))
+        except Exception:
+            flash("Upload failed; please try again.", "error")
+        finally:
+            if db_conn:
+                try:
+                    db_conn.close()
+                except Exception:
+                    pass
+    return render_template("guardian_receipt_upload.html")
 
 
 @guardian_bp.route("/make_payment", methods=["POST"])

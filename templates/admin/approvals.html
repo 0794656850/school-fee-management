@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Approval Workflows — {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Approval Workflows{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-lg">
+    <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Digital workflow</p>
+    <h2 class="text-2xl font-semibold text-slate-900">Request special approvals</h2>
+    <p class="mt-2 text-sm text-slate-500">Staff can request write-offs, discounts, or credit transfers. An OTP secures every submission before it enters the approval queue.</p>
+    <form method="post" class="mt-6 space-y-4">
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="text-xs text-slate-500">Your name
+          <input name="requestor_name" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500" placeholder="Jane Admin" required>
+        </label>
+        <label class="text-xs text-slate-500">Email
+          <input name="requestor_email" type="email" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500" placeholder="you@school.org" required>
+        </label>
+      </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        <label class="text-xs text-slate-500">
+          Request type
+          <select name="request_type" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500" required>
+            <option value="">Choose one</option>
+            {% for value,label in request_types %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="text-xs text-slate-500">
+          Amount (KES)
+          <input name="amount" type="number" step="0.01" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500" placeholder="Optional">
+        </label>
+        <label class="text-xs text-slate-500">
+          Reason
+          <input name="reason" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500" placeholder="Why is this needed?">
+        </label>
+      </div>
+      <input type="hidden" name="pending_request_id" value="{{ pending_request.id if pending_request else '' }}">
+      {% if pending_request %}
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+        OTP sent to {{ pending_request.email }}. Enter the code below to complete the request.
+        <div class="mt-3 space-y-2">
+          <label class="flex flex-col gap-1 text-xs text-amber-800">
+            OTP code
+            <input name="otp" class="rounded-2xl border border-amber-300 bg-white px-3 py-2 text-sm text-amber-900 focus:border-amber-400">
+          </label>
+          <button type="submit" class="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white">Confirm OTP</button>
+        </div>
+      </div>
+      {% else %}
+      <button type="submit" class="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">Request approval (send OTP)</button>
+      {% endif %}
+    </form>
+  </section>
+
+  <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-lg space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-slate-900">Pending approvals</h3>
+      <span class="text-xs text-slate-500">Tap a row for actions</span>
+    </div>
+    <div class="overflow-x-auto rounded-2xl border border-slate-100">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-[0.4em] text-slate-500">
+          <tr>
+            <th class="px-4 py-3 text-left">Requestor</th>
+            <th class="px-4 py-3 text-left">Type</th>
+            <th class="px-4 py-3 text-left">Amount</th>
+            <th class="px-4 py-3 text-left">Status</th>
+            <th class="px-4 py-3 text-left">Created</th>
+            <th class="px-4 py-3 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for request in requests %}
+          <tr class="border-b border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-3">
+              <div class="font-semibold text-slate-900">{{ request.requestor_name }}</div>
+              <div class="text-[11px] text-slate-500">{{ request.requestor_email }}</div>
+            </td>
+            <td class="px-4 py-3 capitalize">{{ request.request_type.replace('_', ' ') }}</td>
+            <td class="px-4 py-3">KES {{ request.amount or '—' }}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold {% if request.status == 'approved' %}bg-emerald-50 text-emerald-700{% elif request.status == 'rejected' %}bg-rose-50 text-rose-600{% else %}bg-slate-50 text-slate-600{% endif %}">
+                {{ request.status }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500">{{ request.created_at }}</td>
+            <td class="px-4 py-3">
+              {% if request.status == 'pending' %}
+              <form method="post" action="{{ url_for('approval.approval_action', request_id=request.id) }}" class="flex flex-col gap-2">
+                <textarea name="admin_note" rows="2" class="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700" placeholder="Optional note"></textarea>
+                <div class="flex gap-2">
+                  <button name="action" value="approve" class="h-8 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white">Approve</button>
+                  <button name="action" value="reject" class="h-8 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white">Reject</button>
+                </div>
+              </form>
+              {% else %}
+              {% if request.qr_payload %}
+              <div class="text-[11px] text-slate-500">QR token available.</div>
+              {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-slate-500">No approvals yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

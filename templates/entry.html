@@ -24,33 +24,41 @@
       </div>
     </div>
 
-    <div class="grid md:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-10 lg:gap-12 place-items-stretch">
       <!-- School/Admin card -->
-      <div class="entry-card p-8">
-        <div class="icon-badge"><i data-lucide="school" class="w-8 h-8"></i></div>
-        <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">School Login</h2>
-        <p class="mt-1 text-gray-500 text-lg">Admin & Staff Access</p>
-        <a href="{{ url_for('auth.login') }}" class="mt-8 block w-full">
-          <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
-            <i data-lucide="arrow-right" class="mr-2"></i>
-            Login to Dashboard
-          </span>
-        </a>
-        <p class="mt-4 text-gray-500">Manage your school's digital fee system</p>
+      <div class="entry-card p-8 flex flex-col justify-between min-h-[320px] gap-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl">
+        <div class="space-y-4">
+          <div class="icon-badge"><i data-lucide="school" class="w-8 h-8"></i></div>
+          <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">School Login</h2>
+          <p class="text-gray-500 text-lg">Admin & Staff Access</p>
+        </div>
+        <div class="space-y-3">
+          <a href="{{ url_for('auth.login') }}" class="block w-full">
+            <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
+              <i data-lucide="arrow-right" class="mr-2"></i>
+              Login to Dashboard
+            </span>
+          </a>
+          <p class="text-gray-500">Manage your school's digital fee system</p>
+        </div>
       </div>
 
       <!-- Parent/Guardian card -->
-      <div class="entry-card p-8">
-        <div class="icon-badge"><i data-lucide="users" class="w-8 h-8"></i></div>
-        <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">Parent Login</h2>
-        <p class="mt-1 text-gray-500 text-lg">Guardian & Family Access</p>
-        <a href="{{ url_for('guardian.guardian_login') }}" class="mt-8 block w-full">
-          <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
-            <i data-lucide="arrow-right" class="mr-2"></i>
-            Login Now
-          </span>
-        </a>
-        <p class="mt-4 text-gray-500">Track progress and make secure payments</p>
+      <div class="entry-card p-8 flex flex-col justify-between min-h-[320px] gap-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl">
+        <div class="space-y-4">
+          <div class="icon-badge"><i data-lucide="users" class="w-8 h-8"></i></div>
+          <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">Parent Login</h2>
+          <p class="text-gray-500 text-lg">Guardian & Family Access</p>
+        </div>
+        <div class="space-y-3">
+          <a href="{{ url_for('guardian.guardian_login') }}" class="block w-full">
+            <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
+              <i data-lucide="arrow-right" class="mr-2"></i>
+              Login Now
+            </span>
+          </a>
+          <p class="text-gray-500">Track progress and make secure payments</p>
+        </div>
       </div>
     </div>
   </div>

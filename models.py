@@ -6,10 +6,14 @@ db = SQLAlchemy()
 
 class Student(db.Model):
     __tablename__ = 'students'
+    __table_args__ = (
+        db.UniqueConstraint('school_id', 'admission_no', name='uq_students_school_admission'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     # Store in DB column 'admission_no' but expose as attribute 'regNo' for compatibility
-    regNo = db.Column('admission_no', db.String(50), unique=True, nullable=False)
+    regNo = db.Column('admission_no', db.String(50), nullable=False)
+    school_id = db.Column(db.Integer, index=True, nullable=True)  # Multi-tenant scoping for admission numbers
     name = db.Column(db.String(100), nullable=False)
     class_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))

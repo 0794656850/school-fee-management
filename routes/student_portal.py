@@ -10,7 +10,11 @@ import mysql.connector
 
 from utils.mpesa import stk_push, DarajaError
 from utils.schema import get_admission_select_and_column
-from routes.term_routes import get_or_seed_current_term, ensure_academic_terms_table
+from routes.term_routes import (
+    get_or_seed_current_term,
+    ensure_academic_terms_table,
+    ensure_payments_term_columns,
+)
 from utils.settings import get_setting
 
 
@@ -102,6 +106,205 @@ def ensure_guardian_messages_table(conn) -> None:
     )
     conn.commit()
 
+
+_balance_column_cache: str | None = None
+_credit_column_exists_cache: bool | None = None
+
+
+def _get_student_balance_column(conn) -> str | None:
+    global _balance_column_cache
+    if _balance_column_cache:
+        return _balance_column_cache
+    cur = conn.cursor()
+    try:
+        cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+        if cur.fetchone():
+            _balance_column_cache = "balance"
+            return _balance_column_cache
+        cur.execute("SHOW COLUMNS FROM students LIKE 'fee_balance'")
+        if cur.fetchone():
+            _balance_column_cache = "fee_balance"
+            return _balance_column_cache
+    except Exception:
+        pass
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+    return None
+
+
+def _student_has_credit_column(conn) -> bool:
+    global _credit_column_exists_cache
+    if _credit_column_exists_cache is not None:
+        return _credit_column_exists_cache
+    cur = conn.cursor()
+    try:
+        cur.execute("SHOW COLUMNS FROM students LIKE 'credit'")
+        _credit_column_exists_cache = bool(cur.fetchone())
+    except Exception:
+        _credit_column_exists_cache = False
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+    return _credit_column_exists_cache
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def record_mpesa_payment_if_missing(
+    *,
+    db,
+    student_id: int,
+    amount,
+    reference: str,
+    school_id=None,
+    year=None,
+    term=None,
+    now: datetime | None = None,
+    method: str | None = None,
+) -> int | None:
+    """Insert the M-Pesa payment into the ledger once and adjust the student balance."""
+    if not db or not student_id or not reference:
+        return None
+    try:
+        amount_val = float(amount or 0)
+    except Exception:
+        amount_val = 0.0
+    if amount_val <= 0:
+        return None
+    try:
+        ensure_payments_term_columns(db)
+    except Exception:
+        pass
+
+    dup_cursor = db.cursor()
+    try:
+        dup_cursor.execute(
+            "SELECT id FROM payments WHERE reference=%s AND student_id=%s",
+            (reference, student_id),
+        )
+        if dup_cursor.fetchone():
+            return None
+    except Exception:
+        pass
+    finally:
+        try:
+            dup_cursor.close()
+        except Exception:
+            pass
+
+    term_val = _int_or_none(term)
+    year_val = _int_or_none(year)
+    fallback_now = now or datetime.now()
+    if term_val is None or year_val is None:
+        try:
+            current_year, current_term = get_or_seed_current_term(db)
+        except Exception:
+            current_year = None
+            current_term = None
+        if year_val is None and current_year is not None:
+            year_val = current_year
+        if term_val is None and current_term is not None:
+            term_val = current_term
+    if year_val is None and hasattr(fallback_now, "year"):
+        year_val = fallback_now.year
+    method_name = (method or "M-Pesa").strip() or "M-Pesa"
+
+    insert_cursor = db.cursor()
+    try:
+        insert_cursor.execute(
+            """
+            INSERT INTO payments (student_id, amount, method, term, year, reference, date, school_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                student_id,
+                amount_val,
+                method_name,
+                term_val,
+                year_val,
+                reference,
+                fallback_now,
+                school_id,
+            ),
+        )
+        payment_id = insert_cursor.lastrowid
+    except Exception:
+        current_app.logger.exception("Failed to insert M-Pesa payment record")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+    finally:
+        try:
+            insert_cursor.close()
+        except Exception:
+            pass
+
+    balance_col = _get_student_balance_column(db)
+    credit_exists = _student_has_credit_column(db)
+    if balance_col:
+        select_sql = f"SELECT COALESCE({balance_col},0) AS balance"
+        if credit_exists:
+            select_sql += ", COALESCE(credit,0) AS credit"
+        select_sql += " FROM students WHERE id=%s"
+        params = [student_id]
+        if school_id is not None:
+            select_sql += " AND school_id=%s"
+            params.append(school_id)
+        select_cursor = db.cursor(dictionary=True)
+        try:
+            select_cursor.execute(select_sql, tuple(params))
+            row = select_cursor.fetchone() or {}
+        except Exception:
+            row = {}
+        finally:
+            try:
+                select_cursor.close()
+            except Exception:
+                pass
+        current_balance = float(row.get("balance") or 0)
+        current_credit = float(row.get("credit") or 0) if credit_exists else 0.0
+        overpay = max(amount_val - current_balance, 0.0)
+        new_balance = max(current_balance - amount_val, 0.0)
+        new_credit = current_credit + overpay
+        update_parts = [f"{balance_col}=%s"]
+        update_params = [new_balance]
+        if credit_exists:
+            update_parts.append("credit=%s")
+            update_params.append(new_credit)
+        update_sql = f"UPDATE students SET {', '.join(update_parts)} WHERE id=%s"
+        update_params.append(student_id)
+        if school_id is not None:
+            update_sql += " AND school_id=%s"
+            update_params.append(school_id)
+        update_cursor = db.cursor()
+        try:
+            update_cursor.execute(update_sql, tuple(update_params))
+        except Exception:
+            current_app.logger.exception("Failed to update student balance after M-Pesa payment")
+        finally:
+            try:
+                update_cursor.close()
+            except Exception:
+                pass
+
+    try:
+        db.commit()
+    except Exception:
+        current_app.logger.exception("Failed to commit M-Pesa payment record")
+
+    return payment_id
 
 def _sign_token(student_id: int, issued_at: int | None = None) -> str:
     sid = str(int(student_id))

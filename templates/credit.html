@@ -29,11 +29,18 @@
     </form>
   </div>
 
-  <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
-    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-      <i data-lucide="wallet"></i> Refund Credit
-    </h3>
-    <form method="POST" action="{{ url_for('credit.refund_credit') }}" class="space-y-4" id="refund-form">
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
+      <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <i data-lucide="wallet"></i> Refund Credit
+      </h3>
+      {% if b2c_enabled %}
+      <p class="text-xs text-gray-500 mb-3">
+        Use the Daraja payout option to automatically refund guardians; the prompt they see on their phone will read
+        <strong>SmartEduPay Enterprise EDU_PAY</strong>. Provide the guardian's M-Pesa number below when selecting the
+        B2C method.
+      </p>
+      {% endif %}
+      <form method="POST" action="{{ url_for('credit.refund_credit') }}" class="space-y-4" id="refund-form">
       <div>
         <label class="block text-sm text-gray-700 mb-1">Student</label>
         <div class="relative" id="refund-student-combo">
@@ -57,6 +64,15 @@
           </div>
         </div>
       </div>
+      {% if b2c_enabled %}
+      <div id="refund-phone-wrapper" class="hidden">
+        <label class="block text-sm text-gray-700 mb-1">Guardian M-Pesa Number</label>
+        <input type="tel" name="phone" id="refund-phone" placeholder="07xx..." class="w-full border rounded-lg p-2.5 text-sm" autocomplete="off" />
+        <p class="text-xs text-gray-500 mt-1">
+          Refunds routed through Daraja B2C post to the phone above; the mobile prompt will display <strong>SmartEduPay Enterprise EDU_PAY</strong>.
+        </p>
+      </div>
+      {% endif %}
       <div>
         <label class="block text-sm text-gray-700 mb-1">Reference</label>
         <input type="text" name="reference" placeholder="Receipt/Transaction ID" class="w-full border rounded-lg p-2.5 text-sm" />
@@ -129,7 +145,10 @@ const studentsData = {{ credit_students | tojson | safe }};
 const transferToData = {{ transfer_targets | tojson | safe }};
 const refundMethods = [
   { value: 'Cash', label: 'Cash' },
-  { value: 'M-Pesa', label: 'M-Pesa' },
+  { value: 'M-Pesa', label: 'M-Pesa (Manual)' },
+  {% if b2c_enabled %}
+  { value: 'M-Pesa B2C', label: 'M-Pesa (Daraja B2C)', b2c: true },
+  {% endif %}
   { value: 'Bank Transfer', label: 'Bank Transfer' },
   { value: 'Cheque', label: 'Cheque' },
 ];
@@ -281,6 +300,16 @@ function refreshRefundAvail() {
   if (refundAmountInput) refundAmountInput.max = String(maxRefund);
   if (refundAvail) refundAvail.textContent = `Available credit: KES ${fmtKES(maxRefund)}`;
 }
+const refundPhoneWrapper = document.getElementById('refund-phone-wrapper');
+const refundPhoneInput = document.getElementById('refund-phone');
+const refundB2cEnabled = {{ 'true' if b2c_enabled else 'false' }};
+let refundMethodSelection = null;
+function updateRefundPhoneVisibility() {
+  if (!refundPhoneWrapper) return;
+  const show = refundB2cEnabled && refundMethodSelection && refundMethodSelection.b2c;
+  refundPhoneWrapper.classList.toggle('hidden', !show);
+  if (refundPhoneInput) refundPhoneInput.required = show;
+}
 mountCombo(document.getElementById('refund-student-combo'), {
   data: studentOptions,
   label: (s) => `${s.name} (${s.class_name})`,
@@ -366,7 +395,8 @@ mountCombo(document.getElementById('transfer-to-combo'), {
 mountCombo(document.getElementById('refund-method-combo'), {
   data: refundMethods,
   label: (m) => m.label,
-  value: (m) => m.value
+  value: (m) => m.value,
+  onSelect: (m) => { refundMethodSelection = m; updateRefundPhoneVisibility(); },
 });
 </script>
 

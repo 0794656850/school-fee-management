@@ -15,6 +15,8 @@
   .amount{margin:10px 0;padding:14px;border:1px solid #e2e8f0;border-radius:12px;background:linear-gradient(135deg,#e0f2fe,#eef2ff);text-align:center}
   .actions{margin:12px 0 6px;text-align:center}
   .btn{display:inline-block;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}
+  .qrblock{text-align:center;margin-top:16px}
+  .qrwrap{display:inline-block;padding:12px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc;box-shadow:0 10px 24px rgba(15,23,42,.08)}
   @media print{.actions{display:none}}</style>
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
@@ -41,8 +43,26 @@
       <div class="row"><div class="muted">Current Balance</div><div>{% if current_balance is not none %}KES {{ '%.2f'|format(current_balance) }}{% else %}-{% endif %}</div></div>
       <div class="row"><div class="muted">Credit on Account</div><div>{% if current_credit is not none %}KES {{ '%.2f'|format(current_credit) }}{% else %}-{% endif %}</div></div>
       <div class="actions"><button class="btn" onclick="doPrint()">Print</button></div>
+      {% if auth_qr_data %}
+        <div class="qrblock">
+          <div class="qrwrap">
+            <div id="guardian-qr"></div>
+          </div>
+          <div style="font-size:12px;color:#64748b;margin-top:6px;">Scan to verify this receipt.</div>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script>
+          (function(){
+            try {
+              var payload = {{ auth_qr_data|tojson }};
+              new QRCode(document.getElementById("guardian-qr"), { text: payload, width: 180, height: 180 });
+            } catch (err) {
+              console.error("QR render failed", err);
+            }
+          })();
+        </script>
+      {% endif %}
     </div>
   </div>
 </body>
 </html>
-

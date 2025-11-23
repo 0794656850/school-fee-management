@@ -168,7 +168,7 @@ def _issue_license_for_request(req: "LicenseRequest", admin_name: str, admin_not
     db.session.commit()
 
     base = _base_url()
-    subject_user = "Your Lovato_Tech Premium License"
+    subject_user = "Your SmartEduPay Premium License"
     expires_label = "Lifetime" if not expires_at else expires_at.strftime("%Y-%m-%d")
     body_user = f"""
     <p>Thank you {req.user_name},</p>
@@ -190,7 +190,7 @@ def _issue_license_for_request(req: "LicenseRequest", admin_name: str, admin_not
         if school_email:
             _send_email(
                 school_email,
-                f"[Lovato_Tech] License issued for {req.user_email}",
+                f"[SmartEduPay] License issued for {req.user_email}",
                 f"<p>Issued license for {req.user_email}.<br><strong>Key:</strong> {license_key}<br><strong>Expires:</strong> {expires_label}</p>",
             )
     except Exception:
@@ -606,7 +606,7 @@ def submit_request():
         admin = _admin_email()
         base = _base_url()
         verify_link = f"{base}{url_for('billing.verify_page', verify_token=token)}"
-        subject = f"[Lovato_Tech] New Premium Request from {name} ({email}) [REQ:{token}]"
+        subject = f"[SmartEduPay] New Premium Request from {name} ({email}) [REQ:{token}]"
         preview_b64 = _img_preview_if_image(stored_file)
         preview_html = (
             f'<p><img alt="preview" src="data:image/png;base64,{preview_b64}" style="max-width:420px;border:1px solid #eee;border-radius:8px;"/></p>'
@@ -712,7 +712,7 @@ def verify_action(verify_token: str):
             db.session.commit()
 
             if req.user_email:
-                subject = "Lovato_Tech Premium Request - Update"
+                subject = "SmartEduPay Premium Request - Update"
                 body = f"""
                 <p>Hello {req.user_name},</p>
                 <p>Your premium request has been reviewed and could not be verified at this time.</p>
@@ -771,7 +771,7 @@ def verify_action(verify_token: str):
         db.session.commit()
 
         base = _base_url()
-        subject_user = "Your Lovato_Tech Premium License"
+        subject_user = "Your SmartEduPay Premium License"
         expires_label = "Lifetime" if not expires_at else expires_at.strftime("%Y-%m-%d")
         body_user = f"""
         <p>Thank you {req.user_name},</p>
@@ -793,7 +793,7 @@ def verify_action(verify_token: str):
             if school_email:
                 _send_email(
                     school_email,
-                    f"[Lovato_Tech] License issued for {req.user_email}",
+                    f"[SmartEduPay] License issued for {req.user_email}",
                     f"<p>Issued license for {req.user_email}.<br><strong>Key:</strong> {license_key}<br><strong>Expires:</strong> {expires_label}</p>",
                 )
         except Exception:
@@ -1018,7 +1018,7 @@ def inbound_email():
             db.session.commit()
 
             if req.user_email:
-                subject_user = "Lovato_Tech Premium Request - Update"
+                subject_user = "SmartEduPay Premium Request - Update"
                 body_user = f"""
                 <p>Hello {req.user_name},</p>
                 <p>Your premium request has been reviewed and could not be verified at this time.</p>
@@ -1030,7 +1030,7 @@ def inbound_email():
             if admin_email:
                 _send_email(
                     admin_email,
-                    f"[Lovato_Tech] Processed NO for request {req.id}",
+                    f"[SmartEduPay] Processed NO for request {req.id}",
                     f"<p>Request {req.id} for {req.user_email} marked REJECTED.</p><p><a href='{base}/admin'>Admin</a></p>",
                 )
             return jsonify({"ok": True, "status": "REJECTED"})
@@ -1045,7 +1045,7 @@ def inbound_email():
             expires_label = "Lifetime" if not lic.expires_at else lic.expires_at.strftime("%Y-%m-%d")
             _send_email(
                 admin_email,
-                f"[Lovato_Tech] Processed YES for request {req.id}",
+                f"[SmartEduPay] Processed YES for request {req.id}",
                 f"<p>Issued and activated license for {req.user_email}.<br><strong>Key:</strong> {lic.license_key}<br><strong>Expires:</strong> {expires_label}</p>",
             )
 
@@ -1056,7 +1056,7 @@ def inbound_email():
                 expires_label = "Lifetime" if not lic.expires_at else lic.expires_at.strftime("%Y-%m-%d")
                 _send_email(
                     school_email,
-                    f"[Lovato_Tech] License issued for {req.user_email}",
+                    f"[SmartEduPay] License issued for {req.user_email}",
                     f"<p>Issued and activated license for {req.user_email}.<br><strong>Key:</strong> {lic.license_key}<br><strong>Expires:</strong> {expires_label}</p>",
                 )
         except Exception:

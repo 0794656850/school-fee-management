@@ -61,7 +61,7 @@ def answer_query(query: str, model: Optional[str] = None) -> Dict[str, Any]:
     system = {
         "role": "system",
         "content": (
-            "You are the Lovato_Tech Fee Management system assistant. "
+            "You are the SmartEduPay Fee Management system assistant. "
             "Answer ONLY using the provided context. If unknown, say you do not know."
         ),
     }

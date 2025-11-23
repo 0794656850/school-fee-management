@@ -9,6 +9,22 @@ from utils.notify import normalize_phone  # legacy import; unused after email sw
 from utils.gmail_api import send_email as gmail_send_email, has_valid_token
 from utils.settings import get_setting
 
+DEFAULT_REMINDER_TEMPLATE = """📌 Payment Reminder (Gentle Reminder)
+
+Subject: Friendly Fee Payment Reminder
+
+Hello {name},
+
+We hope you are well. This is a gentle reminder that your payment of KES {balance} for {purpose} is due on {due_date}. Current class: {class_label}.
+Kindly make the payment at your convenience to avoid any interruptions.
+
+If you have already settled this, please disregard this message.
+
+Thank you.
+{institution}
+{contact_details}
+"""
+
 reminder_bp = Blueprint('reminders', __name__, url_prefix='/reminders')
 
 
@@ -94,6 +110,17 @@ class _SafeDict(dict):
         return '{' + key + '}'
 
 
+def _contact_details() -> str:
+    parts = []
+    phone = (get_setting("SCHOOL_PHONE") or current_app.config.get("SUPPORT_PHONE") or "").strip()
+    email = (get_setting("SCHOOL_EMAIL") or current_app.config.get("MAIL_USERNAME") or "").strip()
+    if phone:
+        parts.append(f"Phone: {phone}")
+    if email:
+        parts.append(f"Email: {email}")
+    return " | ".join(parts) if parts else ""
+
+
 def _render_message(template: str, *, name: str, balance: Decimal, class_name: str | None) -> str:
     data = _SafeDict(
         name=name,
@@ -103,6 +130,11 @@ def _render_message(template: str, *, name: str, balance: Decimal, class_name: s
         cls=class_name or "",
         school=get_setting("SCHOOL_NAME") or current_app.config.get("APP_NAME", "the school"),
         school_name=get_setting("SCHOOL_NAME") or current_app.config.get("APP_NAME", "the school"),
+        institution=get_setting("SCHOOL_NAME") or current_app.config.get("APP_NAME", "the school"),
+        purpose=f"{class_name + ' fees' if class_name else 'school fees'}",
+        due_date=(get_setting("REMINDER_DUE_DATE") or "the upcoming due date"),
+        contact_details=_contact_details(),
+        class_label=f"{class_name or 'your class'}",
     )
     return (template or "").format_map(data)
 
@@ -116,7 +148,13 @@ def reminders_home():
     if not col:
         db.close()
         flash("No valid balance column found in 'students' table.", "error")
-        return render_template('reminders.html', default_message_template=(get_setting("REMINDER_DEFAULT_MESSAGE") or ''), students=[], classes=[], whatsapp_enabled=False)
+        return render_template(
+            'reminders.html',
+            default_message_template=(get_setting("REMINDER_DEFAULT_MESSAGE") or DEFAULT_REMINDER_TEMPLATE),
+            students=[],
+            classes=[],
+            whatsapp_enabled=False,
+        )
 
     # Determine email column to use for reminders
     email_col = _resolve_email_column(cursor)
@@ -194,7 +232,7 @@ def reminders_home():
         selected_class=selected_class,
         q=q,
         min_balance=min_balance,
-        default_message_template=(get_setting("REMINDER_DEFAULT_MESSAGE") or ''),
+        default_message_template=(get_setting("REMINDER_DEFAULT_MESSAGE") or DEFAULT_REMINDER_TEMPLATE),
         email_enabled=True,
         gmail_connected=gmail_connected,
     )
@@ -236,14 +274,8 @@ def send_email_reminder(student_id: int):
 
     # Optional custom message from form/query with placeholders
     message_template = request.form.get('message') or request.args.get('message')
-    if message_template:
-        message_body = _render_message(message_template, name=student['name'], balance=balance, class_name=student.get('class_name'))
-    else:
-        message_body = (
-            f"Hello {student['name']}, this is a fee reminder from the school. "
-            f"Your outstanding balance is KES {balance:,.2f}. "
-            f"Kindly clear at your earliest convenience."
-        )
+    template = message_template or DEFAULT_REMINDER_TEMPLATE
+    message_body = _render_message(template, name=student['name'], balance=balance, class_name=student.get('class_name'))
 
     # Prefer Gmail API OAuth2 sender if available; fallback to Flask-Mail
     subject = f"Fee reminder for {student['name']}"
@@ -316,14 +348,8 @@ def send_all_reminders():
             skipped += 1
             continue
         balance = Decimal(str(s.get('balance') or 0))
-        if message_template:
-            msg = _render_message(message_template, name=s['name'], balance=balance, class_name=s.get('class_name'))
-        else:
-            msg = (
-                f"Hello {s['name']}, this is a fee reminder from the school. "
-                f"Your outstanding balance is KES {balance:,.2f}. "
-                f"Kindly clear at your earliest convenience."
-            )
+        template = message_template or DEFAULT_REMINDER_TEMPLATE
+        msg = _render_message(template, name=s['name'], balance=balance, class_name=s.get('class_name'))
         # Try Gmail API first
         subject = f"Fee reminder for {s['name']}"
         ok = False

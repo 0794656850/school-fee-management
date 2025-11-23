@@ -7,6 +7,8 @@ import json
 import mysql.connector
 from urllib.parse import urlparse
 
+from utils.mpesa import b2c_payment, DarajaError
+
 # Audit trail removed
 
 
@@ -110,6 +112,14 @@ def _detect_balance_column(cur) -> str:
     return "balance" if has_balance else "fee_balance"
 
 
+def _b2c_ready() -> bool:
+    cfg = current_app.config
+    initiator = (cfg.get("DARAJA_B2C_INITIATOR_NAME") or "").strip()
+    credential = (cfg.get("DARAJA_B2C_SECURITY_CREDENTIAL") or "").strip()
+    short_code = (cfg.get("DARAJA_B2C_SHORT_CODE") or cfg.get("DARAJA_SHORT_CODE") or "").strip()
+    return bool(initiator and credential and short_code)
+
+
 @credit_bp.route("/")
 def credit_home():
     db = _db()
@@ -135,7 +145,12 @@ def credit_home():
         transfer_targets = cur.fetchall() or []
     finally:
         db.close()
-    return render_template("credit.html", credit_students=credit_students, transfer_targets=transfer_targets)
+    return render_template(
+        "credit.html",
+        credit_students=credit_students,
+        transfer_targets=transfer_targets,
+        b2c_enabled=_b2c_ready(),
+    )
 
 
 @credit_bp.route("/api/search_sources")
@@ -255,8 +270,9 @@ def apply_credit():
 def refund_credit():
     student_id = request.form.get("student_id", type=int)
     amount = request.form.get("amount", type=float)
-    method = (request.form.get("method") or "").strip() or None
-    reference = (request.form.get("reference") or "").strip() or None
+    method = (request.form.get("method") or "").strip()
+    reference = (request.form.get("reference") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
     if not student_id or not amount or amount <= 0:
         flash("Provide a valid student and amount to refund.", "warning")
         return redirect(url_for("credit.credit_home"))
@@ -283,21 +299,49 @@ def refund_credit():
             return redirect(url_for("credit.credit_home"))
         to_refund = amount
 
+        send_b2c = bool(phone and _b2c_ready())
+        b2c_response = None
+        stored_method = method or "Manual refund"
+        if send_b2c:
+            try:
+                b2c_response = b2c_payment(phone=phone, amount=to_refund, remarks=reference, occasion=stored_method or None)
+            except DarajaError as e:
+                flash(f"M-Pesa refund failed: {e}", "error")
+                return redirect(url_for("credit.credit_home"))
+            stored_method = "M-Pesa B2C"
+            reference = reference or b2c_response.get("ConversationID") or b2c_response.get("OriginatorConversationID") or b2c_response.get("TransactionID")
+
         new_credit = max(credit - to_refund, 0)
         cur.execute("UPDATE students SET credit=%s WHERE id=%s AND school_id=%s", (new_credit, student_id, session.get("school_id")))
         db.commit()
 
-        # audit removed
-
         ensure_credit_ops_table(db)
         cur2 = db.cursor()
+        meta = {"source": "manual", "method": stored_method}
+        if phone:
+            meta["phone"] = phone
+        if b2c_response:
+            meta["b2c_response"] = b2c_response
         cur2.execute(
             "INSERT INTO credit_operations (ts, actor, student_id, op_type, amount, reference, method, meta, school_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (datetime.utcnow(), session.get("username"), student_id, "refund", to_refund, reference, method, json.dumps({}), session.get("school_id")),
+            (
+                datetime.utcnow(),
+                session.get("username"),
+                student_id,
+                "refund",
+                to_refund,
+                reference or None,
+                stored_method,
+                json.dumps(meta),
+                session.get("school_id"),
+            ),
         )
         db.commit()
 
-        flash(f"Refunded KES {to_refund:,.2f} to {row.get('name')}.", "success")
+        if send_b2c:
+            flash(f"Refund of KES {to_refund:,.2f} queued to {row.get('name')} via M-Pesa (phone: {phone}).", "success")
+        else:
+            flash(f"Refunded KES {to_refund:,.2f} to {row.get('name')}.", "success")
     except Exception as e:
         db.rollback()
         flash(f"Error refunding credit: {e}", "error")

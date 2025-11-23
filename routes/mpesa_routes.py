@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from flask import Blueprint, request, jsonify, current_app, url_for, redirect, flash
+from flask import Blueprint, request, jsonify, current_app, url_for, redirect, flash, session, abort
 import json
 import mysql.connector
 from datetime import datetime
 
 from utils.mpesa import stk_push, DarajaError, parse_callback_items
-from routes.student_portal import ensure_mpesa_student_table  # reuse table creator
-from routes.term_routes import ensure_academic_terms_table, get_or_seed_current_term
+from routes.student_portal import ensure_mpesa_student_table, record_mpesa_payment_if_missing  # reuse table creator
 # Pro activation is no longer auto-granted on STK callbacks.
 # Keys are issued only after admin verification.
 try:
@@ -80,6 +79,23 @@ def ensure_tables(db):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS mpesa_b2c_callbacks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            callback_type VARCHAR(32) NOT NULL,
+            conversation_id VARCHAR(64) DEFAULT NULL,
+            originator_conversation_id VARCHAR(64) DEFAULT NULL,
+            transaction_id VARCHAR(64) DEFAULT NULL,
+            result_code INT DEFAULT NULL,
+            result_desc VARCHAR(255) DEFAULT NULL,
+            payload LONGTEXT,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            INDEX idx_mpesa_b2c_callback_type (callback_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """
+    )
     db.commit()
     # Student STK tracking table (for portal payments)
     try:
@@ -91,9 +107,50 @@ def ensure_tables(db):
             pass
 
 
+def _record_b2c_callback(callback_type: str, payload: dict) -> None:
+    db = None
+    try:
+        db = _db()
+        ensure_tables(db)
+        cur = db.cursor()
+        now = datetime.now()
+        result = (payload.get("Result") or {}) if isinstance(payload, dict) else {}
+        cur.execute(
+            """
+            INSERT INTO mpesa_b2c_callbacks (callback_type, conversation_id, originator_conversation_id, transaction_id, result_code, result_desc, payload, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                callback_type,
+                result.get("ConversationID"),
+                result.get("OriginatorConversationID"),
+                result.get("TransactionID"),
+                result.get("ResultCode"),
+                result.get("ResultDesc"),
+                json.dumps(payload),
+                now,
+                now,
+            ),
+        )
+        db.commit()
+    except Exception:
+        current_app.logger.exception("Failed to persist M-Pesa B2C callback")
+        if db:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    finally:
+        if db:
+            db.close()
+
+
 @mpesa_bp.route("/checkout", methods=["POST"])
 def checkout():
     # Requires admin session on the UI, but does not strictly guard here.
+    if not session.get("user_logged_in"):
+        abort(403)
+
     phone = (request.form.get("phone") or request.json.get("phone") if request.is_json else "").strip()
     try:
         amount = int(request.form.get("amount") or (request.json.get("amount") if request.is_json else 0) or current_app.config.get("PRO_PRICE_KES", 1500))
@@ -102,6 +159,9 @@ def checkout():
 
     account_ref = current_app.config.get("DARAJA_ACCOUNT_REF", "FMS-PRO")
     trans_desc = current_app.config.get("DARAJA_TRANSACTION_DESC", "Pro upgrade")
+    if amount <= 0 or amount > current_app.config.get("PRO_PRICE_KES", 1500) * 50:
+        flash("Invalid Pro price. Please try again.", "error")
+        return redirect(url_for("admin.billing"))
     try:
         res = stk_push(phone=phone, amount=amount, account_ref=account_ref, trans_desc=trans_desc)
         # Persist initial record
@@ -191,42 +251,23 @@ def callback():
                 school_id = row.get("school_id")
                 y = row.get("year")
                 t = row.get("term")
-                amt = meta.get("amount") or row.get("amount") or 0
+                raw_amount = meta.get("amount") or row.get("amount") or 0
                 try:
-                    # Ensure term/year (fallback if missing)
-                    ensure_academic_terms_table(db)
-                    if not y or not t:
-                        y, t = get_or_seed_current_term(db)
+                    amount_val = float(raw_amount or 0)
                 except Exception:
-                    pass
-                # Insert payment only if not already inserted for this receipt
+                    amount_val = 0.0
                 ref = (meta.get("receipt") or f"MP_{checkout_id}")
-                cur4 = db.cursor()
-                cur4.execute(
-                    "SELECT COUNT(*) FROM payments WHERE reference=%s AND student_id=%s",
-                    (ref, student_id),
+                payment_id = record_mpesa_payment_if_missing(
+                    db=db,
+                    student_id=student_id,
+                    amount=amount_val,
+                    reference=ref,
+                    school_id=school_id,
+                    year=y,
+                    term=t,
+                    now=now,
                 )
-                row_cnt = cur4.fetchone()
-                cnt = (row_cnt[0] if isinstance(row_cnt, (list, tuple)) else (row_cnt or 0)) if row_cnt is not None else 0
-                if not cnt:
-                    cur4.execute(
-                        """
-                        INSERT INTO payments (student_id, amount, method, term, year, reference, date, school_id)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                        """,
-                        (
-                            student_id,
-                            amt,
-                            "M-Pesa",
-                            t,
-                            y,
-                            ref,
-                            now,
-                            school_id,
-                        ),
-                    )
-                    db.commit()
-                    payment_id = cur4.lastrowid
+                if payment_id:
                     # Email confirmation to guardian/student when email exists
                     try:
                         cur5 = db.cursor()
@@ -259,16 +300,16 @@ def callback():
                                     receipt_url = url_for('payment_receipt', payment_id=payment_id, _external=True)
                                 except Exception:
                                     receipt_url = ""
-                                subject = f"Payment received - KES {float(amt):,.2f}"
+                                subject = f"Payment received - KES {float(amount_val):,.2f}"
                                 brand = current_app.config.get("APP_NAME") or "School"
                                 student_name = row.get("student_name") or "Student"
                                 html = (
-                                    f"<p>Hi,</p><p>We received your payment of <strong>KES {float(amt):,.2f}</strong> via M-Pesa (Ref: {ref}).</p>"
+                                    f"<p>Hi,</p><p>We received your payment of <strong>KES {float(amount_val):,.2f}</strong> via M-Pesa (Ref: {ref}).</p>"
                                     f"<p>Thank you. {('View receipt: <a href=\"'+receipt_url+'\">'+receipt_url+'</a>') if receipt_url else ''}</p>"
                                     f"<p>— {brand}</p>"
                                 )
                                 if not gmail_send_email_html(student_email, subject, html):
-                                    gmail_send_email(student_email, subject, f"Payment received KES {float(amt):,.2f} via M-Pesa (Ref: {ref}). " + (f"View receipt: {receipt_url}" if receipt_url else ""))
+                                    gmail_send_email(student_email, subject, f"Payment received KES {float(amount_val):,.2f} via M-Pesa (Ref: {ref}). " + (f"View receipt: {receipt_url}" if receipt_url else ""))
                             except Exception:
                                 pass
                     except Exception:
@@ -283,4 +324,18 @@ def callback():
     # We only persist callback data; the licensing workflow handles issuance.
     db.close()
 
+    return jsonify({"status": "ok"})
+
+
+@mpesa_bp.route("/b2c/result", methods=["POST"])
+def b2c_result():
+    payload = request.get_json(silent=True) or {}
+    _record_b2c_callback("result", payload)
+    return jsonify({"status": "ok"})
+
+
+@mpesa_bp.route("/b2c/timeout", methods=["POST"])
+def b2c_timeout():
+    payload = request.get_json(silent=True) or {}
+    _record_b2c_callback("timeout", payload)
     return jsonify({"status": "ok"})

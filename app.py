@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, Response, session
+﻿from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, Response, session, abort
 import json
 import hmac
 import hashlib
@@ -43,8 +43,11 @@ from routes.student_auth import student_auth_bp
 from routes.student_portal import student_portal_bp
 from routes.student_auth import ensure_student_portal_columns
 from utils.security import hash_password
+from utils.document_qr import build_document_qr
 from routes.guardian_routes import guardian_bp
 from routes.newsletter_routes import newsletter_bp, ensure_newsletters_table
+from routes.insights_routes import insights_bp
+from routes.approval_routes import approval_bp
 from extensions import db, migrate
 from billing import billing_bp
 from routes.defaulter_routes import recovery_bp
@@ -62,6 +65,7 @@ from utils.tenant import (
     ensure_unique_indices_per_school,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 try:
     from werkzeug.middleware.proxy_fix import ProxyFix
 except Exception:  # pragma: no cover
@@ -164,6 +168,36 @@ def _enforce_https_redirect():
     except Exception:
         return None
 
+
+def _matches_allowed_host(host: str, pattern: str) -> bool:
+    host = host.lower()
+    pattern = pattern.lower()
+    if pattern.startswith("*."):
+        base = pattern[2:]
+        return host == base or host.endswith("." + base)
+    return host == pattern
+
+
+@app.before_request
+def _enforce_allowed_hosts():
+    allowed = tuple(app.config.get("ALLOWED_HOSTS") or ())
+    if not allowed:
+        return None
+    header = request.host or request.headers.get("Host", "")
+    host = header.split(":")[0].strip().lower()
+    if not host:
+        abort(400, description="Host header missing")
+    for pattern in allowed:
+        if _matches_allowed_host(host, pattern):
+            return None
+    abort(400, description="Invalid Host header")
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def _handle_oversized_request(error):
+    # Let clients know the body was too large; Flask already logs this.
+    return jsonify({"error": "Request body too large"}), 413
+
 # Initialize optional extensions
 try:
     from extensions import limiter, mail  # type: ignore
@@ -215,6 +249,8 @@ app.register_blueprint(mpesa_bp)
 app.register_blueprint(student_auth_bp)
 app.register_blueprint(student_portal_bp)
 app.register_blueprint(guardian_bp)
+app.register_blueprint(insights_bp)
+app.register_blueprint(approval_bp)
 app.register_blueprint(ai_bp)
 app.register_blueprint(gmail_oauth_bp)
 app.register_blueprint(recovery_bp)
@@ -2425,14 +2461,18 @@ def payment_receipt(payment_id: int):
         verify_url = ""
 
     # Build signed QR payload with key details for authenticity
+    date_str = ""
     try:
         pdate = payment.get("date")
         if hasattr(pdate, "strftime"):
             date_str = pdate.strftime("%Y-%m-%d %H:%M")
         else:
             date_str = str(pdate or "")
-        qr_payload = {
-            "t": "receipt",
+    except Exception:
+        date_str = ""
+    auth_qr_data = build_document_qr(
+        "receipt",
+        {
             "rid": int(payment.get("id")),
             "sid": int(payment.get("sid")),
             "amt": round(float(payment.get("amount") or 0.0), 2),
@@ -2445,13 +2485,8 @@ def payment_receipt(payment_id: int):
             "term": payment.get("term") or "",
             "year": payment.get("year") or "",
             "school_id": session.get("school_id"),
-        }
-        canon = json.dumps(qr_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        sig = hmac.new(app.secret_key.encode("utf-8"), canon, hashlib.sha256).hexdigest()[:20]
-        qr_payload["sig"] = sig
-        auth_qr_data = json.dumps(qr_payload, separators=(",", ":"))
-    except Exception:
-        auth_qr_data = ""
+        },
+    )
 
     return render_template(
         "receipt.html",
@@ -4302,23 +4337,17 @@ def export_school_profile_docx():
     cur.execute("SELECT COALESCE(SUM(credit),0) AS total FROM students WHERE school_id=%s", (sid,))
     total_credit = (cur.fetchone() or {}).get('total', 0)
 
-    auth_qr_data = ""
-    try:
-        qr_payload = {
-            "t": "school_profile",
+    auth_qr_data = build_document_qr(
+        "school_profile",
+        {
             "sid": int(sid or 0),
             "s": school_name,
             "col": round(float(total_collected or 0), 2),
             "bal": round(float(total_balance or 0), 2),
             "students": int(total_students or 0),
             "ts": generated_at.strftime('%Y-%m-%dT%H:%M:%S'),
-        }
-        canon = json.dumps(qr_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        sig = hmac.new(app.secret_key.encode("utf-8"), canon, hashlib.sha256).hexdigest()[:20]
-        qr_payload["sig"] = sig
-        auth_qr_data = json.dumps(qr_payload, separators=(",", ":"))
-    except Exception:
-        auth_qr_data = ""
+        },
+    )
 
     # Class summary
     cur.execute("""

@@ -218,7 +218,7 @@
 
     <!-- Premium: AI Assistant -->
     <section class="glass rounded-2xl p-5 border border-gray-100">
-      <h3 class="text-lg font-semibold mb-3">Lovato SmartBot</h3>
+      <h3 class="text-lg font-semibold mb-3">SmartEduPay SmartBot</h3>
       <div class="grid md:grid-cols-[1fr,220px] gap-3">
         <div>
           <div id="aiLog" class="text-sm p-3 rounded-xl border border-gray-100 bg-white/70 min-h-[80px]"></div>
@@ -430,7 +430,7 @@
         const p = document.createElement('p'); p.className='mb-2';
         p.innerHTML = `<span class="text-xs text-gray-500">${who}:</span> ${text}`; log.appendChild(p); log.scrollTop = log.scrollHeight;
       };
-      append('Hi, I am Lovato SmartBot. Ask me about fees or exams.','Bot');
+      append('Hi, I am SmartEduPay SmartBot. Ask me about fees or exams.','Bot');
       f.addEventListener('submit', async (e) => {
         e.preventDefault(); const val = (q.value||'').trim(); if (!val) return; append(val,'You'); q.value='';
         try{

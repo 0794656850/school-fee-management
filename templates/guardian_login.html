@@ -16,10 +16,6 @@
   {% endwith %}
  </head>
  <body class="bg-white min-h-screen text-[var(--text)]">
-  <!-- Floating back button -->
-  <button id="backBtn" class="fixed top-3 left-3 z-40 p-2 rounded-full nav-button" title="Back">
-    <i data-lucide="arrow-left"></i>
-  </button>
   <header class="bg-white">
     <div class="brand-hero">
       <div class="brand-hero__row">
@@ -87,19 +83,6 @@
 
   <script>
     lucide.createIcons();
-    // Back button: prefer history, fallback to Admin Login
-    (function(){
-      const btn = document.getElementById('backBtn');
-      if (!btn) return;
-      btn.addEventListener('click', () => {
-        try {
-          const ref = document.referrer || '';
-          const same = ref && new URL(ref).origin === window.location.origin;
-          if (same) { history.back(); return; }
-        } catch(_) {}
-        window.location.assign('{{ url_for('auth.login') }}');
-      });
-    })();
     // Render flashes
     (function(){
       const flash = window.__flash__ || [];

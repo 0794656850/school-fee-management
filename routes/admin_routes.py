@@ -5,11 +5,14 @@ from typing import Any
 from datetime import datetime
 import mysql.connector
 
+from extensions import limiter
+
 from utils.whatsapp import whatsapp_is_configured, send_whatsapp_text, send_whatsapp_template
 from utils.settings import get_setting, set_setting, set_school_setting
 from utils.security import verify_password, hash_password, is_hashed
 from utils.pro import is_pro_enabled, set_license_key, get_license_key, upgrade_url
-from utils.audit import fetch_audit_logs
+from utils.audit import fetch_audit_logs, log_event
+from utils.db_helpers import ensure_guardian_receipts_table
 from utils.tenant import get_or_create_school, bootstrap_new_school, ensure_schools_table, slugify_code
 from utils.users import (
     ensure_user_tables,
@@ -22,6 +25,7 @@ from utils.users import (
     set_user_active,
 )
 from utils.security import hash_password
+from routes.reminder_routes import DEFAULT_REMINDER_TEMPLATE
 
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -96,6 +100,7 @@ def _serialize_audit_log(log: dict[str, Any]) -> dict[str, Any]:
 
 
 @admin_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("6 per minute", methods=["POST"])
 def login():
     if request.method == "POST":
         password = request.form.get("password", "").strip()
@@ -104,7 +109,11 @@ def login():
             session["is_admin"] = True
             flash("Welcome, admin!", "success")
             return redirect(url_for("admin.dashboard"))
-        # No audit: failed attempts are not recorded
+        log_event(
+            "security",
+            "admin_login_failed",
+            detail=f"Failed admin login from {request.remote_addr or 'unknown IP'}",
+        )
         flash("Invalid password.", "error")
         return redirect(url_for("admin.login"))
     return render_template("admin_login.html")
@@ -217,6 +226,55 @@ def manage_schools():
         return guard
     # Schools management UI is disabled. Redirect to dashboard.
     return redirect(url_for("admin.dashboard"))
+
+
+@admin_bp.route("/guardian-receipts", methods=["GET", "POST"])
+def guardian_receipts():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before reviewing uploads.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.guardian_receipts")))
+
+    db = _db()
+    ensure_guardian_receipts_table(db)
+    cur = db.cursor(dictionary=True)
+    try:
+        if request.method == "POST":
+            rid = int(request.form.get("receipt_id") or 0)
+            action = (request.form.get("action") or "").strip().lower()
+            if rid and action in ("verify", "reject"):
+                now = datetime.utcnow()
+                status = "verified" if action == "verify" else "rejected"
+                cur.execute(
+                    """
+                    UPDATE guardian_receipts
+                    SET status=%s, verified_by=%s, verified_at=%s, updated_at=%s
+                    WHERE id=%s AND school_id=%s
+                    """,
+                    (status, session.get("username") or "Admin", now, now, rid, sid),
+                )
+                db.commit()
+                flash(f"Receipt {status}.", "success")
+        cur.execute(
+            """
+            SELECT * FROM guardian_receipts
+            WHERE school_id=%s
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (sid,),
+        )
+        receipts = cur.fetchall() or []
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    return render_template("admin/guardian_receipts.html", receipts=receipts)
 
     # The logic below is intentionally bypassed to prevent
     # any Schools management UI or text from rendering.
@@ -342,6 +400,13 @@ def mpesa_config():
         "DARAJA_CALLBACK_URL",
         "DARAJA_ACCOUNT_REF",
         "DARAJA_TRANSACTION_DESC",
+        "DARAJA_B2C_SHORT_CODE",
+        "DARAJA_B2C_INITIATOR_NAME",
+        "DARAJA_B2C_SECURITY_CREDENTIAL",
+        "DARAJA_B2C_RESULT_URL",
+        "DARAJA_B2C_TIMEOUT_URL",
+        "DARAJA_B2C_COMMAND",
+        "DARAJA_B2C_OCCASION",
     ]
 
     if request.method == "POST":
@@ -383,12 +448,14 @@ def school_profile():
     ]
 
     if request.method == "POST":
+        sid = session.get("school_id")
+        if not sid:
+            flash("Select a school before saving its profile.", "warning")
+            return redirect(url_for("choose_school", next=url_for("admin.school_profile")))
         for k in keys:
             val = (request.form.get(k) or "").strip()
             # Save per-school to avoid cross-tenant conflicts
-            set_school_setting(k, val)
-            # Reflect immediately in running app
-            current_app.config[k] = val
+            set_school_setting(k, val, school_id=sid)
 
         # Handle logo upload (optional)
         try:
@@ -410,9 +477,7 @@ def school_profile():
                     file.save(path_fs)
                     # Store relative static path for template usage via url_for('static', filename=...)
                     rel = os.path.join("uploads", "schools", str(sid), target_name).replace("\\", "/")
-                    set_school_setting("SCHOOL_LOGO_URL", rel)
-                    # Reflect immediately
-                    current_app.config["SCHOOL_LOGO_URL"] = rel
+                    set_school_setting("SCHOOL_LOGO_URL", rel, school_id=sid)
                     flash("Logo uploaded.", "success")
                 else:
                     flash("Unsupported logo format. Use PNG/JPG/GIF/WEBP.", "warning")
@@ -423,8 +488,7 @@ def school_profile():
         try:
             for k in penalty_keys:
                 val = (request.form.get(k) or "").strip()
-                set_school_setting(k, val)
-                current_app.config[k] = val
+                set_school_setting(k, val, school_id=sid)
         except Exception:
             pass
 
@@ -434,14 +498,14 @@ def school_profile():
     # Load current values with config/env override
     values = {}
     for k in keys:
-        v = (current_app.config.get(k) or get_setting(k) or "").strip()
+        v = (get_setting(k) or current_app.config.get(k) or "").strip()
         values[k] = v
     # Include existing logo path if any
-    values["SCHOOL_LOGO_URL"] = (current_app.config.get("SCHOOL_LOGO_URL") or get_setting("SCHOOL_LOGO_URL") or "").strip()
+    values["SCHOOL_LOGO_URL"] = (get_setting("SCHOOL_LOGO_URL") or current_app.config.get("SCHOOL_LOGO_URL") or "").strip()
     # Penalty settings
-    values["LATE_PENALTY_KIND"] = (current_app.config.get("LATE_PENALTY_KIND") or get_setting("LATE_PENALTY_KIND") or "").strip()
-    values["LATE_PENALTY_VALUE"] = (current_app.config.get("LATE_PENALTY_VALUE") or get_setting("LATE_PENALTY_VALUE") or "").strip()
-    values["LATE_PENALTY_GRACE_DAYS"] = (current_app.config.get("LATE_PENALTY_GRACE_DAYS") or get_setting("LATE_PENALTY_GRACE_DAYS") or "").strip()
+    values["LATE_PENALTY_KIND"] = (get_setting("LATE_PENALTY_KIND") or current_app.config.get("LATE_PENALTY_KIND") or "").strip()
+    values["LATE_PENALTY_VALUE"] = (get_setting("LATE_PENALTY_VALUE") or current_app.config.get("LATE_PENALTY_VALUE") or "").strip()
+    values["LATE_PENALTY_GRACE_DAYS"] = (get_setting("LATE_PENALTY_GRACE_DAYS") or current_app.config.get("LATE_PENALTY_GRACE_DAYS") or "").strip()
     return render_template("school_profile.html", values=values)
 
 
@@ -451,20 +515,24 @@ def access_settings():
     if guard is not None:
         return guard
 
+    sid = session.get("school_id")
+
     form_kind = (request.form.get("form") or "").strip().lower() if request.method == "POST" else ""
 
     if request.method == "POST":
         if form_kind == "access":
             username = (request.form.get("APP_LOGIN_USERNAME") or "").strip()
             password = (request.form.get("APP_LOGIN_PASSWORD") or "").strip()
+            if not sid:
+                flash("Select a school before editing access settings.", "warning")
+                return redirect(url_for("choose_school", next=url_for("admin.access_settings")))
             if username:
-                set_school_setting("APP_LOGIN_USERNAME", username)
-                current_app.config["LOGIN_USERNAME"] = username or current_app.config.get("LOGIN_USERNAME", "user")
+                set_school_setting("APP_LOGIN_USERNAME", username, school_id=sid)
             if password:
                 try:
-                    set_school_setting("APP_LOGIN_PASSWORD", hash_password(password))
+                    set_school_setting("APP_LOGIN_PASSWORD", hash_password(password), school_id=sid)
                 except Exception:
-                    set_school_setting("APP_LOGIN_PASSWORD", password)
+                    set_school_setting("APP_LOGIN_PASSWORD", password, school_id=sid)
             flash("Access settings saved.", "success")
             return redirect(url_for("admin.access_settings"))
 
@@ -511,8 +579,11 @@ def access_settings():
         elif form_kind == "reminders":
             email_col = (request.form.get("REMINDER_EMAIL_COLUMN") or "email").strip() or "email"
             default_msg = (request.form.get("REMINDER_DEFAULT_MESSAGE") or "").strip()
-            set_school_setting("REMINDER_EMAIL_COLUMN", email_col)
-            set_school_setting("REMINDER_DEFAULT_MESSAGE", default_msg)
+            if not sid:
+                flash("Select a school before editing reminder settings.", "warning")
+                return redirect(url_for("choose_school", next=url_for("admin.access_settings")))
+            set_school_setting("REMINDER_EMAIL_COLUMN", email_col, school_id=sid)
+            set_school_setting("REMINDER_DEFAULT_MESSAGE", default_msg, school_id=sid)
             flash("Reminder settings saved.", "success")
             return redirect(url_for("admin.access_settings"))
 
@@ -538,15 +609,18 @@ def access_settings():
             # Portal token config and global rotation
             max_age = (request.form.get("PORTAL_TOKEN_MAX_AGE_DAYS") or "").strip()
             rotate = (request.form.get("ROTATE_ALL_NOW") or "").strip()
+            if not sid:
+                flash("Select a school before editing portal tokens.", "warning")
+                return redirect(url_for("choose_school", next=url_for("admin.access_settings")))
             if max_age:
                 try:
-                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", int(max_age))
+                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", int(max_age), school_id=sid)
                 except Exception:
-                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", max_age)
+                    set_school_setting("PORTAL_TOKEN_MAX_AGE_DAYS", max_age, school_id=sid)
             if rotate == "1":
                 try:
                     now_ts = int(datetime.now().timestamp())
-                    set_school_setting("PORTAL_TOKEN_ROLLOVER_AT", now_ts)
+                    set_school_setting("PORTAL_TOKEN_ROLLOVER_AT", now_ts, school_id=sid)
                 except Exception:
                     pass
             flash("Portal settings saved.", "success")
@@ -560,7 +634,7 @@ def access_settings():
     values["WHATSAPP_TEMPLATE_NAME"] = (get_setting("WHATSAPP_TEMPLATE_NAME") or current_app.config.get("WHATSAPP_TEMPLATE_NAME", ""))
     values["WHATSAPP_TEMPLATE_LANG"] = (get_setting("WHATSAPP_TEMPLATE_LANG") or current_app.config.get("WHATSAPP_TEMPLATE_LANG", "en_US") or "en_US")
     values["REMINDER_EMAIL_COLUMN"] = (get_setting("REMINDER_EMAIL_COLUMN") or "email")
-    values["REMINDER_DEFAULT_MESSAGE"] = (get_setting("REMINDER_DEFAULT_MESSAGE") or "Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.")
+    values["REMINDER_DEFAULT_MESSAGE"] = (get_setting("REMINDER_DEFAULT_MESSAGE") or DEFAULT_REMINDER_TEMPLATE)
 
     # Portal token settings
     values["PORTAL_TOKEN_MAX_AGE_DAYS"] = (get_setting("PORTAL_TOKEN_MAX_AGE_DAYS") or current_app.config.get("PORTAL_TOKEN_MAX_AGE_DAYS", 180))

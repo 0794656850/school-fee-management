@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
-from requests.exceptions import RequestException, SSLError, ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 from flask import current_app, url_for
+from requests.exceptions import RequestException, SSLError, ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 from utils.settings import get_setting
-import os
 
 
 class DarajaError(Exception):
@@ -82,6 +83,37 @@ def _password(short_code: str, passkey: str, ts: str) -> str:
     return base64.b64encode(raw).decode("utf-8")
 
 
+def _resolve_callback_url(callback_url: Optional[str] = None) -> str:
+    cb = (callback_url or _cfg("DARAJA_CALLBACK_URL") or "").strip()
+    if not cb:
+        raise DarajaError(
+            "DARAJA_CALLBACK_URL is not set. Provide your public HTTPS callback (e.g. https://your-ngrok-url/mpesa/callback)."
+        )
+    pr = urlparse(cb)
+    scheme = (pr.scheme or "").lower()
+    host = (pr.hostname or "").lower()
+    if scheme != "https" or not host:
+        raise DarajaError("CallBackURL must be a public HTTPS endpoint ending in /mpesa/callback.")
+    if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
+        raise DarajaError("CallBackURL must not target a localhost or private host.")
+    return cb
+
+
+def _resolve_b2c_urls() -> tuple[str, str]:
+    result = (current_app.config.get("DARAJA_B2C_RESULT_URL") or "").strip()
+    timeout = (current_app.config.get("DARAJA_B2C_TIMEOUT_URL") or "").strip()
+    if not result or not timeout:
+        try:
+            if not result:
+                result = url_for("mpesa.b2c_result", _external=True)
+            if not timeout:
+                timeout = url_for("mpesa.b2c_timeout", _external=True)
+        except RuntimeError:
+            # Fallback to empty; validation will raise later if missing
+            pass
+    return result, timeout
+
+
 def normalize_msisdn(phone: str) -> str:
     p = (phone or "").strip()
     if p.startswith("+"):
@@ -114,23 +146,7 @@ def stk_push(phone: str, amount: int, account_ref: Optional[str] = None, trans_d
 
     token = get_access_token()
     ts = _timestamp()
-    # Resolve and validate callback URL. Daraja rejects private/localhost URLs.
-    try:
-        cb = (callback_url or _cfg("DARAJA_CALLBACK_URL") or url_for("mpesa.callback", _external=True) or "").strip()
-        # Basic normalization: prefer https when available
-        if cb.startswith("http://") and (_cfg("DARAJA_ENV", "sandbox").lower() != "sandbox"):
-            cb = cb.replace("http://", "https://", 1)
-        from urllib.parse import urlparse
-        pr = urlparse(cb)
-        host = (pr.hostname or "").lower()
-        if (not pr.scheme) or (not host):
-            raise DarajaError("Invalid CallBackURL. Set DARAJA_CALLBACK_URL to your public https URL e.g. https://your-domain/mpesa/callback")
-        if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
-            raise DarajaError("Invalid CallBackURL (localhost). Use a public URL (ngrok/Cloudflare) to /mpesa/callback and set DARAJA_CALLBACK_URL")
-    except DarajaError:
-        raise
-    except Exception:
-        raise DarajaError("Failed to resolve CallBackURL. Set DARAJA_CALLBACK_URL to your public https URL")
+    cb = _resolve_callback_url(callback_url)
 
     payload = {
         "BusinessShortCode": short_code,
@@ -161,6 +177,62 @@ def stk_push(phone: str, amount: int, account_ref: Optional[str] = None, trans_d
         return r.json()
     except ValueError:
         raise DarajaError("STK push failed: non-JSON response from Daraja")
+
+
+def b2c_payment(phone: str, amount: float, remarks: Optional[str] = None, occasion: Optional[str] = None, command: Optional[str] = None, timeout: int = 20) -> Dict[str, Any]:
+    if _stub_enabled():
+        return {
+            "ResponseCode": "0",
+            "ResponseDescription": "Success. Payment request accepted",
+            "ConversationID": f"C{int(time.time())}",
+            "OriginatorConversationID": f"OC{int(time.time())}",
+            "TransactionID": f"T{int(time.time()*1000)}",
+        }
+    initiator = _cfg("DARAJA_B2C_INITIATOR_NAME")
+    security = _cfg("DARAJA_B2C_SECURITY_CREDENTIAL")
+    short_code = _cfg("DARAJA_B2C_SHORT_CODE") or _cfg("DARAJA_SHORT_CODE")
+    if not initiator or not security:
+        raise DarajaError("Daraja B2C initiator and security credential are not configured")
+    if not short_code:
+        raise DarajaError("Daraja B2C short code is not configured")
+
+    amount_int = int(round(amount))
+    if amount_int <= 0:
+        raise DarajaError("Amount must be greater than zero")
+
+    result_url, timeout_url = _resolve_b2c_urls()
+    if not result_url or not timeout_url:
+        raise DarajaError("Daraja B2C result/timeout URLs are not configured")
+
+    token = get_access_token()
+    payload = {
+        "InitiatorName": initiator,
+        "SecurityCredential": security,
+        "CommandID": command or _cfg("DARAJA_B2C_COMMAND", "BusinessPayment"),
+        "Amount": amount_int,
+        "PartyA": short_code,
+        "PartyB": normalize_msisdn(phone),
+        "Remarks": remarks or occasion or _cfg("DARAJA_B2C_OCCASION", "Credit refund"),
+        "QueueTimeOutURL": timeout_url,
+        "ResultURL": result_url,
+        "Occasion": occasion or _cfg("DARAJA_B2C_OCCASION", "Credit refund"),
+    }
+    url = f"{_base_url()}/mpesa/b2c/v1/paymentrequest"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=timeout)
+    except (RequestsTimeout, SSLError, RequestsConnectionError, RequestException) as e:
+        err = (
+            "Network/SSL error during Daraja B2C payout: "
+            f"{type(e).__name__}: {e}"
+        )
+        raise DarajaError(err)
+    if r.status_code != 200:
+        raise DarajaError(f"Daraja B2C payout failed: {r.status_code} {r.text}")
+    try:
+        return r.json()
+    except ValueError:
+        raise DarajaError("Daraja B2C payout failed: non-JSON response from Daraja")
 
 
 def parse_callback_items(items: list[dict]) -> dict:

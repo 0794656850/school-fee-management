@@ -186,7 +186,18 @@ def student_detail(student_id: int):
     finally:
         db.close()
 
-    return render_template("recovery_student.html", student=student, actions=actions)
+    promise_values = [float(a.get("amount_promised") or 0) for a in actions if a.get("amount_promised") not in (None, "")]
+    follow_ups = [a for a in actions if a.get("next_follow_up")]
+    paid_full_count = sum(1 for a in actions if (a.get("status") or "").lower() == "paid_full")
+    avg_promise = sum(promise_values) / (len(promise_values) or 1) if actions else 0
+    stats = {
+        "last_action": actions[0] if actions else None,
+        "promise_total": sum(promise_values),
+        "promise_average": avg_promise,
+        "follow_ups": len(follow_ups),
+        "paid_full_count": paid_full_count,
+    }
+    return render_template("recovery_student.html", student=student, actions=actions, stats=stats)
 
 
 @recovery_bp.route("/student/<int:student_id>/log", methods=["POST"])

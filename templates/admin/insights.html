@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Insights & Alerts — {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Insights & Alerts{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <section class="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-lg">
+    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Anomaly Detection</p>
+        <h2 class="text-2xl font-semibold text-slate-900">Alerts engine</h2>
+      </div>
+      <div class="text-sm text-slate-500">Runs on site data every time you refresh the page.</div>
+    </div>
+    <div class="mt-6 grid gap-4 md:grid-cols-3">
+      {% set coll = metrics.get("collections", {}) %}
+      {% set failed = metrics.get("failed_payments", {}) %}
+      {% set unused = metrics.get("unused_credits", {}) %}
+      <article class="rounded-2xl border border-slate-100 p-4 shadow-sm">
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Collections (7d)</p>
+        <p class="mt-2 text-2xl font-semibold text-slate-900">KES {{ coll.current or 0 | round(2) }}</p>
+        <p class="mt-1 text-xs text-slate-500">
+          Prev wk: KES {{ coll.previous or 0 | round(2) }} — drop {{ coll.drop_pct or 0 | round(1) }}%
+        </p>
+      </article>
+      <article class="rounded-2xl border border-slate-100 p-4 shadow-sm">
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Failed payments</p>
+        <p class="mt-2 text-2xl font-semibold text-slate-900">{{ failed.current or 0 }}</p>
+        {% set ratio = failed_ratio_display %}
+        <p class="mt-1 text-xs text-slate-500">
+          Ratio vs prev: {{ ratio }}
+        </p>
+      </article>
+      <article class="rounded-2xl border border-slate-100 p-4 shadow-sm">
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Unused credit</p>
+        <p class="mt-2 text-2xl font-semibold text-slate-900">KES {{ unused.total or 0 | round(2) }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ unused.count or 0 }} students</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-lg">
+    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Detected anomalies</p>
+        <h3 class="text-xl font-semibold text-slate-900">Summary</h3>
+      </div>
+      <div class="text-xs font-semibold text-slate-600">
+        Alert targets: {{ recipients | join(", ") if recipients else "Not configured" }}
+      </div>
+    </div>
+    <div class="mt-4 space-y-3">
+      {% if anomalies %}
+        {% for title, desc in anomalies %}
+          <article class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p class="text-sm font-semibold text-amber-700">{{ title }}</p>
+            <p class="text-xs text-amber-600">{{ desc }}</p>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p class="text-sm text-slate-500">No actionable anomalies detected right now.</p>
+      {% endif %}
+    </div>
+    <form method="post" class="mt-5 flex flex-wrap gap-3">
+      <button type="submit" class="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500" {% if not anomalies or not recipients %}disabled{% endif %}>
+        Send email alert
+      </button>
+      {% if not recipients %}
+        <p class="text-xs text-rose-600">Set ALERT_EMAIL_RECIPIENTS to enable.</p>
+      {% endif %}
+    </form>
+  </section>
+</div>
+{% endblock %}

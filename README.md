@@ -3,7 +3,7 @@
 A modern, multi-tenant school fee management web application for small and medium learning institutions (Kindergarten → High School). It digitizes the full fee lifecycle: student enrollment, term fees and invoicing, payments, credits and transfers, reminders, analytics, and admin/user access — with optional M-Pesa STK Push, WhatsApp Cloud API, and an AI assistant.
 
 ## Key Features
-- Multi-tenant: per-school data isolation, settings, and branding.
+- Multi-tenant: per-school data isolation, settings, and branding (each school stores its details in `school_settings` keyed by its own `school_id`, so identical data never cross-links).
 - Students & Payments: balances, overpayments as credit, credit transfers between siblings.
 - Terms & Invoices: academic terms, fee components, per-class defaults, discounts, invoice generation, term summaries.
 - Collections: M-Pesa (Daraja) STK Push initiation and callback reconciliation.
@@ -21,14 +21,19 @@ A modern, multi-tenant school fee management web application for small and mediu
 - Integrations: Safaricom Daraja (M-Pesa), Gmail API (email reminders), WhatsApp Cloud API (optional receipts), Vertex AI (Gemini) for the AI assistant.
 - Deployment: Dockerfile, docker-compose, WSGI (for gunicorn/uwsgi), `.env` support via `config.py`.
 
-## Repository Layout
+-## Repository Layout
 - App entry: `app.py`, `wsgi.py`
-- Blueprints: `routes/` (admin, auth, credit, mpesa, terms, reminders, ai)
-- Utilities: `utils/` (settings, tenant, users, whatsapp, mpesa, ledger, ai, security, audit)
-- Templates: `templates/` (pages, partials, printables)
+- Blueprints: `routes/` (admin, auth, credit, mpesa, terms, reminders, ai, approvals, insights)
+- Utilities: `utils/` (settings, tenant, users, whatsapp, mpesa, ledger, ai, security, audit, alerts, document_qr, notifications, db_helpers)
+- Templates: `templates/` (pages, partials, printables, guardian receipts, approvals, insights)
 - Static: `static/`
 - Docs: `docs/` (M-Pesa setup, AI assistant)
-- Scripts: `scripts/` (index/ask AI, seeding, testing Daraja, read settings)
+- Scripts: `scripts/` (index/ask AI, seeding, testing Daraja, read settings, start-ngrok)
+
+## Governance & Admin Workflows
+- **Approval workbench**: `/admin/approvals` lets staff submit OTP-secured requests for write-offs, discounts, or credit transfers. Requests are hashed, emailed via `utils/notifications`, recorded in `approval_requests`, and resolved with QR-signed documents from `utils/document_qr` so auditors can verify summaries.
+- **Insights & alerts**: `/admin/insights` surfaces anomalies (collections drop, failed callbacks, unused credits) calculated in `utils/alerts`. A “Send alert” button notifies configured recipients via Gmail and logs the attempt for oversight.
+- **Guardian receipts**: guardians can upload payment proofs through the new upload page, and supporting helpers in `utils/db_helpers` persist and track status so admins can verify before reconciliation.
 
 ## Quickstart (Local)
 Prerequisites:
@@ -85,6 +90,15 @@ Most settings can be done in the Admin UI. Environment variables can override de
   - STK Push: Admin → Billing triggers an STK for Pro upgrade (config required)
 - Payments QR/Link (optional): `PAYMENT_LINK` displays a QR on receipts
 
+### Alerts & approvals (optional)
+- `ALERT_EMAIL_RECIPIENTS` (comma-separated) toggles who receives insights alerts.
+- `ALERT_COLLECTION_DROP_PERCENT`, `ALERT_FAILED_PAYMENT_RATIO`, and `ALERT_UNUSED_CREDITS_THRESHOLD` adjust the detection thresholds (defaults: 30%, 1.5×, KES 5,000).
+- `GUARDIAN_RECEIPT_UPLOADS_DIR` chooses where guardian-uploaded receipts live under `static/` (default `uploads/guardian_receipts`).
+
+### Security configuration (optional)
+- `ALLOWED_HOSTS` (comma-separated) locks the app to specific hostnames/aliases and rejects invalid Host headers.
+- `MAX_CONTENT_LENGTH` caps request bodies (default 10 MB) and helps mitigate large payload abuse.
+
 See detailed setup guides:
 - `docs/MPESA_SETUP.md` for Daraja (STK Push)
 - `docs/AI_ASSISTANT.md` for the AI assistant
@@ -108,6 +122,11 @@ Set your envs via Compose or a `.env` file before running.
 
 ## Security Notes
 - Change all default credentials immediately after first login.
+- Admin login (`/admin/login`) now caps POSTs at 6/min per IP and records failed attempts in the audit log.
+- Insights & Alerts: `/admin/insights` reports collection drops, failed payment spikes, and unused credits and emails configured recipients (`ALERT_EMAIL_RECIPIENTS`) whenever thresholds trigger.
+- Approval workflows: `/admin/approvals` lets staff log write-offs/discounts/credit transfers, dispatches OTPs before submissions, and issues QR-backed confirmations once admins approve.
+- Guardian receipt uploads: guardians can submit receipt or cheque scans from `/g/upload-receipt`; admins verify and track them at `/admin/guardian-receipts`.
+- Guardian receipts (`/g/receipt/<payment_id>`) now embed signed QR codes that link back to the verified receipt payload.
 - Keep `.env`, `instance/` (per-machine data), and `static/uploads/` out of version control (already handled in `.gitignore`).
 - Restrict access to Admin pages and API credentials.
 
@@ -190,7 +209,7 @@ No license specified. If you intend to open-source, add a suitable license file.
 ## Media via Git LFS
 - Large media in `static/media/` is tracked with Git LFS via `.gitattributes`.
 - Install once: `git lfs install`.
-- Add the promo video at `static/media/Stop_Guessing_Fees__Lovato_Tech_Made_Easy.mp4` and commit normally.
+- Add the promo video at `static/media/Stop_Guessing_Fees__SmartEduPay_Made_Easy.mp4` and commit normally.
 - See `static/media/README.md` for step-by-step instructions.
 
 ## AI Providers (Options)

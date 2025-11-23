@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Upload Receipt — {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Upload Receipt for Verification{% endblock %}
+
+{% block content %}
+<div class="flex min-h-[60vh] items-center justify-center">
+  <form method="post" enctype="multipart/form-data" class="w-full max-w-xl space-y-6 rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-lg">
+    <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Guardian Service</p>
+    <h2 class="text-2xl font-bold text-slate-900">Upload payment proof</h2>
+    <p class="text-sm text-slate-500">Submit receipts or cheque scans for admin verification. Approved uploads speed up reconciliation.</p>
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="text-xs text-slate-500">
+        Guardian name
+        <input name="guardian_name" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500" placeholder="Jane Doe">
+      </label>
+      <label class="text-xs text-slate-500">
+        Email
+        <input type="email" name="guardian_email" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500" placeholder="you@example.com">
+      </label>
+      <label class="text-xs text-slate-500">
+        Phone
+        <input name="guardian_phone" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500" placeholder="+2547...">
+      </label>
+      <label class="text-xs text-slate-500">
+        Description
+        <input name="description" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500" placeholder="Receipt for fees paid on 15 Oct">
+      </label>
+    </div>
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Receipt file</p>
+      <input type="file" name="receipt" accept=".png,.jpg,.jpeg,.pdf" class="w-full rounded-2xl border border-dashed border-slate-300 px-3 py-8 text-sm text-slate-500 focus:border-indigo-500">
+    </div>
+    <button type="submit" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500">Upload & notify admin</button>
+  </form>
+</div>
+{% endblock %}

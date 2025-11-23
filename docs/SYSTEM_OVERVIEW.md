@@ -3,12 +3,13 @@ Fee Management Portal — System Overview
 This document summarizes the product identity, main navigation, and core capabilities so the in‑app AI Assistant can answer questions grounded in this system. It is safe to include in the AI index.
 
 Branding
-- Brand Name: Lovato_Tech
-- Portal Title: Fee Management portal
-- Primary Logo: static/css/lovato_logo.jpg
-- Secondary Logo: static/css/lovato_logo1.jpg
-- Favicon: static/css/lovato_logo.jpg (default)
+- Brand Name: SmartEduPay
+- Portal Title: SmartEduPay Portal
+- Primary Logo: static/img/smartedupay_logo.svg
+- Secondary Logo: static/img/smartedupay_logo_secondary.svg
+- Favicon: static/img/smartedupay_logo_secondary.svg (default)
 - Footer Signature: Ac 2025 Fee_Management_System
+- Profile isolation: every school's branding settings stay in `school_settings` keyed by `school_id`, so even matching data never leaks between tenants.
 
 Navigation (Sidebar)
 - Dashboard: High‑level KPIs and quick links; totals collected, pending balances, credits, and trends.
@@ -49,11 +50,11 @@ Key Endpoints (selected)
 - /ai
 
 Branding Configuration (env vars)
-- BRAND_NAME=Lovato_Tech
-- PORTAL_TITLE="Fee Management portal"
-- LOGO_PRIMARY=css/lovato_logo.jpg
-- LOGO_SECONDARY=css/lovato_logo1.jpg
-- FAVICON=css/lovato_logo.jpg
+- BRAND_NAME=SmartEduPay
+- PORTAL_TITLE="SmartEduPay Portal"
+- LOGO_PRIMARY=img/smartedupay_logo.svg
+- LOGO_SECONDARY=img/smartedupay_logo_secondary.svg
+- FAVICON=img/smartedupay_logo_secondary.svg
 
 Notes for the AI Assistant
 - When asked about what this system can do, summarize items under Core Capabilities.

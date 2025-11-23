@@ -3,133 +3,201 @@
 {% block page_title %}Recovery: {{ student.name }}{% endblock %}
 {% block content %}
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-  <div class="lg:col-span-2">
-    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white">
-      <div class="px-6 py-4 border-b border-gray-100">
+<div class="space-y-6">
+  <section class="rounded-3xl border border-indigo-200/40 bg-gradient-to-br from-indigo-900 to-[#03122e] p-8 text-white shadow-[0_25px_75px_rgba(15,23,42,0.65)]">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-white/60">Collections Recovery</p>
+        <h1 class="text-3xl font-semibold">{{ student.name }}</h1>
+        <p class="text-sm text-white/70">ID: {{ student.id }} • Class: {{ student.class_name or 'Unassigned' }}</p>
+      </div>
+      <div class="flex flex-col gap-1 text-right">
+        <span class="text-xs uppercase tracking-[0.4em] text-white/60">Outstanding</span>
+        <span class="text-4xl font-extrabold text-amber-300">KES {{ "{:,.2f}".format(student.balance or 0) }}</span>
+        <span class="text-sm text-white/70">Current term balance to recover</span>
+      </div>
+    </div>
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+      <div class="rounded-2xl bg-white/10 border border-white/20 px-4 py-3">
+        <p class="text-xs uppercase tracking-[0.3em] text-white/70">Last action</p>
+        <p class="text-base font-semibold">{{ stats.last_action.created_at if stats.last_action else '—' }}</p>
+      </div>
+      <div class="rounded-2xl bg-white/10 border border-white/20 px-4 py-3">
+        <p class="text-xs uppercase tracking-[0.3em] text-white/70">Next follow-up</p>
+        <p class="text-base font-semibold">
+          {{ stats.last_action.next_follow_up if stats.last_action and stats.last_action.next_follow_up else 'Schedule now' }}
+        </p>
+      </div>
+      <div class="rounded-2xl bg-white/10 border border-white/20 px-4 py-3">
+        <p class="text-xs uppercase tracking-[0.3em] text-white/70">Promise total</p>
+        <p class="text-base font-semibold">
+          KES {{ "{:,.2f}".format(stats.promise_total) }}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+      <section class="rounded-3xl border border-gray-100 bg-white/80 p-6 shadow-sm backdrop-blur">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-lg font-semibold">History</div>
-            <div class="text-sm text-gray-500">All recovery actions for this student</div>
+            <p class="text-xs uppercase tracking-[0.4em] text-gray-500">Recovery Timeline</p>
+            <h2 class="text-2xl font-semibold text-gray-900">All recovery actions</h2>
           </div>
+          <span class="text-xs text-gray-400">Updated live</span>
         </div>
-      </div>
-      <div class="p-6">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-3 py-2 text-left">When</th>
-                <th class="px-3 py-2 text-left">Action</th>
-                <th class="px-3 py-2 text-left">Status</th>
-                <th class="px-3 py-2 text-left">Promise</th>
-                <th class="px-3 py-2 text-left">Next Follow-up</th>
-                <th class="px-3 py-2 text-left">By</th>
-                <th class="px-3 py-2 text-left">Notes</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              {% for a in actions %}
-                <tr>
-                  <td class="px-3 py-2">{{ a.created_at }}</td>
-                  <td class="px-3 py-2">{{ a.action }}</td>
-                  <td class="px-3 py-2">{{ a.status or '-' }}</td>
-                  <td class="px-3 py-2">
-                    {% if a.amount_promised %}
-                      KES {{ "{:,.2f}".format(a.amount_promised|float) }} on {{ a.promise_date or '-' }}
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                  <td class="px-3 py-2">{{ a.next_follow_up or '-' }}</td>
-                  <td class="px-3 py-2">{{ a.created_by or '-' }}</td>
-                  <td class="px-3 py-2">{{ a.notes or '' }}</td>
-                </tr>
-              {% else %}
-                <tr>
-                  <td colspan="7" class="text-center text-gray-500 py-6">No recovery actions logged yet.</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div class="mt-6 space-y-4">
+          {% for a in actions %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-gray-100 p-4 shadow-sm transition hover:shadow-lg">
+              <div>
+                <p class="text-xs uppercase tracking-[0.3em] text-gray-400">When</p>
+                <p class="font-semibold text-gray-900">{{ a.created_at }}</p>
+                <p class="text-sm text-gray-500 mt-1">By {{ a.created_by or 'Team' }}</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Action & Status</p>
+                <p class="text-base font-semibold text-indigo-600">{{ a.action }}</p>
+                <p class="text-sm text-gray-500">Status: {{ a.status or 'Pending' }}</p>
+              </div>
+              <div class="md:col-span-2">
+                <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Promise</p>
+                {% if a.amount_promised %}
+                  <p class="text-sm font-semibold text-rose-600">
+                    KES {{ "{:,.2f}".format(a.amount_promised|float) }} on {{ a.promise_date or 'TBD' }}
+                  </p>
+                {% else %}
+                  <p class="text-sm text-gray-500">No promise recorded.</p>
+                {% endif %}
+                <p class="text-xs text-gray-500">Next follow-up: {{ a.next_follow_up or 'Schedule' }}</p>
+                <p class="mt-2 text-sm text-gray-600">{{ a.notes or 'No notes captured.' }}</p>
+              </div>
+            </div>
+          {% else %}
+            <div class="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-gray-500">
+              <p class="text-lg font-semibold mb-2">No logs yet</p>
+              <p>Start by logging a recovery action below to keep the team in sync.</p>
+            </div>
+          {% endfor %}
         </div>
-      </div>
-    </div>
-  </div>
+      </section>
 
-  <div>
-    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white">
-      <div class="px-6 py-4 border-b border-gray-100">
-        <div class="text-lg font-semibold">Student</div>
-      </div>
-      <div class="p-6 space-y-2">
-        <div class="text-gray-900 font-medium">{{ student.name }}</div>
-        <div class="text-gray-600 text-sm">ID: {{ student.id }}{% if student.class_name %} • Class: {{ student.class_name }}{% endif %}</div>
-        <div class="text-rose-600 font-semibold">Outstanding: KES {{ "{:,.2f}".format(student.balance or 0) }}</div>
-      </div>
+      <section class="rounded-3xl border border-gradient-to-tr from-amber-200 via-indigo-200 to-sky-200 bg-gradient-to-tr from-white/70 to-white/50 p-6 shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-gray-500">Recovery Summary</p>
+            <h3 class="text-lg font-semibold text-gray-900">Key details</h3>
+          </div>
+          <span class="text-xs text-gray-500">Visualize progress</span>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-4 text-sm text-gray-600">
+          <div class="rounded-2xl border border-white/80 bg-white/60 p-3 text-center">
+            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Average promise</p>
+            <p class="text-xl font-semibold text-indigo-600">
+              KES {{ "{:,.0f}".format(stats.promise_average) }}
+            </p>
+          </div>
+          <div class="rounded-2xl border border-white/80 bg-white/60 p-3 text-center">
+            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Follow-ups</p>
+            <p class="text-xl font-semibold text-amber-600">
+              {{ stats.follow_ups }}
+            </p>
+          </div>
+          <div class="rounded-2xl border border-white/80 bg-white/60 p-3 text-center">
+            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Promise hit rate</p>
+            <p class="text-xl font-semibold text-emerald-600">
+              {{ "{:,.0f}".format(stats.paid_full_count * 100 / (actions|length or 1)) }}%
+            </p>
+          </div>
+          <div class="rounded-2xl border border-white/80 bg-white/60 p-3 text-center">
+            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Actions tracked</p>
+            <p class="text-xl font-semibold text-slate-900">{{ actions|length }}</p>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <div class="rounded-2xl shadow-sm border border-gray-100 bg-white mt-6">
-      <div class="px-6 py-4 border-b border-gray-100">
-        <div class="text-lg font-semibold">Log Recovery Action</div>
+    <aside class="space-y-6">
+      <div class="rounded-3xl border border-gray-100 bg-white/90 p-6 shadow-lg">
+        <div class="flex items-center justify-between">
+          <p class="text-xs uppercase tracking-[0.4em] text-gray-500">Student</p>
+          <span class="text-xs text-gray-400">Profile card</span>
+        </div>
+        <div class="mt-4 space-y-2">
+          <p class="text-lg font-semibold text-gray-900">{{ student.name }}</p>
+          <p class="text-sm text-gray-500">ID: {{ student.id }}</p>
+          <p class="text-sm text-gray-500">Current Class: {{ student.class_name or '—' }}</p>
+          <div class="rounded-2xl bg-rose-50 px-3 py-2 text-rose-600 font-semibold">
+            Outstanding: KES {{ "{:,.2f}".format(student.balance or 0) }}
+          </div>
+        </div>
       </div>
-      <form method="post" action="{{ url_for('recovery.log_action', student_id=student.id) }}" class="p-6 space-y-4">
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Action</label>
-          <select name="action" class="rounded-lg border-gray-300 text-sm w-full">
-            <option value="call">Phone Call</option>
-            <option value="sms">SMS</option>
-            <option value="email">Email</option>
-            <option value="visit">Visit</option>
-            <option value="letter">Letter</option>
-            <option value="note">Note</option>
-          </select>
+
+      <div class="rounded-3xl border border-gray-100 bg-white shadow-lg">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <div class="text-lg font-semibold">Log Recovery Action</div>
+          <p class="text-xs text-gray-500">Document the next outreach</p>
         </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Status</label>
-          <select name="status" class="rounded-lg border-gray-300 text-sm w-full">
-            <option value="">—</option>
-            <option value="no_answer">No Answer</option>
-            <option value="left_message">Left Message</option>
-            <option value="contacted">Contacted</option>
-            <option value="promise">Promise to Pay</option>
-            <option value="paid_partial">Paid Partial</option>
-            <option value="paid_full">Paid in Full</option>
-          </select>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <form method="post" action="{{ url_for('recovery.log_action', student_id=student.id) }}" class="p-6 space-y-4">
           <div>
-            <label class="block text-xs text-gray-600 mb-1">Amount Promised (KES)</label>
-            <input type="number" name="amount_promised" step="0.01" min="0" class="rounded-lg border-gray-300 text-sm w-full" />
+            <label class="block text-xs text-gray-600 mb-1">Action</label>
+            <select name="action" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm">
+              <option value="call">Phone Call</option>
+              <option value="sms">SMS</option>
+              <option value="email">Email</option>
+              <option value="visit">Visit</option>
+              <option value="letter">Letter</option>
+              <option value="note">Note</option>
+            </select>
           </div>
           <div>
-            <label class="block text-xs text-gray-600 mb-1">Promise Date</label>
-            <input type="date" name="promise_date" class="rounded-lg border-gray-300 text-sm w-full" />
+            <label class="block text-xs text-gray-600 mb-1">Status</label>
+            <select name="status" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm">
+              <option value="">—</option>
+              <option value="no_answer">No Answer</option>
+              <option value="left_message">Left Message</option>
+              <option value="contacted">Contacted</option>
+              <option value="promise">Promise to Pay</option>
+              <option value="paid_partial">Paid Partial</option>
+              <option value="paid_full">Paid in Full</option>
+            </select>
           </div>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Next Follow-up</label>
-          <input type="date" name="next_follow_up" class="rounded-lg border-gray-300 text-sm w-full" />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Notes</label>
-          <textarea name="notes" rows="3" class="rounded-lg border-gray-300 text-sm w-full" placeholder="Summary of conversation, context, etc."></textarea>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Your Name</label>
-          <input type="text" name="created_by" class="rounded-lg border-gray-300 text-sm w-full" />
-        </div>
-        <div class="pt-2">
-          <button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm">
-            <i data-lucide="save"></i>
-            <span>Save</span>
-          </button>
-          <a href="{{ url_for('recovery.dashboard') }}" class="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Back</a>
-        </div>
-      </form>
-    </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Amount Promised (KES)</label>
+              <input type="number" name="amount_promised" step="0.01" min="0" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Promise Date</label>
+              <input type="date" name="promise_date" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Next Follow-up</label>
+            <input type="date" name="next_follow_up" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Notes</label>
+            <textarea name="notes" rows="3" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm" placeholder="Summary of conversation, context, etc."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Your Name</label>
+            <input type="text" name="created_by" class="rounded-2xl border border-gray-200 text-sm w-full bg-white px-3 py-2 shadow-sm" />
+          </div>
+          <div class="flex flex-wrap gap-2 pt-2">
+            <button class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-lg transition">
+              <i data-lucide="save"></i>
+              <span>Save</span>
+            </button>
+            <a href="{{ url_for('recovery.dashboard') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+              <i data-lucide="corner-down-left"></i>
+              <span>Back</span>
+            </a>
+          </div>
+        </form>
+      </div>
+    </aside>
   </div>
 </div>
 
 {% endblock %}
-

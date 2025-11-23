@@ -99,12 +99,15 @@
     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
       <div class="flex items-center justify-between mb-3">
         <label for="messageTemplate" class="text-sm font-medium text-gray-800">Message Template</label>
-        <div class="flex items-center gap-2 text-xs">
-          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{name}</span>
-          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{balance}</span>
-          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{class_name}</span>
-          <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{school_name}</span>
-        </div>
+          <div class="flex items-center gap-2 text-xs flex-wrap">
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{name}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{balance}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{class_name}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{school_name}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{due_date}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{purpose}</span>
+            <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{contact_details}</span>
+          </div>
       </div>
       <textarea id="messageTemplate" rows="4"
                 class="w-full mt-1 rounded-lg border border-gray-300 bg-white p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"

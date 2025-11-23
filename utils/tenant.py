@@ -117,6 +117,24 @@ def get_or_create_school(conn, code: str, name: Optional[str] = None) -> Optiona
     return int(cur.lastrowid)
 
 
+def get_school_name_by_id(conn, school_id: Optional[int]) -> str:
+    """Return a human-friendly name for the requested school id."""
+    if not school_id:
+        return ""
+    try:
+        ensure_schools_table(conn)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM schools WHERE id=%s LIMIT 1", (school_id,))
+        row = cur.fetchone()
+        if row:
+            name_val = row.get("name") if isinstance(row, dict) else row[0]
+            if name_val:
+                return str(name_val)
+    except Exception:
+        pass
+    return ""
+
+
 def bootstrap_new_school(conn, school_id: int, name: str, code: Optional[str] = None) -> None:
     """Seed initial data for a newly created school.
 
@@ -284,6 +302,31 @@ def ensure_unique_indices_per_school(conn) -> None:
             cur.execute("SHOW INDEX FROM students WHERE Key_name='idx_students_school_class'")
             if not cur.fetchone():
                 cur.execute("CREATE INDEX idx_students_school_class ON students(school_id, class_name)")
+                conn.commit()
+        except Exception:
+            pass
+        # Replace any legacy admission_no unique index with a scoped one
+        try:
+            legacy_indices = (
+                "uq_students_admission_no",
+                "admission_no",
+                "students.admission_no",
+            )
+            for legacy_idx in legacy_indices:
+                cur.execute("SHOW INDEX FROM students WHERE Key_name=%s", (legacy_idx,))
+                if cur.fetchone():
+                    safe_idx = legacy_idx.replace("`", "``")
+                    cur.execute(f"ALTER TABLE students DROP INDEX `{safe_idx}`")
+                    conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        try:
+            cur.execute("SHOW INDEX FROM students WHERE Key_name='uq_students_school_admission'")
+            if not cur.fetchone():
+                cur.execute("CREATE UNIQUE INDEX uq_students_school_admission ON students(school_id, admission_no)")
                 conn.commit()
         except Exception:
             pass

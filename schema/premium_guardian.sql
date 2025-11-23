@@ -1,4 +1,4 @@
--- Lovato_Tech Premium Guardian/Parent Portal schema (safe to run multiple times)
+-- SmartEduPay Premium Guardian/Parent Portal schema (safe to run multiple times)
 -- These tables are optional; the portal works without them if not used.
 
 -- Guardians table (for future: if you want parent accounts)

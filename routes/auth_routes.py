@@ -153,7 +153,8 @@ def login():
             # Silent upgrade: if stored password is plain, replace with hash per-school
             try:
                 if not is_hashed(get_setting('APP_LOGIN_PASSWORD')):
-                    set_school_setting('APP_LOGIN_PASSWORD', hash_password(password))
+                    sid = session.get('school_id')
+                    set_school_setting('APP_LOGIN_PASSWORD', hash_password(password), school_id=sid)
             except Exception:
                 pass
             # Mark first admin login for this school if not set
@@ -245,7 +246,7 @@ def forgot_password_simple():
         <p>Your new login password is:</p>
         <div style='font-size:22px;font-weight:700;letter-spacing:1px'>{temp}</div>
         <p>Use this on the admin login screen. After signing in, please change it in Access Settings.</p>
-        <p>— Lovato_Tech</p>
+        <p>- SmartEduPay</p>
         """
         ok = False
         try:

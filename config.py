@@ -1,10 +1,17 @@
 import os
+
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv()
 except Exception:
-    # If python-dotenv isn't installed, continue; env vars can still come from OS
+    # dotenv is optional; environment variables may already be loaded
     pass
+
+
+def _split_env_list(key: str, default: str = "") -> tuple[str, ...]:
+    """Helper to parse comma-separated env vars into a clean tuple."""
+    raw = os.environ.get(key, default) or default
+    return tuple(part.strip() for part in raw.split(",") if part and part.strip())
 
 
 class Config:
@@ -23,6 +30,18 @@ class Config:
     ENFORCE_HTTPS = (os.environ.get("ENFORCE_HTTPS", "1").lower() not in ("0", "false", "no"))
     # Trust X-Forwarded-* headers when running behind a reverse proxy (nginx/caddy/traefik)
     TRUST_PROXY = (os.environ.get("TRUST_PROXY", "1").lower() not in ("0", "false", "no"))
+    ALERT_EMAIL_RECIPIENTS = _split_env_list("ALERT_EMAIL_RECIPIENTS")
+    ALERT_COLLECTION_DROP_PERCENT = float(os.environ.get("ALERT_COLLECTION_DROP_PERCENT", "30"))
+    ALERT_FAILED_PAYMENT_RATIO = float(os.environ.get("ALERT_FAILED_PAYMENT_RATIO", "1.5"))
+    ALERT_UNUSED_CREDITS_THRESHOLD = float(os.environ.get("ALERT_UNUSED_CREDITS_THRESHOLD", "5000"))
+    GUARDIAN_RECEIPT_UPLOADS_DIR = os.environ.get("GUARDIAN_RECEIPT_UPLOADS_DIR", "uploads/guardian_receipts")
+    # Guard hosts to prevent Host header attacks (set to comma-separated domains when needed)
+    ALLOWED_HOSTS = _split_env_list("ALLOWED_HOSTS")
+    # Request size guard
+    try:
+        MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))
+    except ValueError:
+        MAX_CONTENT_LENGTH = 10 * 1024 * 1024
 
     # --------------------------
     # 🔹 MySQL Database (SQLAlchemy)
@@ -65,8 +84,8 @@ class Config:
     # Composite app title used in receipts/headers (overrides earlier APP_NAME)
     APP_NAME = os.environ.get("APP_NAME", f"{BRAND_NAME} {PORTAL_TITLE}")
     # Static asset paths under the Flask `static/` folder
-    LOGO_PRIMARY = os.environ.get("LOGO_PRIMARY", "css/lovato_logo.jpg")
-    LOGO_SECONDARY = os.environ.get("LOGO_SECONDARY", "css/lovato_logo1.jpg")
+    LOGO_PRIMARY = os.environ.get("LOGO_PRIMARY", "img/smartedupay_logo.svg")
+    LOGO_SECONDARY = os.environ.get("LOGO_SECONDARY", "img/smartedupay_logo_secondary.svg")
     FAVICON = os.environ.get("FAVICON", LOGO_PRIMARY)
     # Primary brand color (used for meta theme-color and theming)
     BRAND_COLOR = os.environ.get("BRAND_COLOR", "#2563eb")

@@ -403,11 +403,14 @@ const CHART = { brand: cssVar('--chart-brand')||'#4f46e5', accent: cssVar('--cha
     if (alertsCountEl) {
       alertsCountEl.textContent = `${Number(reminders.count || 0).toLocaleString()} students`;
     }
+    const reminderThreshold = Number(reminders.threshold || 0);
+    const reminderDue = Number(reminders.total_due || 0);
     if (alertsThresholdEl) {
-      alertsThresholdEl.textContent = `Threshold: KES ${formatCurrency(reminders.threshold)}`;
+      alertsThresholdEl.textContent = `Threshold: KES ${formatCurrency(reminderThreshold)}`;
     }
     if (deadlineAmountEl) {
-      deadlineAmountEl.textContent = `KES ${formatCurrency(reminders.threshold)}`;
+      const amountToShow = reminderDue || reminderThreshold;
+      deadlineAmountEl.textContent = `KES ${formatCurrency(amountToShow)}`;
     }
     if (trendValueEl) {
       const sign = momPercent >= 0 ? '+' : '';
