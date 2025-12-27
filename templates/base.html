@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
         
@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
@@ -30,39 +30,40 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename=FAVICON) }}">
 </head>
 
-<body class="flex h-screen overflow-hidden no-anim" data-plan="PRO">
+<body class="flex h-screen flex-col overflow-hidden no-anim {% block body_class %}{% endblock %}" data-plan="PRO">
   <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-white focus:border focus:border-gray-200 focus:shadow">Skip to content</a>
 
   <section class="top-banner" aria-label="Institutional banner"
-    style="background: linear-gradient(180deg, {{ BRAND_COLOR or '#0f60d1' }} 0%, #0b3c94 60%, #060f36 100%); border-bottom-color: {{ BRAND_COLOR or '#0f60d1' }};">
+    style="--banner-color: {{ BRAND_COLOR or '#0f60d1' }};">
     <div class="top-banner__inner">
-      <div class="top-banner__stitial">
-        <div class="top-banner__crest">
-          <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="Lovato_Tech" />
-        </div>
-        <div class="top-banner__school">
-          <div class="top-banner__brand">{{ BRAND_NAME or 'Lovato_Tech' }}</div>
-          <div class="top-banner__caption">
-            <span>{{ SCHOOL_NAME or 'SmartEduPay Portal' }}</span>
-            <span class="dot-separator">•</span>
-            <span>School: {{ SCHOOL_NAME or BRAND_NAME or 'Lovato_Tech' }}</span>
-          </div>
-        </div>
+      <div class="top-banner__crest">
+        <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="Lovato_Tech" />
       </div>
-      <div class="top-banner__hero">
+      <div class="top-banner__text">
         <p class="top-banner__title">SmartEduPay</p>
-        <p class="top-banner__tagline">Fostering Equity in Access to Education | Powered by SmartEduPay and Lovato_Tech</p>
+        <p class="top-banner__name">{{ SCHOOL_NAME or BRAND_NAME or 'SmartEduPay Portal' }}</p>
+        <p class="top-banner__tagline">Accountability, clarity, and trust in every ledger</p>
       </div>
-      <div class="top-banner__meta">
-        <div class="top-banner__cta">
-          <span class="top-banner__pill">Premium</span>
-          <span>Term {{ CURRENT_TERM or 'N/A' }} · {{ CURRENT_YEAR or 'Year' }}</span>
-        </div>
-        <div class="top-banner__pill top-banner__pill--mini">Live</div>
+      <div class="top-banner__right">
+        <span class="top-banner__meta">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+          <span class="top-banner__term">
+            Term {{ CURRENT_TERM or '-' }} | {{ CURRENT_YEAR or '-' }}
+          </span>
+        </span>
+        <a href="{{ url_for('admin.payment_records') }}" class="nav-button top-banner__record-btn" title="View fee payment records">
+          <i data-lucide="file-text"></i>
+          <span>Fee payment record</span>
+        </a>
+        <a href="{{ url_for('auth.logout') }}" class="nav-button top-banner__logout-btn" title="Sign out securely">
+          <i data-lucide="log-out"></i>
+          <span>Logout</span>
+        </a>
       </div>
     </div>
   </section>
 
+  <div class="flex flex-1 overflow-hidden">
   <!-- Sidebar -->
   <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
     <div class="p-4 border-b border-gray-100 flex items-center justify-between">
@@ -149,12 +150,20 @@
           <i data-lucide="list-check"></i>
           <span>Audit Logs</span>
         </a>
+        <a href="{{ url_for('admin.payment_records') }}" class="nav-link {% if '/admin/payment-records' in request.path %}active-link{% endif %}">
+          <i data-lucide="file-text"></i>
+          <span>Fee Records</span>
+        </a>
+        <a href="{{ url_for('admin.admin_backups') }}" class="nav-link {% if '/admin/backups' in request.path %}active-link{% endif %}">
+          <i data-lucide="database"></i>
+          <span>Backups &amp; Restore</span>
+        </a>
       </div>
     </nav>
 
 
     <div class="p-4 border-t border-gray-100 text-center text-gray-500 text-xs">
-      <p>© 2025 <span class="font-semibold text-blue-600">Fee_Management_System</span></p>
+      <p>&copy; 2025 <span class="font-semibold text-blue-600">Fee_Management_System</span></p>
       <p class="mt-1">Powered by Flask</p>
     </div>
   </aside>
@@ -189,7 +198,7 @@
     </div>
 
     <!-- Header -->
-    <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+    <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center gap-3 bg-white/80 backdrop-blur-md">
       <div class="flex items-center gap-3">
         <a href="{{ url_for('students') }}" data-back class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
           <i data-lucide="arrow-left"></i>
@@ -199,26 +208,6 @@
         <h2 class="text-lg font-semibold text-gray-800 tracking-tight">
           {% block page_title %}{% endblock %}
         </h2>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <button id="globalSearchBtn" class="hidden md:inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-gray-50" title="Search (Ctrl+K)">
-          <i data-lucide="search"></i>
-          <span>Search</span>
-          <kbd class="ml-1 text-[10px] px-1 py-0.5 rounded border bg-gray-50">Ctrl+K</kbd>
-        </button>
-        <span id="currentTermChip" class="hidden md:inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700">
-          <i data-lucide="calendar"></i>
-          <span id="currentTermText">{{ CURRENT_YEAR or '—' }} • Term {{ CURRENT_TERM or '—' }}</span>
-        </span>
-        
-        <a href="{{ url_for('reminders.reminders_home') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Reminders">
-          <i data-lucide="bell"></i>
-        </a>
-        
-        <a href="{{ url_for('auth.logout') }}" class="nav-button p-2 rounded-full hover:bg-gray-100 transition" title="Sign out">
-          <i data-lucide="log-out"></i>
-        </a>
       </div>
     </header>
 
@@ -238,13 +227,14 @@
           </span>
         </div>
         <div class="text-xs text-gray-600">
-          <span class="mr-2">© {{ (now.year if now is defined else 2025) }}</span>
+          <span class="mr-2">&copy; {{ (now.year if now is defined else 2025) }}</span>
           
         </div>
       </div>
-      <div class="px-8 pb-6 text-center text-xs text-gray-600">© 2025 Fee_Management_System</div>
+      <div class="px-8 pb-6 text-center text-xs text-gray-600">&copy; 2025 Fee_Management_System</div>
     </footer>
   </main>
+  </div>
 
   <!-- Global Search Modal -->
   <div id="searchModal" class="fixed inset-0 z-50 hidden">
@@ -252,7 +242,7 @@
     <div class="absolute left-1/2 -translate-x-1/2 top-20 w-full max-w-2xl bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden">
       <div class="flex items-center gap-2 px-4 py-3 border-b bg-gray-50">
         <i data-lucide="search" class="text-gray-500"></i>
-        <input id="searchInput" type="text" placeholder="Search students, payments…" class="flex-1 outline-none bg-transparent text-sm" />
+        <input id="searchInput" type="text" placeholder="Search students, payments�" class="flex-1 outline-none bg-transparent text-sm" />
         <button onclick="hideSearch()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x"></i></button>
       </div>
       <div id="searchResults" class="max-h-96 overflow-y-auto divide-y"></div>
@@ -274,7 +264,7 @@
         const style = getComputedStyle(el);
         const max = parseFloat(style.fontSize) || 30; // starting size from CSS/tailwind
         // Keep a higher floor so amounts never look too small
-        const min = 16; // px minimum to maintain medium readability
+        const min = 12; // px minimum to keep long totals from overflowing
         let size = max;
         // Ensure the element has a width basis
         el.style.maxWidth = '100%';
@@ -292,9 +282,9 @@
           el.style.fontSize = size + 'px';
           guard++;
         }
-        // Ensure no ellipsis clipping after fitting
-        el.style.overflow = 'visible';
-        el.style.textOverflow = 'clip';
+        // Keep overflow hidden to prevent overlap on long totals
+        el.style.overflow = 'hidden';
+        el.style.textOverflow = 'ellipsis';
       }
       function fitAll(){
         document.querySelectorAll('.fit-text').forEach(fitOne);
@@ -324,8 +314,52 @@
       window.location.href = "{{ url_for('payments') }}";
     }
 
+    // Session-aware back stack (keeps "real world" navigation order)
+    const NAV_STACK_KEY = "navStack";
+    function getNavStack() {
+      try {
+        const raw = sessionStorage.getItem(NAV_STACK_KEY) || "[]";
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    function setNavStack(stack) {
+      try { sessionStorage.setItem(NAV_STACK_KEY, JSON.stringify(stack)); } catch (_) {}
+    }
+    function recordNav() {
+      const key = window.location.pathname + window.location.search;
+      const stack = getNavStack();
+      const last = stack[stack.length - 1];
+      if (last !== key) {
+        stack.push(key);
+        if (stack.length > 30) stack.shift();
+        setNavStack(stack);
+      }
+    }
+    // Record once per page load (keeps the original path order)
+    try { recordNav(); } catch (_) {}
+
     // Robust Back button handler
     function neoBack() {
+      try {
+        const key = window.location.pathname + window.location.search;
+        const stack = getNavStack();
+        let target = null;
+        while (stack.length) {
+          const prev = stack.pop();
+          if (prev && prev !== key) {
+            target = prev;
+            break;
+          }
+        }
+        setNavStack(stack);
+        if (target) {
+          window.location.href = target;
+          return;
+        }
+      } catch (e) {}
       try {
         if (window.history && window.history.length > 1) {
           window.history.back();
@@ -344,7 +378,7 @@
     // Flash close + auto-dismiss (supports future flash injections)
     (function() {
       const container = document.getElementById('flash-container');
-      const AUTO_DISMISS_MS = 15000;
+      const AUTO_DISMISS_MS = 10000;
 
       const cancelAutoDismiss = (item) => {
         if (!item) return;
@@ -417,9 +451,9 @@
       try {
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         const replacePairs = [
-          ['â€¢', ', '],
+          ['•', ', '],
           ['???', ', '],
-          ['•', ', ']
+          ['�', ', ']
         ];
         let node;
         while ((node = walker.nextNode())) {
@@ -443,7 +477,7 @@
           .then(r => r.ok ? r.json() : null)
           .then(d => {
             if (!d) return;
-            text.textContent = `${d.year} • Term ${d.term}`;
+            text.textContent = `${d.year} � Term ${d.term}`;
             // Normalize any stray control characters to a readable separator
             try { text.textContent = (text.textContent || '').replace(/[\u0000-\u001F]+/g, ' - '); } catch (_) {}
             chip.style.display = 'inline-flex';
@@ -471,7 +505,7 @@
       try {
         const text = document.getElementById('currentTermText');
         if (text) {
-          const fix = ()=>{ text.textContent = (text.textContent||'').replace(/\s*[^0-9]+\s*Term/, ' — Term'); };
+          const fix = ()=>{ text.textContent = (text.textContent||'').replace(/\s*[^0-9]+\s*Term/, ' � Term'); };
           fix();
           setInterval(fix, 3000);
         }
@@ -506,13 +540,13 @@
       if (!results) return;
       const students = (data.students||[]).map(s => `
         <a class="block px-4 py-3 hover:bg-indigo-50" href="/student/${s.id}">
-          <div class="text-sm font-medium text-gray-900">${s.name} <span class="text-xs text-gray-500">(${s.class_name||''}${s.admission_no? ' • '+s.admission_no:''})</span></div>
-        <div class="${balanceClassName(s.balance||0)} text-xs">Balance: KES ${(Number(s.balance||0)).toLocaleString()} • Credit: KES ${(Number(s.credit||0)).toLocaleString()}</div>
+          <div class="text-sm font-medium text-gray-900">${s.name} <span class="text-xs text-gray-500">(${s.class_name||''}${s.admission_no? ' � '+s.admission_no:''})</span></div>
+        <div class="${balanceClassName(s.balance||0)} text-xs">Balance: KES ${(Number(s.balance||0)).toLocaleString()} � Credit: KES ${(Number(s.credit||0)).toLocaleString()}</div>
         </a>`).join('');
       const pays = (data.payments||[]).map(p => `
         <a class="block px-4 py-3 hover:bg-indigo-50" href="/payments?ref=${encodeURIComponent(p.reference||'')}">
           <div class="text-sm font-medium text-gray-900">Payment ${p.reference||''} <span class="text-xs text-gray-500">KES ${(Number(p.amount||0)).toLocaleString()}</span></div>
-          <div class="text-xs text-gray-500">${p.student_name||''} • ${p.date||''}</div>
+          <div class="text-xs text-gray-500">${p.student_name||''} � ${p.date||''}</div>
         </a>`).join('');
       results.innerHTML = `
         <div>
@@ -551,16 +585,16 @@
   // Sanitize stray mojibake characters across the UI
   (function(){
     const MAP = new Map([
-      ['â€“','–'],['â€”','—'],['â€˜','‘'],['â€™','’'],['â€œ','“'],['â€�','”'],['â€¦','…'],
-      ['â€“Â','–'],['Â ',''],['Ã—','×'],['Ã·','÷'],['Ã©','é'],['Ã',''],
-      ['â–²','▲'],['â–¼','▼'],['â†’','→'],['â†�','←'],['â—�','•']
+      ['–','�'],['—','�'],['‘','�'],['’','�'],['“','�'],['�?','�'],['…','�'],
+      ['–�','�'],['� ',''],['×','�'],['÷','�'],['é','�'],['�',''],
+      ['▲','?'],['▼','?'],['→','?'],['�?','?'],['�?','�']
     ]);
     function fixText(s){
       if (!s) return s;
       let out = s;
       MAP.forEach((to,from)=>{ out = out.split(from).join(to); });
       // Generic cleanup for replacement char
-      out = out.replace(/�+/g,'-');
+      out = out.replace(/?+/g,'-');
       return out;
     }
 
@@ -588,6 +622,170 @@
 
 </script>
 
+<!-- Idle security overlay -->
+<div id="idleOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4 py-6">
+  <div class="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-gray-200 p-6 text-center space-y-4">
+    <div class="flex items-center justify-center text-4xl text-indigo-600">
+      <i data-lucide="shield-alert"></i>
+    </div>
+    <h3 class="text-lg font-semibold text-gray-900">Security timeout pending</h3>
+    <p class="text-sm text-gray-600">
+      For sensitive finance workflows we automatically lock down after <span class="font-semibold">20 minutes</span> of idle time.
+      The portal will log you out in <span id="idleCount" class="font-mono">60</span>s unless you stay active.
+    </p>
+    <div aria-live="polite" class="text-sm text-gray-500">Interactions anywhere in the UI reset the countdown.</div>
+    <div class="flex flex-wrap items-center justify-center gap-3">
+      <button id="idleStaySignedIn" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-500 text-white text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/30">
+        <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
+        Stay signed in
+      </button>
+      <button id="idleLogoutNow" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-gray-200 text-xs uppercase tracking-[0.2em] text-gray-600 hover:border-gray-400 hover:text-gray-800">
+        Log out immediately
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const IDLE_LIMIT_MS = 20 * 60 * 1000;
+    const WARNING_MS = 60 * 1000;
+    const logoutUrl = "{{ url_for('auth.logout') }}";
+    const overlay = document.getElementById('idleOverlay');
+    const countEl = document.getElementById('idleCount');
+    const stayBtn = document.getElementById('idleStaySignedIn');
+    const logoutBtn = document.getElementById('idleLogoutNow');
+    let warningTimeout;
+    let idleTimeout;
+    let countdownInterval;
+    let remainingSeconds = Math.ceil(WARNING_MS / 1000);
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+
+    function clearAllTimers() {
+      clearTimeout(warningTimeout);
+      clearTimeout(idleTimeout);
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+
+    function scheduleIdleCheck() {
+      clearAllTimers();
+      warningTimeout = setTimeout(showWarning, IDLE_LIMIT_MS - WARNING_MS);
+      idleTimeout = setTimeout(() => window.location.href = logoutUrl, IDLE_LIMIT_MS);
+    }
+
+    function showWarning() {
+      if (!overlay) return;
+      remainingSeconds = Math.ceil(WARNING_MS / 1000);
+      overlay.classList.remove('hidden');
+      updateCountdown();
+      countdownInterval = setInterval(() => {
+        remainingSeconds = Math.max(0, remainingSeconds - 1);
+        updateCountdown();
+      }, 1000);
+    }
+
+    function updateCountdown() {
+      if (countEl) {
+        countEl.textContent = remainingSeconds.toString().padStart(2, '0');
+      }
+    }
+
+    function resetIdle(triggerOverlay = true) {
+      if (overlay && triggerOverlay) {
+        overlay.classList.add('hidden');
+      }
+      clearAllTimers();
+      scheduleIdleCheck();
+    }
+
+    activityEvents.forEach(name => {
+      document.addEventListener(name, () => resetIdle());
+    });
+
+    if (stayBtn) {
+      stayBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        resetIdle(false);
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = logoutUrl;
+      });
+    }
+
+    scheduleIdleCheck();
+  })();
+</script>
+
+<script>
+  (function() {
+    const STORAGE_KEY = "SmartEduPayPortalSettings";
+    const defaults = {
+      guardianQuickAlerts: false,
+      guardianAutoRefresh: false,
+      adminCompactStats: false,
+      adminHighlightLinks: true,
+    };
+    const buttonsSelector = "[data-setting]";
+    const loadState = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+      } catch {
+        return {};
+      }
+    };
+    const state = Object.assign({}, defaults, loadState());
+
+    const persist = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const refreshButton = (button) => {
+      const key = button.dataset.setting;
+      const active = !!state[key];
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      const status = document.querySelector(`[data-setting-status="${key}"]`);
+      if (status) {
+        status.textContent = active ? "On" : "Off";
+      }
+    };
+
+    const handleClick = (button) => {
+      const key = button.dataset.setting;
+      if (!key) {
+        return;
+      }
+      state[key] = !state[key];
+      persist();
+      refreshButton(button);
+    };
+
+    const initialize = () => {
+      document.querySelectorAll(buttonsSelector).forEach((button) => {
+        refreshButton(button);
+        button.addEventListener("click", () => handleClick(button));
+      });
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initialize);
+    } else {
+      initialize();
+    }
+  })();
+</script>
+
 </body>
 </html>
 
@@ -597,4 +795,5 @@
 
 
       
+
 

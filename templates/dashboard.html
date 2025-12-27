@@ -1,5 +1,6 @@
 ﻿{% extends "base.html" %}
 {% block title %}Dashboard - {{ APP_TITLE }}{% endblock %}
+{% block body_class %}dashboard-page{% endblock %}
 {% block page_title %}Dashboard Overview{% endblock %}
 {% block content %}
 
@@ -120,7 +121,7 @@
 </div>
 
 <!-- Premium KPI Cards -->
-<div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-10">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-10">
   <!-- Total Students -->
   <div class="kpi group p-6">
     <div class="flex items-center justify-between">
@@ -277,8 +278,9 @@ const CHART = { brand: cssVar('--chart-brand')||'#4f46e5', accent: cssVar('--cha
 
   // Live totals
   function updateDashboardData() {
-    fetch("/api/dashboard_data")
-      .then(res => res.json())
+    const url = `/api/dashboard_data?ts=${Date.now()}`;
+    fetch(url, { cache: "no-store", credentials: "same-origin" })
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`)))
       .then(data => {
         document.getElementById("total_students").textContent = data.total_students;
         document.getElementById("total_collected").textContent =

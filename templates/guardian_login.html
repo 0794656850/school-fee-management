@@ -20,7 +20,7 @@
     <div class="brand-hero">
       <div class="brand-hero__row">
         <div class="app-badge">
-          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+          <i data-lucide="school"></i>
         </div>
         <div>
           <div class="brand-title text-3xl md:text-4xl">{{ BRAND_NAME }}</div>
@@ -29,8 +29,7 @@
       </div>
     </div>
     <div class="text-center pb-4">
-      <a href="{{ url_for('auth.entry') }}" class="inline-flex items-center gap-1 text-indigo-700 hover:underline">
-        <i data-lucide="grid"></i>
+      <a href="{{ url_for('auth.entry') }}" class="inline-flex items-center gap-1 text-emerald-700 hover:underline">
         <span>All Login Options</span>
       </a>
     </div>
@@ -40,7 +39,7 @@
     <div id="flash" class="mb-4"></div>
     <div class="glass rounded-2xl p-6 md:p-8 border border-gray-100">
       <div class="flex items-center gap-2 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-blue-600/90 text-white grid place-items-center"><i data-lucide="user-round"></i></div>
+        <div class="w-8 h-8 rounded-lg bg-emerald-600/90 text-white grid place-items-center"><i data-lucide="user-round"></i></div>
         <h2 class="text-xl font-semibold">Student / Guardian Login</h2>
       </div>
       <p class="text-sm text-gray-500 mb-4">Please log in securely to access your fee details, receipts, and payments.</p>
@@ -49,14 +48,14 @@
           <label class="block text-sm font-medium text-gray-700">Student Full Name</label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="users"></i></span>
-            <input id="student_full_name" name="student_full_name" placeholder="e.g., Akillius Vincent" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+            <input id="student_full_name" name="student_full_name" placeholder="e.g., Akillius Vincent" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-400" required />
           </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">Admission Number</label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="key-round"></i></span>
-            <input id="admission_no" name="admission_no" type="password" placeholder="Enter your official Admission No." class="w-full mt-1 pl-9 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+            <input id="admission_no" name="admission_no" type="password" placeholder="Enter your official Admission No." class="w-full mt-1 pl-9 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-400" required />
             <button type="button" id="toggleAdm" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-600" title="Show/Hide"><i data-lucide="eye"></i></button>
           </div>
         </div>
@@ -64,7 +63,7 @@
           <label class="block text-sm font-medium text-gray-700">School Name</label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i data-lucide="school"></i></span>
-            <input id="school" name="school" placeholder="Enter your school name" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" required />
+            <input id="school" name="school" placeholder="Enter your school name" class="w-full mt-1 pl-9 pr-3 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-400" required />
           </div>
         </div>
         <button type="submit" class="btn-primary btn-lg w-full rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="arrow-right"></i> Login Now</button>
@@ -76,7 +75,15 @@
 
     <div class="text-center mt-6 text-sm">
       <div class="text-gray-600">Trusted by schools. Loved by parents.</div>
-      <div class="text-gray-500">Powered by <span class="font-semibold text-indigo-700">Lovato_Tech</span> | Smart School Solutions</div>
+      <div class="mt-2 flex justify-center">
+        <div class="inline-flex items-center gap-3 rounded-full border border-emerald-100 bg-emerald-50/70 px-4 py-1.5 text-[11px] font-semibold text-emerald-800">
+          <span class="px-2 py-0.5 rounded-full bg-white text-[10px] uppercase tracking-[0.32em] text-emerald-500">Powered by</span>
+          <span class="h-1 w-1 rounded-full bg-emerald-300"></span>
+          <span class="text-emerald-700">Lovato_Tech</span>
+          <span class="text-emerald-200">|</span>
+          <span class="text-emerald-600">Smart School Solutions</span>
+        </div>
+      </div>
       <div class="mt-1 text-xs text-gray-400">Education made simpler — one login away.</div>
     </div>
   </main>

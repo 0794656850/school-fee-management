@@ -22,7 +22,6 @@
   <!-- Overlay transitions removed to keep clean slide only -->
   <style>
     body { font-family: 'Inter', sans-serif; }
-    .glass { background: var(--surface-strong); box-shadow: 0 20px 50px rgba(79,70,229,.15); }
     /* Entry + exit transitions (mirror login) */
     .card-enter { opacity: 0; transform: translateY(16px) scale(.985); }
     .card-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: transform .55s cubic-bezier(.2,.8,.2,1), opacity .55s ease; }
@@ -37,18 +36,11 @@
   {% endif %}
   {% endwith %}
 </head>
-<body class="min-h-screen flex items-center justify-center p-6">
-  <!-- Theme toggle -->
-  <button id="themeToggle" class="fixed top-3 right-3 z-40 p-2 rounded-full nav-button" title="Toggle theme">
-    <i data-lucide="moon"></i>
-  </button>
+<body class="login-page min-h-screen flex items-start justify-center p-6 pb-10 overflow-y-auto">
   <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
   <div class="max-w-3xl w-full">
     <div class="brand-hero mb-2">
       <div class="brand-hero__row">
-        <div class="app-badge">
-          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}" />
-        </div>
         <div>
           <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
           <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
@@ -60,8 +52,12 @@
         <i data-lucide="arrow-left"></i>
         Back to Login
       </a>
-      <h1 class="text-2xl font-bold mt-2">New School Registration</h1>
+      <h1 class="text-2xl font-bold mt-2 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-600">New School Registration</h1>
       <p class="text-sm text-gray-600">Register your school to get started</p>
+      <div class="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+        <i data-lucide="sparkles" class="h-3.5 w-3.5 text-blue-600"></i>
+        Verified onboarding · Secure by default
+      </div>
     </div>
     <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter card-slide-in-right">
       <form method="post" action="{{ url_for('auth.register_school') }}" class="space-y-4">
@@ -96,7 +92,8 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Admin Email</label>
-            <input name="admin_email" type="email" placeholder="admin@example.com" class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+            <input name="admin_email" type="email" placeholder="admin@example.com" required class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-400" />
+            <p class="text-xs text-gray-500 mt-1">We will send a 10-minute verification code to this email.</p>
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -116,7 +113,13 @@
         <button class="mt-2 w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary">Register School</button>
       </form>
     </div>
-    <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 SmartEduPay - Smart School Fee Management Platform</div>
+    <div class="mt-6 text-center">
+      <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-slate-600">
+        <span class="text-[10px] uppercase tracking-[0.28em] text-slate-400">Powered by</span>
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500">Lovato Tech</span>
+        <i data-lucide="sparkles" class="h-3.5 w-3.5 text-blue-600"></i>
+      </div>
+    </div>
   </div>
   <script>
     lucide.createIcons();
@@ -147,43 +150,6 @@
         setTimeout(() => { if (!fired) done(); }, 480);
       });
     }
-  </script>
-  <script>
-    // Initialize theme icon state on load
-    (function(){
-      try {
-        const btn = document.getElementById('themeToggle');
-        if (!btn) return;
-        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        btn.innerHTML='';
-        const i=document.createElement('i');
-        i.setAttribute('data-lucide', cur==='dark' ? 'sun' : 'moon');
-        btn.appendChild(i);
-        lucide.createIcons();
-      } catch(_){}
-    })();
-    // Toggle handler
-    (function(){
-      const btn = document.getElementById('themeToggle');
-      if (!btn) return;
-      btn.addEventListener('click', function(){
-        const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        const next = cur === 'dark' ? 'light' : 'dark';
-        if (next === 'dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme');
-        try { localStorage.setItem('theme', next); } catch(_){}
-        try {
-          const meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', next === 'dark' ? '#0b1220' : (window.BRAND_COLOR || '{{ BRAND_COLOR or "#2563eb" }}'));
-        } catch(_){}
-        try {
-          btn.innerHTML='';
-          const i=document.createElement('i');
-          i.setAttribute('data-lucide', next==='dark' ? 'sun' : 'moon');
-          btn.appendChild(i);
-          lucide.createIcons();
-        } catch(_){}
-      });
-    })();
   </script>
   <!-- Overlay transitions removed -->
 </body>

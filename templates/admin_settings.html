@@ -3,172 +3,187 @@
 {% block page_title %}Access & Security{% endblock %}
 {% block content %}
 
-<div class="grid md:grid-cols-2 gap-6">
-  <!-- Access Settings -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">Access Settings</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Portal</span>
+<div class="space-y-6">
+  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600/90 to-cyan-500/90 shadow-2xl p-6 text-white">
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.3),_transparent_55%)]"></div>
+    <div class="relative space-y-3">
+      <p class="text-xs uppercase tracking-[0.3em] text-white/80">Access + Security</p>
+      <h2 class="text-2xl md:text-3xl font-semibold leading-snug">Secure portal access that mirrors the password-reset energy above.</h2>
+      <p class="max-w-2xl text-sm text-white/80">Update portal credentials, admin secrets, and link lifecycles inside this creative control deck inspired by the reset experience.</p>
+      <div class="flex flex-wrap gap-3 text-sm font-medium">
+        <span class="px-3 py-1 rounded-full bg-white/20 border border-white/40">Password reset via email</span>
+        <span class="px-3 py-1 rounded-full bg-white/20 border border-white/40">Rotating portal links</span>
+        <span class="px-3 py-1 rounded-full bg-white/20 border border-white/40">Gmail reminders</span>
+      </div>
     </div>
-    <p class="text-sm text-gray-600 mb-4">Set the username and password used for normal portal login (non-admin).</p>
+  </section>
 
-    <form method="post" class="space-y-4">
-      <input type="hidden" name="form" value="access" />
+  <div class="grid lg:grid-cols-2 gap-6">
+    <article class="bg-white border border-indigo-50 shadow-xl rounded-3xl p-6 space-y-4 relative overflow-hidden">
+      <div class="absolute inset-y-0 right-0 w-2 bg-gradient-to-b from-indigo-500 to-indigo-300 opacity-40"></div>
+      <header class="flex items-start justify-between">
+        <div>
+          <p class="text-[0.85rem] uppercase tracking-wider text-indigo-500">Portal</p>
+          <h3 class="text-xl font-semibold text-slate-800">Access Settings</h3>
+        </div>
+        <div class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 border border-indigo-100">Portal</div>
+      </header>
+      <p class="text-sm text-slate-500 leading-relaxed">Set the username/password that keep non-admin logins in sync with the password reset flow above.</p>
+
+      <form method="post" class="space-y-4">
+        <input type="hidden" name="form" value="access" />
+        <div>
+          <label class="text-sm font-semibold text-slate-700">Username</label>
+          <input type="text" name="APP_LOGIN_USERNAME" value="{{ values.APP_LOGIN_USERNAME or '' }}"
+                 class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" placeholder="e.g. bursar" required>
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-slate-700">Password</label>
+          <input type="password" name="APP_LOGIN_PASSWORD" value=""
+                 class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" placeholder="Leave blank to keep current">
+          <p class="text-xs text-slate-500 mt-1">Stored securely (hashed). Leave blank to keep current.</p>
+        </div>
+        <button class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-400/30 hover:opacity-95">Save Access</button>
+      </form>
+    </article>
+
+    <article class="bg-white border border-rose-50 shadow-xl rounded-3xl p-6 space-y-4 relative overflow-hidden">
+      <div class="absolute inset-y-0 right-0 w-2 bg-gradient-to-b from-rose-500 to-rose-300 opacity-40"></div>
+    <header class="flex items-start justify-between">
       <div>
-        <label class="block text-sm font-medium text-gray-700">Username</label>
-        <input type="text" name="APP_LOGIN_USERNAME" value="{{ values.APP_LOGIN_USERNAME or '' }}"
-               class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. bursar" required>
+        <p class="text-[0.85rem] uppercase tracking-wider text-rose-500">Admin</p>
+        <h3 class="text-xl font-semibold text-slate-800">Admin Security</h3>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input type="password" name="APP_LOGIN_PASSWORD" value=""
-               class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Leave blank to keep current">
-        <p class="text-xs text-gray-500 mt-1">Stored securely (hashed). Leave blank to keep current.</p>
-      </div>
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Access</button>
-    </form>
+      <div class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 border border-rose-100">Secure</div>
+    </header>
+    <p class="text-sm text-slate-500 leading-relaxed">Change the global admin password while keeping the Gmail notification thread intact.</p>
+      <form method="post" class="space-y-3">
+        <input type="hidden" name="form" value="admin_pwd" />
+        <div>
+          <label class="text-sm font-semibold text-slate-700">Current Password</label>
+          <input required type="password" name="current_password" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100" placeholder="Enter current admin password" />
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-slate-700">New Password</label>
+          <input required type="password" name="new_password" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100" placeholder="At least 6 characters" />
+          <p class="text-[11px] text-slate-500 mt-1">At least 6 characters</p>
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-slate-700">Confirm New Password</label>
+          <input required type="password" name="confirm_password" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100" placeholder="Re-enter new password" />
+          <p class="text-[11px] text-slate-500 mt-1">Re-enter new password</p>
+        </div>
+        <button class="w-full rounded-2xl bg-gradient-to-r from-rose-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-400/30 hover:opacity-95">Update Password</button>
+      </form>
+    </article>
   </div>
 
-  <!-- Admin Security -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">Admin Security</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100">Secure</span>
-    </div>
-    <p class="text-sm text-gray-600 mb-4">Change the global admin password.</p>
-
-    <form method="post" class="space-y-3">
-      <input type="hidden" name="form" value="admin_pwd" />
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Current Password</label>
-        <input required type="password" name="current_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Enter current admin password" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">New Password</label>
-        <input required type="password" name="new_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="At least 6 characters" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Confirm New Password</label>
-        <input required type="password" name="confirm_password" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Re-enter new password" />
-      </div>
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Update Password</button>
-    </form>
-  </div>
-
-  <!-- Student Portal Links -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">Student Portal Links</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100">Security</span>
-    </div>
-    <p class="text-sm text-gray-600 mb-4">Control how long shared portal links remain valid and rotate all links instantly.</p>
-
-    <form method="post" class="space-y-4">
-      <input type="hidden" name="form" value="portal" />
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Token Max Age (days)</label>
-          <input type="number" min="1" name="PORTAL_TOKEN_MAX_AGE_DAYS" value="{{ values.PORTAL_TOKEN_MAX_AGE_DAYS or 180 }}"
-                 class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm">
-          <p class="text-xs text-gray-500 mt-1">Links older than this become invalid automatically.</p>
+  <div class="grid lg:grid-cols-2 gap-6">
+    <article class="bg-slate-900/90 text-white rounded-3xl p-6 shadow-2xl border border-white/10 relative overflow-hidden">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.4),_transparent_60%)]"></div>
+      <div class="relative space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Student Portal Links</h3>
+          <span class="text-[10px] px-3 py-1 rounded-full bg-white/20">Security</span>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Rollover Timestamp</label>
-          <input type="text" name="PORTAL_TOKEN_ROLLOVER_AT" value="{{ values.PORTAL_TOKEN_ROLLOVER_AT or '' }}" readonly
-                 class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm bg-gray-50">
-          <p class="text-xs text-gray-500 mt-1">Set automatically when you rotate all links.</p>
-        </div>
+        <p class="text-sm text-white/80">Control how long shared portal links last, and invalidate them instantly—just as we do for password resets.</p>
+        <form method="post" class="space-y-4">
+          <input type="hidden" name="form" value="portal" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-xs uppercase tracking-wide text-white/70">Token Max Age (days)</label>
+              <input type="number" min="1" name="PORTAL_TOKEN_MAX_AGE_DAYS" value="{{ values.PORTAL_TOKEN_MAX_AGE_DAYS or 180 }}"
+                     class="mt-1 w-full rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/60 focus:border-cyan-300 focus:ring-2 focus:ring-cyan-200/40">
+              <p class="text-[11px] text-white/60 mt-0.5">Older tokens expire automatically.</p>
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-wide text-white/70">Rollover Timestamp</label>
+              <input type="text" name="PORTAL_TOKEN_ROLLOVER_AT" value="{{ values.PORTAL_TOKEN_ROLLOVER_AT or '' }}" readonly
+                     class="mt-1 w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/60">
+              <p class="text-[11px] text-white/60 mt-0.5">Updated when you rotate all links.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <button class="flex-1 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/40">Save Portal Settings</button>
+            <button name="ROTATE_ALL_NOW" value="1" class="flex-1 rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/90 hover:border-white/60">Rotate All Links Now</button>
+          </div>
+        </form>
       </div>
-      <div class="flex items-center gap-3">
-        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Portal Settings</button>
-        <button name="ROTATE_ALL_NOW" value="1" class="px-4 py-2 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700">Rotate All Links Now</button>
-      </div>
-    </form>
-  </div>
+    </article>
 
-  
-  <!-- Email (Gmail API) -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">Email (Gmail API)</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">Default</span>
-    </div>
-    <p class="text-sm text-gray-600 mb-4">Reminders and payment receipts are sent via email by default using the Gmail API. Place your OAuth client JSON at <code>credentials.json</code>. The token is saved to <code>token.json</code> after authorization.</p>
-    <div class="flex items-center gap-2">
-      <button id="adminTestEmailBtn" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">
-        <i data-lucide="mail"></i>
-        Send Test Email
-      </button>
-      <a href="{{ url_for('reminders.reminders_home') }}" class="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 inline-flex items-center gap-2 text-sm"><i data-lucide="send"></i><span>Open Reminder Center</span></a>
-    </div>
-  </div>
-
-  <!-- Reminder Settings (Pro) -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">Reminder Settings</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Premium</span>
-    </div>
-    <p class="text-sm text-gray-600 mb-4">Choose which email column to use when sending reminders and set a default message template. Placeholders: {name}, {balance}, {class_name}, {school_name}.</p>
-
-    <form method="post" class="space-y-3">
-      <input type="hidden" name="form" value="reminders" />
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Student Email Column</label>
-        <input type="text" name="REMINDER_EMAIL_COLUMN" value="{{ values.REMINDER_EMAIL_COLUMN or 'email' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="e.g. email or parent_email">
-        <p class="text-xs text-gray-500 mt-1">This must match a column in the students table.</p>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Default Message</label>
-        <textarea name="REMINDER_DEFAULT_MESSAGE" rows="3" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="Message template">{{ values.REMINDER_DEFAULT_MESSAGE }}</textarea>
-      </div>
-      <div class="flex items-center gap-2">
-        <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Reminders</button>
-        <a href="{{ url_for('reminders.reminders_home') }}" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 inline-flex items-center gap-2"><i data-lucide="send"></i><span>Open Reminder Center</span></a>
-      </div>
-    </form>
-  </div>
-
-  <!-- AI Assistant Settings (Vertex AI) -->
-  <div class="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-base font-semibold">AI Assistant</h3>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">Optional</span>
-    </div>
-    <p class="text-sm text-gray-600 mb-4">Configure Vertex AI (Gemini) to enable intelligent answers in the in-app assistant.</p>
-
-    <form method="post" class="space-y-3">
-      <input type="hidden" name="form" value="ai" />
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <article class="bg-white border border-gray-100 dark:bg-slate-900 dark:text-white shadow-xl rounded-3xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
         <div>
-          <label class="block text-sm font-medium text-gray-700">GCP Project ID</label>
-          <input type="text" name="VERTEX_PROJECT_ID" value="{{ values.VERTEX_PROJECT_ID or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="my-gcp-project" />
+          <p class="text-[0.85rem] uppercase tracking-wider text-emerald-500">Email</p>
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Reminders & Gmail API</h3>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Region</label>
-          <input type="text" name="VERTEX_LOCATION" value="{{ values.VERTEX_LOCATION or 'us-central1' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="us-central1" />
-        </div>
+        <span class="text-[10px] px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">Default</span>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Service Account JSON (path)</label>
-          <input type="text" name="GOOGLE_APPLICATION_CREDENTIALS" value="{{ values.GOOGLE_APPLICATION_CREDENTIALS or '' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="C:\\path\\to\\sa.json (optional if using ADC)" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Gemini Model</label>
-          <input type="text" name="VERTEX_GEMINI_MODEL" value="{{ values.VERTEX_GEMINI_MODEL or 'gemini-1.5-flash' }}" class="mt-1 w-full border border-gray-200 rounded-lg p-2.5 text-sm" placeholder="gemini-1.5-flash" />
-        </div>
+      <p class="text-sm text-slate-500 dark:text-slate-300 leading-relaxed">Reminders and payment receipts use Gmail when available. Keep <code>credentials.json</code> and <code>token.json</code> ready for smooth resets.</p>
+      <div class="flex flex-wrap gap-3">
+        <button id="adminTestEmailBtn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400">
+          <i data-lucide="mail"></i>
+          Send Test Email
+        </button>
+        <a href="{{ url_for('reminders.reminders_home') }}" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400">
+          <i data-lucide="send"></i>
+          Open Reminder Center
+        </a>
       </div>
-      <p class="text-xs text-gray-500">Settings are stored in the app DB; environment variables still work and take precedence.</p>
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2">Save Vertex Settings</button>
-    </form>
+      <section class="rounded-2xl border border-dashed border-slate-200 p-4 bg-slate-50 dark:bg-slate-900/60 space-y-2">
+        <p class="text-sm text-slate-700 dark:text-slate-300">Reminder Settings <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Premium</span></p>
+        <form method="post" class="space-y-3">
+          <input type="hidden" name="form" value="reminders" />
+          <div>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Student Email Column</label>
+            <input type="text" name="REMINDER_EMAIL_COLUMN" value="{{ values.REMINDER_EMAIL_COLUMN or 'email' }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. email or parent_email">
+            <p class="text-[11px] text-slate-500 mt-0.5">Must match a column in the students table.</p>
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Default Message</label>
+            <textarea name="REMINDER_DEFAULT_MESSAGE" rows="4" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm" placeholder="Template">{{ values.REMINDER_DEFAULT_MESSAGE }}</textarea>
+          </div>
+          <div class="flex gap-3 flex-wrap">
+            <button class="rounded-2xl bg-gradient-to-r from-indigo-600 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-400/30">Save Reminders</button>
+            <a href="{{ url_for('reminders.reminders_home') }}" class="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700">Open Reminder Center</a>
+          </div>
+        </form>
+      </section>
+      <section class="space-y-2">
+        <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">AI Assistant (Vertex AI)</h4>
+        <p class="text-xs text-slate-400">Optional: configure Gemini for assistant + reminder context.</p>
+        <form method="post" class="space-y-3">
+          <input type="hidden" name="form" value="ai" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">GCP Project ID</label>
+              <input type="text" name="VERTEX_PROJECT_ID" value="{{ values.VERTEX_PROJECT_ID or '' }}" placeholder="my-gcp-project" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Region</label>
+              <input type="text" name="VERTEX_LOCATION" value="{{ values.VERTEX_LOCATION or 'us-central1' }}" placeholder="us-central1" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Service Account JSON (path)</label>
+              <input type="text" name="GOOGLE_APPLICATION_CREDENTIALS" value="{{ values.GOOGLE_APPLICATION_CREDENTIALS or '' }}" placeholder="C:\\path\\to\\sa.json (optional if using ADC)" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Gemini Model</label>
+              <input type="text" name="VERTEX_GEMINI_MODEL" value="{{ values.VERTEX_GEMINI_MODEL or 'gemini-1.5-flash' }}" placeholder="gemini-1.5-flash" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500">Settings stored in app DB; env vars still take precedence.</p>
+          <button class="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 px-4 py-2 text-sm font-semibold text-white">Save Vertex Settings</button>
+        </form>
+      </section>
+    </article>
   </div>
 </div>
 
 <script>
-  // Icons
   if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
-  // Admin: test email using reminders endpoint
   document.getElementById('adminTestEmailBtn')?.addEventListener('click', async () => {
     const to = prompt('Send test email to: (leave blank to use SCHOOL_EMAIL/MAIL_SENDER)') || undefined;
     try {

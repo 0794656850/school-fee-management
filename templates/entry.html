@@ -6,61 +6,79 @@
   <title>Choose Login - {{ APP_TITLE }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
 </head>
-<body class="bg-white min-h-screen flex items-center justify-center p-6">
-  <div class="w-full max-w-6xl">
-    <div class="brand-hero mb-8">
-      <div class="brand-hero__row">
-        <div class="app-badge">
-          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
-        </div>
-        <div>
-          <div class="brand-title text-3xl">{{ BRAND_NAME }}</div>
-          <div class="text-sm brand-subtitle">{{ PORTAL_TITLE }}</div>
-        </div>
-      </div>
-    </div>
+<body class="entry-page">
+  <div class="backdrop">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="gridline"></span>
+  </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-10 lg:gap-12 place-items-stretch">
-      <!-- School/Admin card -->
-      <div class="entry-card p-8 flex flex-col justify-between min-h-[320px] gap-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl">
-        <div class="space-y-4">
-          <div class="icon-badge"><i data-lucide="school" class="w-8 h-8"></i></div>
-          <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">School Login</h2>
-          <p class="text-gray-500 text-lg">Admin & Staff Access</p>
-        </div>
-        <div class="space-y-3">
-          <a href="{{ url_for('auth.login') }}" class="block w-full">
-            <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
-              <i data-lucide="arrow-right" class="mr-2"></i>
-              Login to Dashboard
-            </span>
-          </a>
-          <p class="text-gray-500">Manage your school's digital fee system</p>
-        </div>
+  <div class="entry-shell">
+    <header class="entry-header">
+      <div class="logo-pill">
+        <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}" onerror="this.style.display='none'"/>
+        <span class="logo-dot"></span>
       </div>
+      <div>
+        <p class="brand-kicker">SmartEduPay Access</p>
+        <h1 class="brand-title">{{ BRAND_NAME }}</h1>
+        <p class="brand-subtitle">{{ PORTAL_TITLE }}</p>
+      </div>
+    </header>
 
-      <!-- Parent/Guardian card -->
-      <div class="entry-card p-8 flex flex-col justify-between min-h-[320px] gap-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl">
-        <div class="space-y-4">
-          <div class="icon-badge"><i data-lucide="users" class="w-8 h-8"></i></div>
-          <h2 class="mt-5 text-3xl font-extrabold tracking-tight text-slate-800">Parent Login</h2>
-          <p class="text-gray-500 text-lg">Guardian & Family Access</p>
+    <section class="portal-grid">
+      <article class="portal-card portal-card--school">
+        <div class="portal-top">
+          <div class="portal-icon">
+            <i data-lucide="school"></i>
+          </div>
+          <div>
+            <h2>School Portal</h2>
+            <p>Admin and staff workspace</p>
+          </div>
         </div>
-        <div class="space-y-3">
-          <a href="{{ url_for('guardian.guardian_login') }}" class="block w-full">
-            <span class="btn-cta inline-flex items-center justify-center w-full text-white text-lg shadow-lg btn-primary btn-lg hover:brightness-110 transition">
-              <i data-lucide="arrow-right" class="mr-2"></i>
-              Login Now
-            </span>
-          </a>
-          <p class="text-gray-500">Track progress and make secure payments</p>
+        <ul class="portal-list">
+          <li>Dashboard and analytics</li>
+          <li>Billing, invoices, and approvals</li>
+          <li>Operations and policy controls</li>
+        </ul>
+        <a class="portal-cta" href="{{ url_for('auth.login') }}">
+          <span>Continue to School Login</span>
+          <i data-lucide="arrow-right"></i>
+        </a>
+      </article>
+
+      <article class="portal-card portal-card--parent">
+        <div class="portal-top">
+          <div class="portal-icon">
+            <i data-lucide="users"></i>
+          </div>
+          <div>
+            <h2>Parent Portal</h2>
+            <p>Guardian and family access</p>
+          </div>
         </div>
-      </div>
-    </div>
+        <ul class="portal-list">
+          <li>Real-time balances and receipts</li>
+          <li>Safe payments and confirmations</li>
+          <li>Student progress in one view</li>
+        </ul>
+        <a class="portal-cta" href="{{ url_for('guardian.guardian_login') }}">
+          <span>Continue to Parent Login</span>
+          <i data-lucide="arrow-right"></i>
+        </a>
+      </article>
+    </section>
+
+    <footer class="entry-footer">
+      <span>Secure login for parents and schools.</span>
+      <span class="entry-footer__dot"></span>
+      <span>Powered by {{ BRAND_NAME }}</span>
+    </footer>
   </div>
   <script>try { lucide.createIcons(); } catch(_) {}</script>
 </body>

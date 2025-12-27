@@ -28,20 +28,13 @@
   {% endif %}
   {% endwith %}
   </head>
-  <body class="bg-white min-h-screen flex items-center justify-center p-6">
-    <!-- Theme toggle -->
-    <button id="themeToggle" class="fixed top-3 right-3 z-40 p-2 rounded-full nav-button" title="Toggle theme">
-      <i data-lucide="moon"></i>
-    </button>
+  <body class="login-page min-h-screen flex items-start justify-center p-6 pb-10 overflow-y-auto">
     <!-- Flash messages on top -->
     <div class="fixed top-3 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4" id="flash"></div>
 
     <div class="max-w-xl w-full">
       <div class="brand-hero mb-6">
         <div class="brand-hero__row">
-          <div class="app-badge">
-            <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }} Logo" />
-          </div>
           <div class="leading-tight select-none">
             <div class="brand-title text-3xl md:text-4xl">
               {{ BRAND_NAME }}
@@ -55,7 +48,7 @@
       </div><!-- Single modern login card -->
       <!-- School Admin only; removed guardian/parent switch on this page -->
       <div class="text-center -mt-2 mb-2 text-xs">
-        <a href="{{ url_for('auth.entry') }}" class="text-indigo-700 hover:underline">All Login Options</a>
+        <a href="{{ url_for('auth.entry') }}" class="text-emerald-700 hover:underline">All Login Options</a>
       </div>
       <div id="authCard" class="glass rounded-2xl p-6 border border-gray-100 card-enter">
         <div class="text-center mb-4">
@@ -67,14 +60,14 @@
           <div>
             <label class="block text-sm font-medium text-gray-700">School Code</label>
             <input id="school" name="school_code" placeholder="Enter your school code"
-                   class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                   class="w-full mt-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Password</label>
             <div class="relative">
               <input required name="password" id="pwd" type="password" placeholder="Enter your password"
-                     class="w-full mt-1 pr-10 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              <button type="button" id="togglePwd" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-600 hover:text-indigo-700">
+                    class="w-full mt-1 pr-10 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              <button type="button" id="togglePwd" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-600 hover:text-emerald-700">
                 <i data-lucide="eye"></i>
               </button>
             </div>
@@ -82,14 +75,14 @@
           </div>
           <div class="flex items-center justify-between">
             <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" name="remember" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <input type="checkbox" name="remember" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
               <span>Remember me on this device</span>
             </label>
-            <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="text-sm text-indigo-700 hover:underline flex items-center gap-1"><i data-lucide='life-buoy' class="w-4 h-4"></i> Help</a>
+            <a href="https://wa.me/{{ SUPPORT_PHONE | replace('+','') }}" class="text-sm text-emerald-700 hover:underline flex items-center gap-1"><i data-lucide='life-buoy' class="w-4 h-4"></i> Help</a>
           </div>
           <button class="w-full py-2.5 rounded-xl text-white font-semibold transition btn-primary btn-lg flex items-center justify-center gap-2"><i data-lucide="arrow-right"></i> Login to Dashboard</button>
           <div class="text-center text-sm text-gray-500 mt-2">
-            <button id="forgotToggle" type="button" class="text-indigo-700 hover:underline">Forgot your password?</button>
+            <button id="forgotToggle" type="button" class="text-emerald-700 hover:underline">Forgot your password?</button>
           </div>
           <div id="forgotForm" class="hidden mt-2 grid gap-2">
             <div>
@@ -100,15 +93,22 @@
               <button id="btnResetSend" class="px-3 py-2 rounded-lg btn-secondary text-sm" type="button">Reset &amp; Send Password</button>
               <span id="forgotMsg" class="text-xs text-gray-500"></span>
             </div>
-          </div>
-          <!-- Guardian/Parent link removed on School Admin login screen -->
-        </form>
-        <div class="text-center mt-6 text-sm">
-          <span class="text-gray-600">New here?</span>
-          <a id="toRegister" href="{{ url_for('auth.register') }}" class="ml-1 font-medium text-indigo-700 hover:underline" data-animate-nav>Create a new profile</a>
+        </div>
+        <!-- Guardian/Parent link removed on School Admin login screen -->
+      </form>
+      <div class="text-center mt-6 text-sm">
+        <span class="text-gray-600">New here?</span>
+        <a id="toRegister" href="{{ url_for('auth.register') }}" class="ml-1 font-medium text-emerald-700 hover:underline" data-animate-nav>Create a new profile</a>
+      </div>
+    </div>
+      <div class="mt-6 text-center">
+        <div class="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white/80 px-4 py-1.5 text-[11px] font-semibold text-slate-600">
+          <span class="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] uppercase tracking-[0.32em] text-slate-400">Powered by</span>
+          <span class="h-1 w-1 rounded-full bg-slate-300"></span>
+          <span class="bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500">Lovato Tech</span>
+          <i data-lucide="sparkles" class="h-3.5 w-3.5 text-blue-600"></i>
         </div>
       </div>
-      <div class="text-center text-xs text-gray-500 mt-6">&copy; 2025 LOVATO.TECH - Smart School Fee Management Platform</div>
     </div>
     <script>
       lucide.createIcons();
@@ -138,7 +138,7 @@
       });
       try { lucide.createIcons(); } catch(e){}
       // Auto-dismiss after a few seconds
-      setTimeout(() => { box.querySelectorAll('.flash-item').forEach(el => el.remove()); }, 4500);
+      setTimeout(() => { box.querySelectorAll('.flash-item').forEach(el => el.remove()); }, 10000);
       // Autofill remembered school and remember checkbox
       try {
         const s = document.getElementById('school');
@@ -197,12 +197,18 @@
         toggle.addEventListener('click', ()=>{ form.classList.toggle('hidden'); });
         const getCode = () => form.querySelector('input[name="school_code"]').value.trim();
         btnReset.addEventListener('click', async ()=>{
-          msg.textContent = 'Resetting and emailing password...';
+          const code = getCode();
+          if (!code) { msg.textContent = 'Enter your school code first.'; return; }
+          msg.textContent = 'Checking school and resetting password...';
           try{
-            const fd = new FormData(); fd.append('school_code', getCode());
-            const r = await fetch('{{ url_for('auth.forgot_password_simple') }}', { method: 'POST', body: fd });
-            if (r.redirected){ window.location = r.url; return; }
-            msg.textContent = 'If the school was found, a new password has been sent.';
+            const fd = new FormData(); fd.append('school_code', code);
+            const r = await fetch('{{ url_for('auth.forgot_password_simple') }}', {
+              method: 'POST',
+              headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
+              body: fd
+            });
+            const data = await r.json().catch(() => ({}));
+            msg.textContent = data.message || (r.ok ? 'Reset link sent.' : 'School invalid.');
           }catch(e){ msg.textContent = 'Failed to reset password.'; }
         });
       })();

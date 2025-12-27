@@ -9,6 +9,43 @@
     <div class="text-3xl font-bold">{{ total_students }}</div>
     <div class="text-xs opacity-80 mt-1">as of {{ now.strftime('%b %d, %Y') }}</div>
   </div>
+
+  <div class="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 p-5 shadow-sm">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-400">Portal settings</p>
+        <p class="text-lg font-semibold text-gray-900">Fine-tune your admin view</p>
+      </div>
+      <i data-lucide="sliders" class="text-indigo-600"></i>
+    </div>
+    <p class="mt-2 text-xs text-gray-600 max-w-sm">These toggles keep the control center tidy on this device, while the full settings page remains your source of truth.</p>
+    <div class="mt-4 grid grid-cols-2 gap-3">
+      <button
+        type="button"
+        data-setting="adminCompactStats"
+        class="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2 text-left text-sm text-gray-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+        aria-pressed="false"
+      >
+        <div class="font-semibold">Compact stats</div>
+        <div class="text-xs text-gray-500" data-setting-status="adminCompactStats">Off</div>
+      </button>
+      <button
+        type="button"
+        data-setting="adminHighlightLinks"
+        class="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2 text-left text-sm text-gray-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+        aria-pressed="false"
+      >
+        <div class="font-semibold">Focus highlights</div>
+        <div class="text-xs text-gray-500" data-setting-status="adminHighlightLinks">Off</div>
+      </button>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a href="{{ url_for('admin.access_settings') }}" class="inline-flex items-center gap-1 text-xs uppercase tracking-[0.3em] text-indigo-700">
+        Open full settings
+        <i data-lucide="arrow-right"></i>
+      </a>
+    </div>
+  </div>
   <div class="bg-gradient-to-br from-emerald-600 to-teal-600 text-white rounded-2xl p-5 shadow">
     <div class="text-sm opacity-90">Total Collected</div>
     <div class="text-3xl font-bold">KES {{ "{:,.2f}".format(total_collected) }}</div>
@@ -112,6 +149,10 @@
   <a href="{{ url_for('admin.manage_users') }}" class="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm px-3 py-1.5 ml-2">
     <i data-lucide="users"></i>
     <span>Users & Roles</span>
+  </a>
+  <a href="{{ url_for('admin.admin_backups') }}" class="inline-flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm px-3 py-1.5 ml-2">
+    <i data-lucide="shield"></i>
+    <span>Backups & Restore</span>
   </a>
   {# System Health removed #}
   {# Schools management disabled: link removed intentionally #}

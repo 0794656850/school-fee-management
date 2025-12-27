@@ -51,12 +51,12 @@ A modern, multi-tenant school fee management web application for small and mediu
 
 ### Guardian portal (parents)
 - **Login & child switching (`/guardian/login`, `/guardian/switch`)**: Guardians authenticate with email/phone or tokens; once signed in they can switch between enrolled children without reauthentication.
-- **Dashboard (`/guardian/dashboard`)**: The portal lists each child's balance, recent payments, remaining term dues, and contextual actions (print receipt, open payment modal, upload proof). Native filters surface pending invoices, pending STK pushes, and guardian analytics in one scrollable page.
+- **Dashboard (`/guardian/dashboard`)**: The portal lists each child's balance, recent payments, remaining term dues, and contextual actions (print receipt, open payment modal, upload proof). Native filters surface pending invoices, pending STK pushes, and guardian analytics in one scrollable page. A new top-burner pill keeps the active year/term plus notification/logout shortcuts visible so that term context doesn't need to be repeated inside the card, and a floating SmartBot pill launches the same Rasa-powered chatbot used elsewhere in the app.
 - **Payments (`/guardian/make_payment`, PayPal integration)**: Guardians trigger STK Push requests, manually confirm references, or use PayPal buttons; status refresh buttons poll `/guardian/status` and highlight success before the admin ledger is updated.
 - **Receipt printing & verification (`/guardian/receipt/<id>`)**: Receipts are fully branded, printable, and QR-signed for guard verification; the same view surfaces current balance, credit, and action buttons for reprinting or emailing to other guardians.
 - **Receipt upload (`/guardian/upload-receipt`)**: Upload forms accept PNG/JPG/PDF proof, capture guardian metadata, and queue each file for admin verification using the `utils/db_helpers` workflow described above.
 - **Analytics, events, and notifications (`/guardian/analytics`, `/guardian/events`, `/guardian/notifications`)**: Spending analytics chart payments across time, show progress toward targets, and pair with scheduled events/notification feeds so guardians never miss due dates.
-- **Guardian AI assistant (`/guardian/ai_assistant`)**: A limited version of the RAG assistant answers balance queries or clarifies invoice line items right from the guardian dashboard.
+- **Guardian AI assistant (`/guardian/ai_assistant`)**: A limited version of the RAG assistant answers balance queries or clarifies invoice line items right from the guardian dashboard. The guardian bot now routes through the local Rasa intent classifier (`rasa_bot/`); train it with `scripts/train_rasa.py` and keep the Rasa REST server running so the handler can reach `RASA_URL` (default `http://localhost:5005`) for accurate intent routing. The same endpoint powers the new floating chat pill so guardians can ask follow-ups without leaving the dashboard.
 
 ## Quickstart (Local)
 Prerequisites:
@@ -132,6 +132,8 @@ See detailed setup guides:
 - Ask: `python scripts/ai_ask.py "How do invoices work?"`
 - In-app: visit `/ai` to chat; Pro gating may apply.
 
+Guardian-level intent detection now runs through the Rasa project in `rasa_bot/`. Train the model as described there, keep the Rasa REST endpoint running (`rasa run --enable-api --port 5005`), and set `RASA_URL` accordingly so `/guardian/ai_assistant` can route questions through the classifier before the Flask fallback logic kicks in.
+
 ## Docker
 A quick containerized setup is provided.
 ```bash
@@ -178,6 +180,7 @@ Set your envs via Compose or a `.env` file before running.
 - `scripts/seed_students.py` - seed example student data
 - `scripts/read_app_settings.py` - view app settings
 - `scripts/test_daraja_token.py` - test Daraja token/config
+- `scripts/train_rasa.py` - train the guardian Rasa intent model (runs `rasa train` inside `rasa_bot/`)
 - `scripts/ai_index.py` / `scripts/ai_ask.py` - AI index and Q&A
 
 ## Screenshots

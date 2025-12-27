@@ -35,6 +35,7 @@ class Config:
     ALERT_FAILED_PAYMENT_RATIO = float(os.environ.get("ALERT_FAILED_PAYMENT_RATIO", "1.5"))
     ALERT_UNUSED_CREDITS_THRESHOLD = float(os.environ.get("ALERT_UNUSED_CREDITS_THRESHOLD", "5000"))
     GUARDIAN_RECEIPT_UPLOADS_DIR = os.environ.get("GUARDIAN_RECEIPT_UPLOADS_DIR", "uploads/guardian_receipts")
+    PAYMENT_PROOF_UPLOADS_DIR = os.environ.get("PAYMENT_PROOF_UPLOADS_DIR", GUARDIAN_RECEIPT_UPLOADS_DIR or "uploads/payment_proofs")
     # Guard hosts to prevent Host header attacks (set to comma-separated domains when needed)
     ALLOWED_HOSTS = _split_env_list("ALLOWED_HOSTS")
     # Request size guard
@@ -42,6 +43,17 @@ class Config:
         MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))
     except ValueError:
         MAX_CONTENT_LENGTH = 10 * 1024 * 1024
+
+    # --------------------------
+    # Backup configuration
+    # --------------------------
+    BACKUP_DIRECTORY = os.environ.get("BACKUP_DIRECTORY", os.path.join("instance", "backups"))
+    BACKUP_INCLUDE_DIRS = _split_env_list("BACKUP_INCLUDE_DIRS", "uploads,static")
+    try:
+        BACKUP_KEEP_DAYS = int(os.environ.get("BACKUP_KEEP_DAYS", "60"))
+    except ValueError:
+        BACKUP_KEEP_DAYS = 60
+    BACKUP_SCHEDULE = os.environ.get("BACKUP_SCHEDULE", "0 3 * * *")
 
     # --------------------------
     # 🔹 MySQL Database (SQLAlchemy)
@@ -132,6 +144,9 @@ class Config:
     # --------------------------
     LOGIN_USERNAME = os.environ.get("APP_LOGIN_USERNAME", "user")
     LOGIN_PASSWORD = os.environ.get("APP_LOGIN_PASSWORD", "9133")
+
+    # Guardian/parent email OTP (disabled while email auth is offline)
+    PARENT_EMAIL_AUTH_ENABLED = (os.environ.get("PARENT_EMAIL_AUTH_ENABLED", "1").lower() in ("1", "true", "yes"))
 
     # --------------------------
     # Email (Flask-Mail SMTP)

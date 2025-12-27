@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
-from utils.settings import get_setting, set_school_setting
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
+from datetime import datetime, timedelta
+from utils.settings import get_setting, set_school_setting, set_setting
 from utils.security import verify_password, hash_password, is_hashed
 from utils.tenant import slugify_code, get_or_create_school, bootstrap_new_school
 # Audit removed
@@ -11,8 +12,32 @@ from utils.users import (
     get_user_school_role,
 )
 from extensions import limiter
+from utils.login_otp import generate_login_otp, mask_email, send_portal_login_otp
+from utils.notifications import hash_otp
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+REGISTRATION_OTP_EXPIRES_MINUTES = 10
+
+
+def _school_reg_context() -> dict:
+    return session.get("school_reg_context", {})
+
+
+def _clear_school_reg_context() -> None:
+    session.pop("school_reg_context", None)
+
+
+def _send_school_registration_otp(admin_email: str, recipient_name: str, school_name: str) -> tuple[str, bool]:
+    otp_code = generate_login_otp()
+    label = recipient_name or school_name or "Admin"
+    sent = send_portal_login_otp(
+        admin_email,
+        label,
+        "School registration",
+        otp_code,
+        REGISTRATION_OTP_EXPIRES_MINUTES,
+    )
+    return otp_code, bool(sent)
 
 
 @auth_bp.route('/', methods=['GET'])
@@ -199,26 +224,29 @@ def forgot_password_simple():
         def gmail_send_email(*args, **kwargs):  # type: ignore
             return False
 
+    def _respond(message: str, category: str = "error", status: int = 400):
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": category == "success", "message": message}), status
+        flash(message, category)
+        return redirect(url_for('auth.login'))
+
     raw = (request.form.get('school_code') or request.form.get('school_name') or '').strip()
     code = slugify_code(raw)
     if not code:
-        flash('Enter your school code.', 'warning')
-        return redirect(url_for('auth.login'))
+        return _respond('Enter your school code.', 'warning', 400)
 
     # Open DB
     try:
         from app import get_db_connection  # type: ignore
         db = get_db_connection()
     except Exception:
-        flash('Unable to access database.', 'error')
-        return redirect(url_for('auth.login'))
+        return _respond('Unable to access database.', 'error', 500)
     try:
         cur = db.cursor(dictionary=True)
         cur.execute("SELECT id, name FROM schools WHERE code=%s OR LOWER(TRIM(name))=LOWER(TRIM(%s)) LIMIT 1", (code, raw))
         row = cur.fetchone()
         if not row:
-            flash('School not found. Check the code.', 'error')
-            return redirect(url_for('auth.login'))
+            return _respond('School invalid. Check the code.', 'error', 404)
         school_id = int(row['id'])
 
         # Destination email
@@ -226,17 +254,26 @@ def forgot_password_simple():
         cur2.execute("SELECT `value` FROM school_settings WHERE school_id=%s AND `key` IN ('SCHOOL_EMAIL','ACCOUNTS_EMAIL') ORDER BY FIELD(`key`,'SCHOOL_EMAIL','ACCOUNTS_EMAIL') LIMIT 1", (school_id,))
         r = cur2.fetchone(); to_email = (r[0] if r else '') or ''
         if not to_email:
-            flash('School email is not set. Ask support to update SCHOOL_EMAIL.', 'warning')
-            return redirect(url_for('auth.login'))
+            return _respond('School email is not set. Ask support to update SCHOOL_EMAIL.', 'warning', 400)
 
         # Generate new temporary password and store hashed
         import secrets, string
         alphabet = string.ascii_letters + string.digits
         temp = ''.join(secrets.choice(alphabet) for _ in range(10))
+        new_hash = hash_password(temp)
         cur2.execute(
             "INSERT INTO school_settings(school_id, `key`, `value`) VALUES(%s,'APP_LOGIN_PASSWORD',%s) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)",
-            (school_id, hash_password(temp))
+            (school_id, new_hash),
         )
+        try:
+            set_setting("ADMIN_PASSWORD", new_hash)
+            current_app.config["ADMIN_PASSWORD"] = new_hash
+        except Exception:
+            try:
+                set_setting("ADMIN_PASSWORD", temp)
+                current_app.config["ADMIN_PASSWORD"] = temp
+            except Exception:
+                pass
         db.commit()
 
         subject = 'Your New School Admin Password'
@@ -281,8 +318,9 @@ def forgot_password_simple():
                     ok = True
             except Exception:
                 ok = False
-        flash('A new password has been emailed to the school address.' if ok else 'Failed to send new password. Configure Gmail OAuth or SMTP and try again.', 'success' if ok else 'error')
-        return redirect(url_for('auth.login'))
+        if ok:
+            return _respond('A new password has been emailed to the school address.', 'success', 200)
+        return _respond('Failed to send new password. Configure Gmail OAuth or SMTP and try again.', 'error', 500)
     finally:
         try:
             db.close()
@@ -290,7 +328,7 @@ def forgot_password_simple():
             pass
 @auth_bp.route('/register_school', methods=['POST'])
 def register_school():
-    """Create a new school profile from the registration form on login page."""
+    """Start a new school registration and send a verification OTP to admin email."""
     raw_name = (request.form.get('school_name') or '').strip()
     # Allow only small learning institutions: Kindergarten -> High School
     category = (request.form.get('school_category') or '').strip()
@@ -306,48 +344,142 @@ def register_school():
     confirm = (request.form.get('confirm_password') or '').strip()
     if not raw_name:
         flash('School name is required.', 'warning')
-        return redirect(url_for('auth.login'))
+        return redirect(url_for('auth.register'))
     if password != confirm:
         flash('Passwords do not match.', 'warning')
-        return redirect(url_for('auth.login'))
+        return redirect(url_for('auth.register'))
+    if not admin_email:
+        flash('Admin email is required for verification.', 'warning')
+        return redirect(url_for('auth.register'))
     code = slugify_code(raw_name)
-    try:
-        from app import get_db_connection  # type: ignore
-        db = get_db_connection()
-        sid = get_or_create_school(db, code=code, name=raw_name)
-        # Store profile details into settings
+
+    otp_code, sent = _send_school_registration_otp(admin_email, admin_name or "", raw_name)
+    if not sent:
+        flash('Unable to send verification email right now. Please check email configuration and try again.', 'error')
+        return redirect(url_for('auth.register'))
+
+    session["school_reg_context"] = {
+        "school_name": raw_name,
+        "school_category": category,
+        "school_phone": phone,
+        "school_address": address,
+        "admin_name": admin_name,
+        "admin_email": admin_email,
+        "username": username,
+        "password_hash": hash_password(password),
+        "code": code,
+        "otp_hash": hash_otp(otp_code),
+        "otp_sent_at": datetime.now().timestamp(),
+        "otp_until": (datetime.now() + timedelta(minutes=REGISTRATION_OTP_EXPIRES_MINUTES)).timestamp(),
+    }
+    flash('We sent a verification code to the admin email. Enter it to complete registration.', 'info')
+    return redirect(url_for('auth.register_school_verify'))
+
+
+@auth_bp.route('/register_school/verify', methods=['GET', 'POST'])
+def register_school_verify():
+    ctx = _school_reg_context()
+    if not ctx:
+        flash('Start registration first so we know where to send the code.', 'warning')
+        return redirect(url_for('auth.register'))
+
+    now_ts = datetime.now().timestamp()
+    remaining = max(0, int(ctx.get("otp_until", 0) - now_ts))
+    if remaining <= 0:
+        _clear_school_reg_context()
+        flash('Verification code expired after 10 minutes. Please register again.', 'warning')
+        return redirect(url_for('auth.register'))
+
+    if request.method == 'POST':
+        code = (request.form.get('code') or '').strip()
+        code = "".join(ch for ch in code if ch.isdigit())
+        if not code:
+            flash('Enter the six-digit code from your email.', 'warning')
+            return redirect(url_for('auth.register_school_verify'))
+        if hash_otp(code) != ctx.get("otp_hash"):
+            flash('Incorrect code. Check your email and try again.', 'error')
+            return redirect(url_for('auth.register_school_verify'))
+
+        raw_name = ctx.get("school_name") or ""
+        code_slug = ctx.get("code") or slugify_code(raw_name)
         try:
-            set_school_setting('SCHOOL_NAME', raw_name, school_id=sid)
-            if category:
-                set_school_setting('SCHOOL_CATEGORY', category, school_id=sid)
-            if phone:
-                set_school_setting('SCHOOL_PHONE', phone, school_id=sid)
-            if address:
-                set_school_setting('SCHOOL_ADDRESS', address, school_id=sid)
-            if admin_email:
-                set_school_setting('SCHOOL_EMAIL', admin_email, school_id=sid)
-        except Exception:
-            pass
-        # Create admin user and map to school
-        ensure_user_tables(db)
-        uid = create_user(db, username, admin_email, hash_password(password))
-        ensure_school_user(db, uid, sid, role='owner')
-        # Mark first login timestamp
-        cur = db.cursor()
-        cur.execute("UPDATE schools SET first_login_at=NOW() WHERE id=%s AND first_login_at IS NULL", (sid,))
-        db.commit()
-        # No audit events on register
-        # Session
-        session['school_id'] = sid
-        session['school_code'] = code
-        session['user_logged_in'] = True
-        session['username'] = username
-        session['role'] = 'owner'
-        flash('School registered. Welcome!', 'success')
-        return redirect(url_for('dashboard'))
-    except Exception as e:
-        flash(f'Error registering school: {e}', 'error')
-        return redirect(url_for('auth.login'))
+            from app import get_db_connection  # type: ignore
+            db = get_db_connection()
+            sid = get_or_create_school(db, code=code_slug, name=raw_name)
+            try:
+                set_school_setting('SCHOOL_NAME', raw_name, school_id=sid)
+                if ctx.get("school_category"):
+                    set_school_setting('SCHOOL_CATEGORY', ctx.get("school_category"), school_id=sid)
+                if ctx.get("school_phone"):
+                    set_school_setting('SCHOOL_PHONE', ctx.get("school_phone"), school_id=sid)
+                if ctx.get("school_address"):
+                    set_school_setting('SCHOOL_ADDRESS', ctx.get("school_address"), school_id=sid)
+                if ctx.get("admin_email"):
+                    set_school_setting('SCHOOL_EMAIL', ctx.get("admin_email"), school_id=sid)
+                set_school_setting('SCHOOL_EMAIL_VERIFIED_AT', datetime.now().isoformat(timespec='seconds'), school_id=sid)
+            except Exception:
+                pass
+            ensure_user_tables(db)
+            uid = create_user(db, ctx.get("username") or "user", ctx.get("admin_email"), ctx.get("password_hash"))
+            ensure_school_user(db, uid, sid, role='owner')
+            cur = db.cursor()
+            cur.execute("UPDATE schools SET first_login_at=NOW() WHERE id=%s AND first_login_at IS NULL", (sid,))
+            db.commit()
+            session['school_id'] = sid
+            session['school_code'] = code_slug
+            session['user_logged_in'] = True
+            session['username'] = ctx.get("username") or "user"
+            session['role'] = 'owner'
+            _clear_school_reg_context()
+            flash('School registered and verified. Welcome!', 'success')
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            _clear_school_reg_context()
+            flash(f'Error registering school: {e}', 'error')
+            return redirect(url_for('auth.register'))
+
+    return render_template(
+        "login_otp.html",
+        portal_title="School registration verification",
+        portal_label="School registration",
+        heading="Verify your school email",
+        summary="We sent a secure code to confirm the admin email for this school.",
+        email_display=mask_email(ctx.get("admin_email")),
+        countdown_seconds=remaining,
+        countdown_label=f"{remaining // 60} min {remaining % 60} sec",
+        form_action=url_for("auth.register_school_verify"),
+        resend_url=url_for("auth.register_school_resend"),
+        back_url=url_for("auth.register"),
+        back_label="Back to registration",
+        portal_note="Code expires after 10 minutes and is valid for a single registration.",
+    )
+
+
+@auth_bp.route('/register_school/resend', methods=['POST'])
+@limiter.limit('4 per minute')
+def register_school_resend():
+    ctx = _school_reg_context()
+    if not ctx:
+        flash('Start registration first so we know where to send the code.', 'warning')
+        return redirect(url_for('auth.register'))
+
+    admin_email = (ctx.get("admin_email") or "").strip()
+    if not admin_email:
+        flash('No admin email found for this registration. Start again.', 'warning')
+        _clear_school_reg_context()
+        return redirect(url_for('auth.register'))
+
+    otp_code, sent = _send_school_registration_otp(admin_email, ctx.get("admin_name") or "", ctx.get("school_name") or "")
+    if not sent:
+        flash('Unable to resend the code right now. Try again shortly.', 'error')
+        return redirect(url_for('auth.register_school_verify'))
+
+    ctx["otp_hash"] = hash_otp(otp_code)
+    ctx["otp_sent_at"] = datetime.now().timestamp()
+    ctx["otp_until"] = (datetime.now() + timedelta(minutes=REGISTRATION_OTP_EXPIRES_MINUTES)).timestamp()
+    session["school_reg_context"] = ctx
+    flash('A fresh verification code has been sent.', 'info')
+    return redirect(url_for('auth.register_school_verify'))
 
 
 @auth_bp.route('/logout')

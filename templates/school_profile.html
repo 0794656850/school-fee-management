@@ -3,16 +3,20 @@
 {% block page_title %}School Profile{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
-  <h3 class="text-lg font-semibold mb-1">School Information</h3>
-  <p class="text-sm text-gray-600 mb-2">Enter once. Used across the app and included on printed documents.</p>
-  <div class="mb-4 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">
-    <i data-lucide="hash"></i>
-    <span>School Code:</span>
-    <code class="font-semibold">{{ session.get('school_code') }}</code>
-  </div>
+<div class="relative max-w-3xl mx-auto">
+  <div class="absolute inset-0 -z-10 rounded-[28px] bg-gradient-to-br from-emerald-50 via-white to-amber-50"></div>
+  <div class="bg-white border border-slate-200 rounded-[28px] shadow-xl shadow-slate-200/60 p-6 md:p-8">
+    <div class="flex flex-col gap-1 mb-4">
+      <h3 class="text-lg font-semibold text-slate-900">School Information</h3>
+      <p class="text-sm text-slate-600">Enter once. Used across the app and included on printed documents.</p>
+    </div>
+    <div class="mb-4 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800">
+      <i data-lucide="hash"></i>
+      <span>School Code:</span>
+      <code class="font-semibold">{{ session.get('school_code') }}</code>
+    </div>
 
-  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label class="block text-xs text-gray-600 mb-1">School Name</label>
@@ -37,6 +41,10 @@
       <div>
         <label class="block text-xs text-gray-600 mb-1">Website</label>
         <input type="text" name="SCHOOL_WEBSITE" value="{{ values.SCHOOL_WEBSITE }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="https://www.school.ac.ke">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">School Paybill</label>
+        <input type="text" name="SCHOOL_PAYBILL" value="{{ values.SCHOOL_PAYBILL }}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., 123456">
       </div>
     </div>
 
@@ -91,12 +99,39 @@
     </div>
 
     <div class="flex justify-end gap-2 pt-2">
-      <a href="{{ url_for('admin.dashboard') }}" class="px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</a>
+      <a href="{{ url_for('admin.dashboard') }}" class="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
       <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg">
         <i data-lucide="save"></i>
         <span>Save Profile</span>
       </button>
     </div>
-  </form>
+    </form>
+    <div class="mt-8 rounded-2xl border border-rose-200 bg-rose-50 p-5 space-y-3 shadow-inner shadow-rose-100">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.3em] text-rose-600">Self service</p>
+          <h4 class="text-lg font-semibold text-rose-700">Delete this school profile</h4>
+        </div>
+        <span class="text-[0.65rem] uppercase tracking-[0.3em] text-rose-500">Archive</span>
+      </div>
+      <p class="text-sm text-rose-700">
+        Remove all branding, clear sensitive data, and stop the portal from accepting new payments. The underlying data stays protected
+        so an administrator can restore it later if needed.
+      </p>
+      <form method="post" action="{{ url_for('admin.school_profile_delete') }}" class="grid gap-3">
+        <label class="text-xs text-rose-700">
+          Why are you deleting?
+          <textarea name="delete_reason" rows="2" class="mt-1 w-full rounded-xl border border-rose-200 px-3 py-2 text-sm bg-white" placeholder="Optional note for support."></textarea>
+        </label>
+        <label class="text-xs text-rose-700">
+          Type <strong>DELETE</strong> (or <strong>DELETE SCHOOL</strong>) to confirm.
+          <input name="delete_confirmation" class="mt-1 w-full rounded-xl border border-rose-200 px-3 py-2 text-sm" placeholder="DELETE" required />
+        </label>
+        <button type="submit" class="w-full rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-rose-500/30">
+          Archive school profile
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

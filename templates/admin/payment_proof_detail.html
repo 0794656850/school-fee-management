@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Payment Proof #{{ proof.id }} - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Review Payment Proof{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <section class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg space-y-5">
+    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Student</p>
+        <h2 class="text-2xl font-semibold text-slate-900">{{ proof.student_name or 'N/A' }}</h2>
+        <div class="text-xs text-slate-500">Class {{ proof.class_name or 'N/A' }} · Adm No: {{ proof.admission_no or 'N/A' }}</div>
+      </div>
+      <div>
+        {% set status = (proof.status or 'pending')|lower %}
+        {% set badge_classes = {
+          'pending': 'bg-amber-50 text-amber-600',
+          'in_review': 'bg-sky-50 text-sky-600',
+          'verified': 'bg-emerald-50 text-emerald-600',
+          'rejected': 'bg-rose-50 text-rose-600',
+        } %}
+        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold {{ badge_classes.get(status, 'bg-slate-50 text-slate-600') }}">
+          {{ status|replace('_',' ')|capitalize }}
+        </span>
+      </div>
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+        <p class="text-[0.7rem] uppercase tracking-[0.3em] text-slate-500">Balance</p>
+        <p class="text-3xl font-semibold text-slate-900">KES {{ "{:,.2f}".format(balance) }}</p>
+        {% if invoice %}
+        <a href="{{ url_for('terms.invoice_view', invoice_id=invoice.id) }}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-500">View invoice #{{ invoice.id }}</a>
+        {% endif %}
+      </div>
+      <div class="rounded-2xl border border-slate-100 bg-white p-4 space-y-2 text-sm text-slate-600">
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-[0.3em] text-slate-500">Upload time</span>
+          <span>{{ proof.created_at }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-[0.3em] text-slate-500">Guardian</span>
+          <span>{{ proof.guardian_name or 'Parent' }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-[0.3em] text-slate-500">Contact</span>
+          <span>{{ proof.guardian_phone or proof.guardian_email or '—' }}</span>
+        </div>
+        <div class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3 text-sm text-slate-600">
+          <h3 class="text-sm font-semibold text-slate-900">Auto scan insights</h3>
+          <div class="grid gap-2">
+            <div class="flex items-center justify-between">
+              <span>Detected amount</span>
+              <span class="font-semibold text-slate-900">{{ metadata.amount or 'Not found' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Detected date</span>
+              <span class="font-semibold text-slate-900">{{ metadata.date or 'Not found' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Detected channel</span>
+              <span class="font-semibold text-slate-900">{{ metadata.bank or 'Not flagged' }}</span>
+            </div>
+            {% if metadata.raw %}
+            <div>
+              <div class="text-[0.6rem] uppercase tracking-[0.3em] text-slate-500">Sample text</div>
+              <p class="text-xs text-slate-500 line-clamp-3">{{ metadata.raw }}</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-slate-100 bg-white p-4 space-y-3">
+          <h3 class="text-sm font-semibold text-slate-900">Document preview</h3>
+          {% set ext = proof.file_path.split('.')[-1]|lower if proof.file_path else '' %}
+          {% if ext in ['png','jpg','jpeg'] %}
+          <img src="{{ url_for('static', filename=proof.file_path) }}" alt="Proof" class="w-full rounded-2xl border border-slate-200 object-contain max-h-[420px]" loading="lazy">
+          {% elif ext == 'pdf' %}
+          <iframe src="{{ url_for('static', filename=proof.file_path) }}" class="w-full rounded-2xl border border-slate-200 min-h-[420px]" title="Payment proof PDF"></iframe>
+          {% else %}
+          <div class="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">
+            File type not previewable. <a target="_blank" href="{{ url_for('static', filename=proof.file_path) }}" class="text-indigo-600 hover:text-indigo-500">Download</a>
+          </div>
+          {% endif %}
+          <p class="text-xs text-slate-500">Uploaded file: {{ proof.file_path or 'Unknown' }}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-100 bg-white p-4 space-y-3 text-sm text-slate-600">
+          <h3 class="text-sm font-semibold text-slate-900">Payment details entered by parent</h3>
+          <div class="grid gap-2">
+            <div class="flex items-center justify-between">
+              <span>Amount</span>
+              <span class="font-semibold">KES {{ "{:,.2f}".format(proof.amount or 0) }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Payment date</span>
+              <span>{{ proof.payment_date or '—' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Bank</span>
+              <span>{{ proof.bank_name or '—' }}</span>
+            </div>
+            <div>
+              <div class="text-[0.6rem] uppercase tracking-[0.3em] text-slate-500">Description</div>
+              <p class="text-sm text-slate-800">{{ proof.description or proof.notes or 'No description provided.' }}</p>
+            </div>
+            {% if proof.notes %}
+            <div>
+              <div class="text-[0.6rem] uppercase tracking-[0.3em] text-slate-500">Additional notes</div>
+              <p class="text-sm text-slate-800">{{ proof.notes }}</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white space-y-3">
+          <h3 class="text-sm font-semibold">Verification impact</h3>
+          <p class="text-sm text-slate-100">
+            Accepting this proof posts the payment, updates ledgers plus invoices, and sends a notification to the guardian automatically.
+          </p>
+          <ul class="space-y-1 text-xs uppercase tracking-[0.35em] text-indigo-200">
+            <li class="flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+              Auto-record payment + invoice updates
+            </li>
+            <li class="flex items-center gap-2">
+              <i data-lucide="message-circle" class="w-4 h-4 text-cyan-300"></i>
+              Guardian is notified with success/failure
+            </li>
+            <li class="flex items-center gap-2">
+              <i data-lucide="shield" class="w-4 h-4 text-slate-200"></i>
+              Audit trail preserved for finance
+            </li>
+          </ul>
+        </div>
+        <form id="proofActionForm" method="post" class="rounded-2xl border border-slate-100 bg-white p-4 space-y-3">
+          <h3 class="text-sm font-semibold text-slate-900">Actions</h3>
+          <div>
+            <label class="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Admin note / reason</label>
+            <textarea name="reason" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500">{{ proof.admin_note or proof.rejection_reason or '' }}</textarea>
+            <p class="text-[11px] text-slate-500 mt-1">Provide a reason if declining or requesting more info.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" name="action" value="accept" class="flex-1 rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white hover:bg-emerald-500">Accept & record</button>
+            <button type="submit" name="action" value="request_info" class="flex-1 rounded-2xl border border-sky-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-sky-700 hover:bg-sky-50">Request more info</button>
+            <button type="submit" name="action" value="decline" class="flex-1 rounded-2xl border border-rose-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 hover:bg-rose-50">Decline</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="text-xs text-slate-500">
+      <a href="{{ url_for('admin.payment_proofs') }}" class="font-semibold text-indigo-600 hover:text-indigo-500">Back to validation queue</a>
+    </div>
+  </section>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("proofActionForm");
+    if (!form) return;
+    form.addEventListener("submit", (event) => {
+      const action = event.submitter?.value;
+      const message = form.querySelector("textarea[name='reason']");
+      const reason = message ? message.value.trim() : "";
+      if (action === "accept") {
+        if (!confirm("Accepting this proof will record the payment and notify the parent. Continue?")) {
+          event.preventDefault();
+        }
+      }
+      if (action === "decline" && !reason) {
+        alert("Provide a reason before rejecting so the parent knows why.");
+        event.preventDefault();
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -3,196 +3,451 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Premium Receipt</title>
+  <title>Payment Slip</title>
+  <meta name="referrer" content="no-referrer" />
   <style>
     :root {
-      --text: #0f172a; /* slate-900 */
-      --muted: #64748b; /* slate-500 */
-      --border: #e2e8f0; /* slate-200 */
-      --ring: rgba(79,70,229,.25);
-      --brand-from: #4338ca; /* indigo-700 */
-      --brand-to: #06b6d4;   /* cyan-500 */
-      --surface: #ffffff;
-      --surface-weak: #f8fafc;
+      --text: #0f172a;
+      --border: #c2c7ce;
+      --paper: #fff;
+      --background: #f6f7fb;
+      --muted: #4b5563;
     }
-    
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      margin: 0; padding: 20px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--background);
       color: var(--text);
-      background: #ffffff;
+      padding: 24px;
     }
-    .receipt {
-      max-width: 560px;
-      margin: 0 auto;
+
+    .slip-wrapper {
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .slip-frame {
+      width: 100%;
+      max-width: 900px;
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 0;
-      background: var(--surface);
-      box-shadow: 0 12px 32px rgba(15,23,42,.08);
-      overflow: hidden;
-      position: relative;
-      isolation: isolate;
+      background: var(--paper);
+      padding: 28px 32px;
     }
-    /* Remove decorative watermark for a clean look */
-    .receipt::after { display: none; }
-    .hdr {
-      position: relative;
-      background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
-      color: #fff;
-      padding: 18px 20px;
+
+    .inner-frame {
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), #fff 55%);
+      border-radius: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: 0 35px 65px rgba(15, 23, 42, 0.12);
+    }
+
+    .receipt-prologue {
       display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
       align-items: center;
-      box-shadow: inset 0 -1px 0 rgba(255,255,255,.25);
     }
-    .logo {
-      width: 42px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.15);
+
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      background: #f8fbff;
     }
-    .brand {
-      font-weight: 800; font-size: 18px; line-height: 1.2; letter-spacing: .2px;
+
+    .brand-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
-    .sub {
-      font-size: 11px; opacity: .9; margin-top: 2px;
+
+    .school-logo {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      background: #fff;
+      padding: 8px;
     }
-    .badge {
-      font-size: 11px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .6px; font-weight: 700;
+
+    .institution-title {
+      font-size: 24px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 0;
+      line-height: 1.2;
     }
-    .content { position: relative; z-index: 1; padding: 16px 20px 8px; }
-    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-    .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; }
-    .label { color: var(--muted); }
-    .value { color: var(--text); font-weight: 600; }
-    .amount {
-      margin: 12px 0; background: linear-gradient(135deg, #e0f2fe, #eef2ff); border: 1px solid var(--border); border-radius: 14px; padding: 16px; text-align: center;
+
+    .institution-subline {
+      font-size: 13px;
+      color: rgba(15, 23, 42, 0.7);
+      margin: 0;
     }
-    .amount .caption { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
-    .amount .value { display: block; font-size: 26px; font-weight: 900; color: #0f172a; }
-    .tear { border-top: 1px dashed var(--border); position: relative; margin: 14px 0; }
-    .tear::before, .tear::after { content: ""; position: absolute; top: -6px; width: 12px; height: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; }
-    .tear::before { left: -6px; }
-    .tear::after { right: -6px; }
-    .footer { margin: 10px 0 4px; text-align: center; font-size: 12px; color: var(--muted); }
-    .qrblock { text-align:center; margin-top: 8px; }
-    .qrwrap { display:inline-block; padding:10px; border:1px solid var(--border); border-radius:12px; background: var(--surface-weak); box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
-    .actions { margin: 12px auto 16px; text-align: center; }
-    .btn { display: inline-block; padding: 10px 14px; font-size: 13px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: #f8fafc; color: #0f172a; box-shadow: 0 2px 6px rgba(15,23,42,.05); }
-    .btn:hover { filter: saturate(1.05); }
+
+    .school-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 12px 0;
+    }
+
+    .school-detail {
+      font-size: 13px;
+      color: rgba(15, 23, 42, 0.8);
+    }
+
+    .school-detail span {
+      display: block;
+      font-weight: 600;
+      color: rgba(15, 23, 42, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 10px;
+    }
+
+    .meta-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .received-block {
+      padding: 18px;
+      border-radius: 18px;
+      background: #0f172a;
+      color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .received-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.45em;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 600;
+    }
+
+    .received-value {
+      margin-top: 6px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #f9fafb;
+    }
+
+    .receipt-badge {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 14px;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.05);
+    }
+
+    .slip-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slip-code {
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 600;
+    }
+
+    .details-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .details-panel {
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      padding: 18px;
+      background: #fff;
+      border-radius: 22px;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
+    }
+
+    .amount-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    .amount-row .label {
+      font-size: 11px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .amount-row .value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px 20px;
+    }
+
+    .row-label {
+      font-size: 10px;
+      color: rgba(15, 23, 42, 0.6);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .row-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 4px;
+    }
+
+    .footnote {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 16px;
+    }
+
+    .powered {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .auth-panel {
+      border-radius: 18px;
+      padding: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: #fefefe;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .auth-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4em;
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    .auth-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 13px;
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    .auth-meta span {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .slip-label {
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(15, 23, 42, 0.5);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .qr-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .qr-box {
+      width: 110px;
+      height: 110px;
+      border: 1px dashed rgba(15, 23, 42, 0.2);
+      border-radius: 14px;
+      padding: 6px;
+      background: #fff;
+    }
 
     @media print {
-      @page { size: A5; margin: 10mm; }
-      body { padding: 0; background: #fff; }
-      .actions { display: none !important; }
-      .receipt { border: none; padding: 0; max-width: initial; box-shadow: none; }
+      body {
+        padding: 0;
+        background: #fff;
+      }
+
+      .slip-frame {
+        border: none;
+        padding: 0;
+      }
     }
   </style>
-  <script>
-    function doPrint() { window.print(); }
-  </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
-  <meta name="referrer" content="no-referrer" />
-  <style media="print">
-    /* Ensure crisp print */
-    img, svg { filter: none !important; }
-  </style>
-  </head>
+</head>
 <body>
-  <div class="receipt">
-    <div class="hdr">
-      <img class="logo" src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ brand }} Logo" onerror="this.style.display='none'" />
-      <div>
-        <div class="brand">{{ brand or SCHOOL_NAME or 'Receipt' }}</div>
-        {% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL or SCHOOL_WEBSITE %}
-          <div class="sub">
-            {% if SCHOOL_ADDRESS %}{{ SCHOOL_ADDRESS }}{% endif %}
-            {% if SCHOOL_PHONE %}{% if SCHOOL_ADDRESS %} • {% endif %}{{ SCHOOL_PHONE }}{% endif %}
-            {% if SCHOOL_EMAIL %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE %} • {% endif %}{{ SCHOOL_EMAIL }}{% endif %}
-            {% if SCHOOL_WEBSITE %}{% if SCHOOL_ADDRESS or SCHOOL_PHONE or SCHOOL_EMAIL %} • {% endif %}{{ SCHOOL_WEBSITE }}{% endif %}
+  <div class="slip-wrapper">
+      <div class="slip-frame">
+        <div class="inner-frame">
+          <div class="receipt-prologue">
+            <div class="brand-block">
+              <div class="brand-top">
+                {% if school_logo_url %}
+                  <img src="{{ school_logo_url }}" alt="{{ slip_school_name or brand or 'School logo' }}" class="school-logo" />
+                {% endif %}
+                <div>
+                  <p class="institution-title">{{ slip_school_name or brand or SCHOOL_NAME or 'School' }}</p>
+                  <p class="institution-subline">{{ slip_school_tagline or 'Official fee payment confirmation' }}</p>
+                </div>
+              </div>
+              <div class="school-details">
+                {% if SCHOOL_ADDRESS %}
+                  <div class="school-detail">
+                    <span>Address</span>
+                    {{ SCHOOL_ADDRESS }}
+                  </div>
+                {% endif %}
+                {% if SCHOOL_PHONE %}
+                  <div class="school-detail">
+                    <span>Phone</span>
+                    {{ SCHOOL_PHONE }}
+                  </div>
+                {% endif %}
+                {% if SCHOOL_EMAIL %}
+                  <div class="school-detail">
+                    <span>Email</span>
+                    {{ SCHOOL_EMAIL }}
+                  </div>
+                {% endif %}
+                {% if SCHOOL_WEBSITE %}
+                  <div class="school-detail">
+                    <span>Web</span>
+                    {{ SCHOOL_WEBSITE }}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="meta-stack">
+              <div class="received-block">
+                <div class="received-label">Received from</div>
+                <div class="received-value">{{ slip_received_from }}</div>
+                <div class="received-label" style="margin-top:12px;">Amount paid</div>
+                <div class="received-value">KES {{ "{:,.2f}".format(payment.amount or 0) }}</div>
+              </div>
+              <div class="receipt-badge">
+                <div class="slip-meta">
+                  <div>
+                    <p class="slip-label">Payment Code</p>
+                    <p class="slip-code">{{ slip_erp_number }}</p>
+                  </div>
+                  <div class="slip-label" style="margin-top:6px;">Date</div>
+                  <div class="slip-code">{{ slip_payment_date }}</div>
+                </div>
+                <div class="qr-block">
+                  <div class="qr-box">
+                    {% if auth_qr_data %}
+                      <div id="qr-auth-top"></div>
+                    {% endif %}
+                  </div>
+                  <div class="slip-code">Verified</div>
+                </div>
+              </div>
+            </div>
           </div>
-        {% else %}
-          <div class="sub">Official Payment Receipt</div>
-        {% endif %}
-      </div>
-      <div><span class="badge">PAID</span></div>
-    </div>
-
-    <div class="content">
-      <div class="section" style="margin-bottom:10px;">
-        <div class="grid">
-          <div class="row"><div class="label">Receipt No.</div><div class="value">#{{ payment.id }}</div></div>
-          <div class="row"><div class="label">Date</div><div class="value">{% if payment.date %}{% if payment.date.__class__.__name__ == "str" %}{{ payment.date }}{% else %}{{ payment.date.strftime('%Y-%m-%d %H:%M') }}{% endif %}{% else %}N/A{% endif %}</div></div>
-          <div class="row"><div class="label">Student</div><div class="value">{{ payment.student_name }}</div></div>
-          <div class="row"><div class="label">Class</div><div class="value">{{ payment.class_name or 'N/A' }}</div></div>
-        <div class="row"><div class="label">Method</div><div class="value">{{ payment.method or 'N/A' }}</div></div>
-        <div class="row"><div class="label">Reference</div><div class="value">{{ payment.reference or 'N/A' }}</div></div>
-        {% if payment.method and payment.method|lower == 'paypal' %}
-        <div class="row"><div class="label">Note</div><div class="value">Processed by PayPal. Capture ID: {{ payment.reference or 'N/A' }}</div></div>
-        {% endif %}
-          <div class="row"><div class="label">Year / Term</div><div class="value">{{ payment.year or 'N/A' }} / {{ payment.term or 'N/A' }}</div></div>
+          <div>
+            <div class="details-title">Payment Details</div>
+            <div class="details-panel">
+              <div class="amount-row">
+                <div class="label">Detailed amount</div>
+                <div class="value">KES {{ "{:,.2f}".format(payment.amount or 0) }}</div>
+              </div>
+              <div class="details-grid">
+                <div>
+                  <div class="row-label">Service Type</div>
+                  <div class="row-value">{{ slip_service_type }}</div>
+                </div>
+                <div>
+                  <div class="row-label">Payment Date</div>
+                  <div class="row-value">{{ slip_payment_date }}</div>
+                </div>
+                <div>
+                  <div class="row-label">Payment Mode</div>
+                  <div class="row-value">{{ payment.method or 'N/A' }}</div>
+                </div>
+                <div>
+                  <div class="row-label">Invoice Number</div>
+                  <div class="row-value">{{ slip_invoice_number }}</div>
+                </div>
+                <div>
+                  <div class="row-label">ERP Receipt Number</div>
+                  <div class="row-value">{{ slip_erp_number }}</div>
+                </div>
+                <div>
+                  <div class="row-label">Paid To</div>
+                  <div class="row-value">{{ slip_paid_to }}</div>
+                </div>
+              </div>
+              <div class="footnote">
+                This is a computer-generated slip; no signature required.
+              </div>
+              <div class="powered">
+                Powered by Jiunge
+              </div>
+            </div>
+          </div>
+          <div class="auth-panel">
+            <div class="auth-title">verified finance receipt</div>
+            <div class="auth-meta">
+              <span>{{ slip_school_name or brand or SCHOOL_NAME or 'School' }}</span>
+              <span>{{ slip_received_from }}</span>
+              <span>Issued {{ slip_payment_date }}</span>
+            </div>
+          </div>
         </div>
-        <div class="amount">
-          <div class="caption">Amount Paid</div>
-          <span class="value">KES {{ "{:,.2f}".format(payment.amount or 0) }}</span>
-        </div>
-        <div class="grid">
-          <div class="row"><div class="label">Current Balance</div><div class="value">{% if current_balance is not none %}KES {{ "{:,.2f}".format(current_balance) }}{% else %}N/A{% endif %}</div></div>
-          <div class="row"><div class="label">Credit on Account</div><div class="value">{% if current_credit is not none %}KES {{ "{:,.2f}".format(current_credit) }}{% else %}N/A{% endif %}</div></div>
-        </div>
-        <div class="tear"></div>
-        <div class="footer">Thank you for your payment.</div>
-      </div>
-
-      {% if payment_link %}
-      <div class="section qrblock">
-        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Scan to pay via your preferred app</div>
-        <div class="qrwrap"><div id="qr"></div></div>
-        <div style="font-size:11px; color:var(--muted); margin-top:6px; word-break:break-all">{{ payment_link }}</div>
-      </div>
-      <script>
-        try {
-          var link = {{ payment_link|tojson }};
-          var payload = link || ({{ brand|tojson }} + ' payment');
-          new QRCode(document.getElementById('qr'), { text: payload, width: 160, height: 160 });
-        } catch (e) { /* ignore */ }
-      </script>
-      {% endif %}
-
-      {% if auth_qr_data %}
-      <div class="section qrblock" style="margin-top:10px;">
-        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Receipt authenticity QR (signed)</div>
-        <div class="qrwrap" style="padding:12px;"><div id="qr-auth"></div></div>
-        <div style="font-size:11px; color:var(--muted); margin-top:6px">Contains key receipt details and a signature.</div>
-      </div>
-      <script>
-        try {
-          var a = {{ auth_qr_data|tojson }};
-          new QRCode(document.getElementById('qr-auth'), { text: a, width: 220, height: 220 });
-        } catch (e) { /* ignore */ }
-      </script>
-      {% endif %}
-
-      {% if verify_url %}
-      <div class="section qrblock" style="margin-top:10px;">
-        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">Scan to verify receipt</div>
-        <div class="qrwrap"><div id="qr-verify"></div></div>
-        <div style="font-size:11px; color:var(--muted); margin-top:6px; word-break:break-all">{{ verify_url }}</div>
-      </div>
-      <script>
-        try {
-          var v = {{ verify_url|tojson }};
-          new QRCode(document.getElementById('qr-verify'), { text: v, width: 160, height: 160 });
-        } catch (e) { /* ignore */ }
-      </script>
-      {% endif %}
-
-      <div class="actions">
-        <a class="btn" href="{{ url_for('payment_receipt_pdf', payment_id=payment.id) }}">Download PDF</a>
-        <button class="btn" onclick="doPrint()">Print Receipt</button>
       </div>
     </div>
-  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    function renderQr(id, payload, size) {
+      if (!payload || !id) {
+        return;
+      }
+      var target = document.getElementById(id);
+      if (!target) {
+        return;
+      }
+      new QRCode(target, { text: payload, width: size, height: size });
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+      renderQr("qr-auth-top", {{ auth_qr_data | tojson }}, 104);
+    });
+  </script>
 </body>
 </html>

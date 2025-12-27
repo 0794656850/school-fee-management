@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ portal_title }} - {{ APP_TITLE }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <script>window.__flash__ = {{ messages|tojson }};</script>
+    {% endif %}
+  {% endwith %}
+</head>
+<body class="bg-slate-50 min-h-screen text-[var(--text)]">
+  <header class="bg-white">
+    <div class="brand-hero">
+      <div class="brand-hero__row">
+        <div class="app-badge">
+          <img src="{{ url_for('static', filename=LOGO_SECONDARY) }}" alt="{{ BRAND_NAME }}"/>
+        </div>
+        <div>
+          <div class="brand-title text-3xl md:text-4xl">{{ BRAND_NAME }}</div>
+          <div class="brand-subtitle text-sm">{{ PORTAL_TITLE }}</div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="max-w-2xl mx-auto px-4 pb-10 pt-6">
+    <div id="flash" class="mb-4"></div>
+    <div class="glass rounded-2xl p-6 md:p-8 border border-gray-100 shadow-lg">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-emerald-600/90 text-white grid place-items-center">
+          <i data-lucide="shield-check"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-widest text-emerald-500">{{ portal_label }}</p>
+          <h1 class="text-2xl font-semibold">{{ heading }}</h1>
+        </div>
+      </div>
+      <p class="text-sm text-gray-600 mb-2">{{ summary }}</p>
+      <p class="text-sm text-gray-500 mb-4">We sent your six-digit code to <strong>{{ email_display }}</strong>.</p>
+      <div class="text-xs text-gray-500 mb-5">Expires in <strong id="countdown">{{ countdown_label }}</strong></div>
+      <form method="post" action="{{ form_action }}" class="space-y-4">
+        <label class="block text-sm font-medium text-gray-700">One-time code</label>
+        <input name="code" maxlength="6" autocomplete="one-time-code"
+               oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6)"
+               class="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg tracking-[0.3em] text-center font-semibold"
+               placeholder="123456" inputmode="numeric" required />
+        <button type="submit" class="btn-primary btn-lg w-full rounded-2xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2">
+          <i data-lucide="mail"></i>
+          <span>Verify now</span>
+        </button>
+      </form>
+      <form method="post" action="{{ resend_url }}" class="mt-4 text-center">
+        <button type="submit" class="text-xs text-emerald-600 uppercase tracking-[0.2em] hover:underline">
+          Resend code
+        </button>
+      </form>
+      <div class="mt-6 text-xs text-gray-500">
+        <span>Need to start over?</span>
+        <a href="{{ back_url }}" class="text-emerald-700 hover:underline">{{ back_label or 'Back to login' }}</a>
+      </div>
+      {% if portal_note %}
+      <div class="mt-4 text-xs text-emerald-600">{{ portal_note }}</div>
+      {% endif %}
+    </div>
+  </main>
+  <script>
+    lucide.createIcons();
+    (function(){
+      const flash = window.__flash__ || [];
+      const box = document.getElementById('flash');
+      if (!flash.length || !box) return;
+      for (const [cat, msg] of flash) {
+        const d = document.createElement('div');
+        d.className = 'mb-2 px-3 py-2 rounded-xl text-sm ' + (cat==='success'?'bg-emerald-50 text-emerald-700 border border-emerald-200':(cat==='error'?'bg-rose-50 text-rose-700 border border-rose-200':'bg-amber-50 text-amber-700 border border-amber-200'));
+        d.textContent = msg; box.appendChild(d);
+      }
+    })();
+    (function(){
+      const countdownEl = document.getElementById('countdown');
+      let remaining = {{ countdown_seconds }};
+      if (!countdownEl || remaining <= 0) return;
+      const update = () => {
+        const minutes = Math.floor(remaining / 60);
+        const seconds = remaining % 60;
+        countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} remaining`;
+        if (remaining <= 0) return;
+        remaining -= 1;
+      };
+      update();
+      const timer = setInterval(() => {
+        if (remaining <= 0) {
+          clearInterval(timer);
+          countdownEl.textContent = 'Expired';
+          return;
+        }
+        update();
+      }, 1000);
+    })();
+  </script>
+</body>
+</html>

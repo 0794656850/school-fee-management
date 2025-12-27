@@ -1,6 +1,7 @@
 ﻿from flask import Blueprint, render_template, current_app, redirect, url_for, flash, request, session, jsonify
 from decimal import Decimal
 import os
+import random
 
 import mysql.connector
 from flask_mail import Message
@@ -8,6 +9,11 @@ from extensions import mail
 from utils.notify import normalize_phone  # legacy import; unused after email switch
 from utils.gmail_api import send_email as gmail_send_email, has_valid_token
 from utils.settings import get_setting
+from routes.term_routes import (
+    get_or_seed_current_term,
+    ensure_academic_terms_table,
+    ensure_invoices_tables,
+)
 
 DEFAULT_REMINDER_TEMPLATE = """📌 Payment Reminder (Gentle Reminder)
 
@@ -15,15 +21,25 @@ Subject: Friendly Fee Payment Reminder
 
 Hello {name},
 
-We hope you are well. This is a gentle reminder that your payment of KES {balance} for {purpose} is due on {due_date}. Current class: {class_label}.
-Kindly make the payment at your convenience to avoid any interruptions.
+We hope you are well. Term {term_label} fees are expected at KES {expected_term_total}. {previous_term_note}
+Current class: {class_label}. Kindly settle KES {balance} by {due_date} so the school can keep everything running smoothly.
 
 If you have already settled this, please disregard this message.
+
+"{quote}"
 
 Thank you.
 {institution}
 {contact_details}
 """
+
+REMINDER_QUOTES = [
+    "Consistency in small payments keeps the classroom doors open wider.",
+    "Together we keep the lights on and the lessons flowing.",
+    "Timely fee contributions make every new term smoother for your child.",
+    "Every cleared invoice is a promise fulfilled for the school community.",
+    "Your attention to fees keeps the school ready for every learning adventure.",
+]
 
 reminder_bp = Blueprint('reminders', __name__, url_prefix='/reminders')
 
@@ -121,7 +137,85 @@ def _contact_details() -> str:
     return " | ".join(parts) if parts else ""
 
 
-def _render_message(template: str, *, name: str, balance: Decimal, class_name: str | None) -> str:
+def _term_reminder_context(student_id: int, school_id: int) -> dict[str, object]:
+    context = {
+        "term_label": "current term",
+        "expected_term_total": "0.00",
+        "previous_term_note": "Previous terms are fully settled.",
+        "previous_outstanding": 0.0,
+        "term_year": None,
+        "term_term": None,
+    }
+    if not student_id or not school_id:
+        return context
+    db = _db_from_config()
+    try:
+        ensure_academic_terms_table(db)
+        ensure_invoices_tables(db)
+        cur = db.cursor(dictionary=True)
+        year, term = get_or_seed_current_term(db)
+        context["term_year"] = year
+        context["term_term"] = term
+        context["term_label"] = f"{year} Term {term}"
+        cur.execute(
+            "SELECT COALESCE(total,0) AS total FROM invoices WHERE student_id=%s AND school_id=%s AND year=%s AND term=%s",
+            (student_id, school_id, year, term),
+        )
+        invoice = cur.fetchone() or {}
+        expected_total = float(invoice.get("total") or 0)
+        context["expected_term_total"] = f"{expected_total:,.2f}"
+        prev_outstanding = 0.0
+        cur.execute(
+            """
+            SELECT year, term, COALESCE(total,0) AS total
+            FROM invoices
+            WHERE student_id=%s AND school_id=%s AND (year<>%s OR term<>%s)
+            """,
+            (student_id, school_id, year, term),
+        )
+        for inv in cur.fetchall() or []:
+            inv_year = inv.get("year")
+            inv_term = inv.get("term")
+            inv_total = float(inv.get("total") or 0)
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(amount),0) AS paid
+                FROM payments
+                WHERE student_id=%s AND school_id=%s AND year=%s AND term=%s
+                """,
+                (student_id, school_id, inv_year, inv_term),
+            )
+            paid_row = cur.fetchone() or {}
+            paid_amount = float(paid_row.get("paid") or 0)
+            prev_outstanding += max(inv_total - paid_amount, 0.0)
+        context["previous_outstanding"] = prev_outstanding
+        if prev_outstanding > 0:
+            context["previous_term_note"] = (
+                f"Previous term balance still due: KES {prev_outstanding:,.2f}."
+            )
+        else:
+            context["previous_term_note"] = "Previous terms are fully settled."
+    except Exception:
+        pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    return context
+
+
+def _render_message(
+    template: str,
+    *,
+    name: str,
+    balance: Decimal,
+    class_name: str | None,
+    term_label: str,
+    expected_term_total: str,
+    previous_term_note: str,
+    quote: str,
+) -> str:
     data = _SafeDict(
         name=name,
         balance=f"{balance:,.2f}",
@@ -135,6 +229,10 @@ def _render_message(template: str, *, name: str, balance: Decimal, class_name: s
         due_date=(get_setting("REMINDER_DUE_DATE") or "the upcoming due date"),
         contact_details=_contact_details(),
         class_label=f"{class_name or 'your class'}",
+        term_label=term_label,
+        expected_term_total=expected_term_total,
+        previous_term_note=previous_term_note,
+        quote=quote,
     )
     return (template or "").format_map(data)
 
@@ -275,7 +373,18 @@ def send_email_reminder(student_id: int):
     # Optional custom message from form/query with placeholders
     message_template = request.form.get('message') or request.args.get('message')
     template = message_template or DEFAULT_REMINDER_TEMPLATE
-    message_body = _render_message(template, name=student['name'], balance=balance, class_name=student.get('class_name'))
+    term_context = _term_reminder_context(student_id, session.get("school_id"))
+    quote = random.choice(REMINDER_QUOTES)
+    message_body = _render_message(
+        template,
+        name=student['name'],
+        balance=balance,
+        class_name=student.get('class_name'),
+        term_label=term_context.get("term_label") or "current term",
+        expected_term_total=term_context.get("expected_term_total") or "0.00",
+        previous_term_note=term_context.get("previous_term_note") or "",
+        quote=quote,
+    )
 
     # Prefer Gmail API OAuth2 sender if available; fallback to Flask-Mail
     subject = f"Fee reminder for {student['name']}"
@@ -349,7 +458,18 @@ def send_all_reminders():
             continue
         balance = Decimal(str(s.get('balance') or 0))
         template = message_template or DEFAULT_REMINDER_TEMPLATE
-        msg = _render_message(template, name=s['name'], balance=balance, class_name=s.get('class_name'))
+        term_context = _term_reminder_context(s['id'], session.get("school_id"))
+        quote = random.choice(REMINDER_QUOTES)
+        msg = _render_message(
+            template,
+            name=s['name'],
+            balance=balance,
+            class_name=s.get('class_name'),
+            term_label=term_context.get("term_label") or "current term",
+            expected_term_total=term_context.get("expected_term_total") or "0.00",
+            previous_term_note=term_context.get("previous_term_note") or "",
+            quote=quote,
+        )
         # Try Gmail API first
         subject = f"Fee reminder for {s['name']}"
         ok = False

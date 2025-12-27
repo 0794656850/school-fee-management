@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Automated Backups - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Automated Backups{% endblock %}
+{% block content %}
+
+<div class="space-y-6">
+  <section class="glass rounded-2xl border border-gray-100 p-6 shadow-sm bg-white">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <h3 class="text-lg font-semibold">Data safety</h3>
+        <p class="text-sm text-gray-500">
+          Backups run automatically using the schedule below and are stored in {{ backup_directory }}.
+        </p>
+        <p class="text-[11px] text-gray-400 mt-1">History and recovery below reflect the currently selected school profile.</p>
+        <p class="text-xs text-gray-500 mt-1">
+          Schedule: <span class="font-semibold">{{ schedule }}</span>
+          {% if next_run %}
+            • Next run: <span class="font-semibold">{{ next_run }}</span> (EAT, 24h)
+          {% endif %}
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3 w-full sm:w-auto">
+        <form method="post" class="flex-1 min-w-[190px]">
+          <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-indigo-500/30 transition hover:scale-[1.01]">
+            <i data-lucide="database"></i>
+            Run manual backup
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('admin.admin_backups_restore') }}" class="flex-1 min-w-[190px]">
+          <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white text-xs font-semibold uppercase tracking-[0.3em] px-4 py-2 shadow-lg shadow-slate-800/50 transition hover:shadow-slate-900/70">
+            <i data-lucide="tornado"></i>
+            Recover entire backup
+          </button>
+        </form>
+      </div>
+    </div>
+    <p class="mt-3 text-xs text-gray-500">
+      Recover button will rehydrate this school's data from the most recent snapshot (if the file is still present). Use with caution.
+    </p>
+    <div class="mt-3 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-800">
+      <p class="font-semibold text-emerald-700">Deleted items come back</p>
+      <p class="mt-1 text-emerald-700/80">
+        Every snapshot captures the full database, so once a recovery job finishes it reinstates records that were deleted after the backup was taken (students, payments, invoices, attachments, etc.).
+        Think of the restore button as a full-time rewind for sensitive fee office work.
+      </p>
+    </div>
+    <div class="mt-4 text-xs text-gray-600 space-y-1">
+      <p>Retention: {{ backup_keep_days }} days</p>
+      <p>Each backup includes a fresh database dump (mysqldump) and zipped copies of configured assets.</p>
+      <p>
+        Each school profile keeps isolated snapshots; make sure the active profile in the selector
+        matches the one you expect before running a recovery so that the deleted student’s data is
+        pulled from the correct dataset.
+      </p>
+    </div>
+  </section>
+
+  <section class="glass rounded-2xl border border-gray-100 p-6 shadow-sm bg-white">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold">History</h3>
+      <span class="text-xs text-gray-500">{{ history|length }} recent backups shown</span>
+    </div>
+    <div class="overflow-x-auto">
+      {% if history %}
+        <table class="min-w-full text-sm text-left">
+          <thead class="text-xs text-gray-500 uppercase tracking-[0.4em] border-b border-gray-100">
+            <tr>
+              <th class="px-3 py-2">Timestamp (EAT)</th>
+              <th class="px-3 py-2">Triggered by</th>
+              <th class="px-3 py-2">Database</th>
+              <th class="px-3 py-2">Archives</th>
+              <th class="px-3 py-2">Retention</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 text-gray-700">
+            {% for entry in history %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-3 align-top text-xs font-semibold text-slate-600">
+                {{ entry.timestamp|eat_time("%b %d, %Y %H:%M") }}
+              </td>
+              <td class="px-3 py-3 align-top">
+                {{ entry.reason or "scheduled" }}
+              </td>
+              <td class="px-3 py-3 align-top text-xs space-y-1">
+                {% set db = entry.db_dump %}
+                {% if db %}
+                  <div class="flex items-center gap-2">
+                    <span class="font-semibold text-slate-800">{{ db.status|capitalize }}</span>
+                    {% if db.size %}
+                      <span class="text-gray-500">{{ db.size|format_bytes }}</span>
+                    {% endif %}
+                  </div>
+                  {% if db.reason %}
+                    <div class="text-amber-600">Reason: {{ db.reason }}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="text-gray-500">No dump</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 align-top text-xs space-y-2">
+                {% if entry.archives %}
+                  {% for archive in entry.archives %}
+                    <div class="text-slate-700">
+                      {{ archive.name }} •
+                      {% if archive.size %}{{ archive.size|format_bytes }}{% else %}—{% endif %}
+                      {% if archive.status != "ok" %}<span class="text-rose-600">{{ archive.status }}</span>{% endif %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-gray-500">None</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 align-top text-xs text-gray-500 space-y-1">
+                {% if entry.removed %}
+                  <div>Removed: {{ entry.removed|join(", ") }}</div>
+                {% else %}
+                  <div>No cleanup actions</div>
+                {% endif %}
+                <div class="text-[0.65rem] leading-snug">Dir: {{ entry.dir }}</div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="text-xs text-gray-500 py-6 text-center">No backups recorded yet.</div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+{% endblock %}

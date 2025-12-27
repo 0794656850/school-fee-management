@@ -7,335 +7,1992 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-G5yRvCNrI6VOGGAaHo9dZYkTfGZNVVRhk1FdYyqS/fWznuaCG2lLBVmOAXoJ1V8L" crossorigin="anonymous"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
+  <style>
+    :root {
+      --portal-ink: #0b1324;
+      --portal-muted: #526175;
+      --portal-card: rgba(255, 255, 255, 0.88);
+      --portal-border: rgba(11, 19, 36, 0.12);
+      --portal-shadow: 0 24px 60px rgba(11, 19, 36, 0.16);
+      --portal-accent: #0f766e;
+      --portal-accent-strong: #0b4a4a;
+      --portal-warm: #f59e0b;
+      --portal-warm-soft: rgba(245, 158, 11, 0.18);
+      --portal-ice: rgba(230, 248, 244, 0.9);
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .guardian-portal {
+      font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+      color: var(--portal-ink);
+      background: #f3f9f7;
+      margin: 0;
+      padding: 0;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    .guardian-portal h1,
+    .guardian-portal h2,
+    .guardian-portal h3,
+    .guardian-portal .brand-title {
+      font-family: "Fraunces", "Times New Roman", serif;
+      letter-spacing: -0.01em;
+    }
+
+    .portal-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 8% 8%, rgba(15, 118, 110, 0.22), transparent 42%),
+        radial-gradient(circle at 90% 8%, rgba(245, 158, 11, 0.24), transparent 46%),
+        radial-gradient(circle at 20% 85%, rgba(14, 165, 233, 0.16), transparent 48%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(231, 245, 241, 0.95));
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .portal-grid {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(11, 19, 36, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(11, 19, 36, 0.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(circle at 30% 10%, rgba(0, 0, 0, 0.6), transparent 65%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .portal-frame {
+      position: fixed;
+      inset: 12px;
+      border-radius: 28px;
+      border: 1px dashed rgba(11, 19, 36, 0.08);
+      box-shadow:
+        0 0 0 12px rgba(255, 255, 255, 0.35),
+        0 20px 50px rgba(15, 23, 42, 0.1);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    @media (max-width: 640px) {
+      .portal-frame {
+        inset: 6px;
+        border-radius: 18px;
+      }
+    }
+
+    .portal-shell {
+      width: 100%;
+      max-width: 1240px;
+      padding: 0 clamp(16px, 3vw, 40px);
+      margin: 0 auto;
+    }
+
+    .portal-header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    .portal-header__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 0;
+      flex-wrap: wrap;
+    }
+
+    .portal-header__brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 220px;
+    }
+
+    .portal-header__logo {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+      color: #fff;
+      box-shadow: 0 12px 24px rgba(30, 64, 175, 0.25);
+    }
+
+    .portal-header__logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 12px;
+      background: #fff;
+      padding: 4px;
+    }
+
+    .portal-header__title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .portal-header__subtitle {
+      font-size: 0.85rem;
+      color: var(--portal-muted);
+      margin-top: 2px;
+    }
+
+    .portal-header__school {
+      font-size: 0.78rem;
+      color: #1f2937;
+      margin-top: 4px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .portal-header__meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .portal-header__bell {
+      position: relative;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: #fff;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      color: var(--portal-ink);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .portal-header__bell:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    .portal-header__badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      box-shadow: 0 8px 14px rgba(220, 38, 38, 0.3);
+    }
+
+    .portal-header__profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px 6px 8px;
+      border-radius: 999px;
+      background: #f8fafc;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      color: var(--portal-ink);
+      font-weight: 600;
+    }
+
+    .portal-header__avatar {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: rgba(30, 64, 175, 0.12);
+      color: #1d4ed8;
+    }
+
+    .portal-header__logout {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: #fff;
+      color: #0f172a;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .portal-header__logout i {
+      width: 16px;
+      height: 16px;
+    }
+
+    .portal-header__logout:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    .guardian-portal .brand-hero__row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .guardian-portal .app-badge {
+      border-radius: 18px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .guardian-portal .brand-title {
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .portal-layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 24px;
+      padding: 28px 0 46px;
+    }
+
+    .portal-deck {
+      display: grid;
+      gap: 32px;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .portal-card {
+      grid-column: span 12;
+      min-width: 0;
+    }
+
+    @media (min-width: 1100px) {
+      .portal-card--wide { grid-column: span 12; }
+      .portal-card--half { grid-column: span 6; }
+      .portal-card--third { grid-column: span 4; }
+      .portal-card--two-thirds { grid-column: span 8; }
+    }
+
+    .portal-order-1 { order: 1; }
+    .portal-order-2 { order: 2; }
+    .portal-order-3 { order: 3; }
+    .portal-order-4 { order: 4; }
+    .portal-order-5 { order: 5; }
+    .portal-order-6 { order: 6; }
+    .portal-order-7 { order: 7; }
+    .portal-order-8 { order: 8; }
+    .portal-order-9 { order: 9; }
+    .portal-order-10 { order: 10; }
+    .portal-order-11 { order: 11; }
+    .portal-order-12 { order: 12; }
+    .portal-order-13 { order: 13; }
+
+    @media (min-width: 900px) {
+      .portal-layout {
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+    }
+
+    .portal-side {
+      position: relative;
+      background: var(--portal-card);
+      border: 1px solid var(--portal-border);
+      box-shadow: var(--portal-shadow);
+    }
+
+    .portal-side::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border-radius: 22px;
+      border: 1px dashed rgba(15, 23, 42, 0.08);
+      pointer-events: none;
+    }
+
+    .guardian-portal .glass {
+      background: var(--portal-card);
+      border: 1px solid var(--portal-border);
+      box-shadow: var(--portal-shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .guardian-portal .bg-white\/70,
+    .guardian-portal .bg-white\/80,
+    .guardian-portal .bg-white\/90 {
+      background: var(--portal-card);
+    }
+
+    .guardian-portal .border-gray-100 {
+      border-color: var(--portal-border);
+    }
+
+    .guardian-portal .text-indigo-700,
+    .guardian-portal .text-indigo-600 {
+      color: var(--portal-accent);
+    }
+
+    .guardian-portal .text-indigo-500 {
+      color: var(--portal-accent-strong);
+    }
+
+    .guardian-portal .bg-indigo-600 {
+      background-color: var(--portal-accent);
+    }
+
+    .guardian-portal .hover\:bg-indigo-500:hover {
+      background-color: var(--portal-accent-strong);
+    }
+
+    .guardian-portal .bg-indigo-50 {
+      background-color: var(--portal-ice);
+    }
+
+    .guardian-portal .border-indigo-100 {
+      border-color: rgba(15, 118, 110, 0.2);
+    }
+
+    .guardian-portal .hover\:border-indigo-200:hover {
+      border-color: rgba(15, 118, 110, 0.35);
+    }
+
+    .guardian-portal .focus\:border-indigo-500:focus {
+      border-color: var(--portal-accent);
+      box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+    }
+
+    .guardian-portal .focus-visible\:outline-indigo-500:focus-visible {
+      outline-color: var(--portal-accent);
+    }
+
+    .guardian-portal .btn-secondary {
+      background: rgba(15, 118, 110, 0.1);
+      color: var(--portal-accent);
+      border: 1px solid rgba(15, 118, 110, 0.2);
+    }
+
+    .guardian-portal .btn-secondary:hover {
+      background: rgba(15, 118, 110, 0.2);
+    }
+
+    .guardian-portal .guardian-analytics-panel {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 253, 250, 0.85));
+      border: 1px solid rgba(15, 118, 110, 0.25);
+      color: var(--portal-ink);
+      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
+    }
+
+    .guardian-portal .guardian-analytics-panel::after {
+      background:
+        radial-gradient(circle at 20% -10%, rgba(15, 118, 110, 0.25), transparent 55%),
+        radial-gradient(circle at 72% 25%, rgba(245, 158, 11, 0.2), transparent 55%);
+      opacity: 0.35;
+    }
+
+    .guardian-portal .guardian-analytics-metrics {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--portal-border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .guardian-portal .guardian-analytics-metric {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--portal-border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+
+    .portal-hero {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .portal-hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -30% -30% auto;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(249, 115, 22, 0.3), transparent 70%);
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .portal-kpi {
+      border-radius: 18px;
+      background: rgba(15, 118, 110, 0.12);
+      color: var(--portal-accent);
+      padding: 12px;
+    }
+
+    .portal-stagger > * {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: portalIn 0.75s ease forwards;
+    }
+
+    .portal-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    .portal-stagger > *:nth-child(2) { animation-delay: 0.1s; }
+    .portal-stagger > *:nth-child(3) { animation-delay: 0.16s; }
+    .portal-stagger > *:nth-child(4) { animation-delay: 0.22s; }
+    .portal-stagger > *:nth-child(5) { animation-delay: 0.28s; }
+    .portal-stagger > *:nth-child(6) { animation-delay: 0.34s; }
+
+    @keyframes portalIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .portal-ui {
+      background:
+        radial-gradient(circle at 8% 0%, rgba(17, 126, 121, 0.12), transparent 45%),
+        radial-gradient(circle at 92% 8%, rgba(196, 139, 50, 0.12), transparent 45%),
+        #f6f3ee;
+      color: #0f172a;
+    }
+
+    .sample-shell {
+      width: 100%;
+      max-width: 1260px;
+      padding: 0 clamp(16px, 3vw, 40px);
+      margin: 0 auto;
+    }
+
+    .sample-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(245, 246, 251, 0.8);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-topbar__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 0;
+    }
+
+    .sample-icon-btn {
+      border: 1px solid rgba(12, 24, 45, 0.12);
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 999px;
+      padding: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 26px rgba(11, 19, 36, 0.12);
+    }
+
+    .sample-search {
+      flex: 1;
+      max-width: 420px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(12, 24, 45, 0.12);
+      border-radius: 999px;
+      padding: 10px 16px;
+      box-shadow: 0 16px 32px rgba(11, 19, 36, 0.12);
+    }
+
+    .sample-search input {
+      border: none;
+      outline: none;
+      background: transparent;
+      width: 100%;
+      font-size: 0.95rem;
+      color: #0f172a;
+    }
+
+    .sample-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sample-avatar {
+      height: 40px;
+      width: 40px;
+      border-radius: 999px;
+      background: #4f46e5;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .sample-logout {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .sample-layout {
+      padding: 28px 0 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .sample-hero {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .sample-hero__copy h1 {
+      font-size: clamp(1.8rem, 2.5vw, 2.6rem);
+      font-weight: 700;
+    }
+
+    .sample-hero__label {
+      text-transform: uppercase;
+      letter-spacing: 0.35em;
+      font-size: 0.65rem;
+      color: #64748b;
+    }
+
+    .sample-hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .sample-child-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 12px 16px;
+      border-radius: 16px;
+      box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    .sample-child-icon {
+      height: 44px;
+      width: 44px;
+      border-radius: 999px;
+      background: #eef2ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #4f46e5;
+    }
+
+    .sample-primary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #0b6e6b, #149189);
+      color: #fff;
+      border-radius: 16px;
+      padding: 12px 20px;
+      font-weight: 600;
+      box-shadow: 0 18px 30px rgba(12, 110, 107, 0.35);
+    }
+
+    .sample-primary-btn--full {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .sample-secondary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(12, 24, 45, 0.12);
+      background: #fffaf2;
+      color: #0f172a;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 600;
+    }
+
+    .sample-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 246, 238, 0.88));
+      border-radius: 20px;
+      border: 1px solid rgba(12, 24, 45, 0.1);
+      box-shadow: 0 26px 48px rgba(11, 19, 36, 0.12);
+      padding: 24px;
+    }
+
+    .sample-kpis {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .sample-kpi {
+      border-radius: 18px;
+      padding: 20px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sample-kpi--paid {
+      background: linear-gradient(135deg, #0b6e6b, #2bb1a6);
+    }
+
+    .sample-kpi--balance {
+      background: linear-gradient(135deg, #c48b32, #f2b45a);
+    }
+
+    .sample-kpi--lite {
+      background: #fff;
+      color: #0f172a;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-kpi__label {
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+
+    .sample-kpi__value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+
+    .sample-kpi__sub {
+      font-size: 0.85rem;
+      margin-top: 10px;
+      opacity: 0.85;
+    }
+
+    .sample-section__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .sample-section__header h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .sample-section__header p {
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    .sample-link {
+      color: #4f46e5;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sample-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .sample-list__item {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-list__icon {
+      height: 44px;
+      width: 44px;
+      border-radius: 14px;
+      background: #eef2ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #4f46e5;
+    }
+
+    .sample-list__title {
+      font-weight: 600;
+    }
+
+    .sample-list__meta {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    .sample-list__amount {
+      font-weight: 700;
+    }
+
+    .sample-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+
+    .sample-status--paid {
+      background: #dcfce7;
+      color: #15803d;
+      border-color: #86efac;
+    }
+
+    .sample-status--pending {
+      background: #fef3c7;
+      color: #b45309;
+      border-color: #fde68a;
+    }
+
+    .sample-status--overdue {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+
+    .sample-actions-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+
+    .sample-action-card {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      display: grid;
+      gap: 6px;
+      text-align: center;
+    }
+
+    .sample-action-icon {
+      height: 52px;
+      width: 52px;
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 6px;
+      color: #fff;
+    }
+
+    .sample-action-icon--indigo { background: #0f766e; }
+    .sample-action-icon--green { background: #22c55e; }
+    .sample-action-icon--orange { background: #f97316; }
+    .sample-action-icon--slate { background: #64748b; }
+
+    .sample-action-title {
+      font-weight: 600;
+    }
+
+    .sample-action-sub {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    .sample-form-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .sample-label {
+      font-size: 0.85rem;
+      color: #475569;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .sample-label--row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sample-input {
+      width: 100%;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+
+    .sample-help {
+      color: #64748b;
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    .sample-track {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+
+    .sample-divider {
+      height: 1px;
+      background: rgba(15, 23, 42, 0.08);
+      margin: 16px 0;
+    }
+
+    .sample-split {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .sample-info-panel {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-info-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .sample-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .sample-pill-row span {
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 999px;
+    }
+
+    .sample-form-panel {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 18px;
+    }
+
+    .sample-form-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .sample-form-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #94a3b8;
+      font-size: 0.75rem;
+    }
+
+    .sample-form-title {
+      font-weight: 600;
+    }
+
+    .sample-form-sub {
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+
+    .sample-badge {
+      background: #ecfdf3;
+      color: #15803d;
+      font-size: 0.75rem;
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid #86efac;
+    }
+
+    .sample-form-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .sample-form-row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+    }
+
+    .sample-bank-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .sample-bank-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f8fafc;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+    }
+
+    .sample-grid-2 {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .sample-dropzone {
+      border: 1px dashed rgba(15, 23, 42, 0.2);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      background: #f8fafc;
+    }
+
+    .sample-drop-icon {
+      height: 48px;
+      width: 48px;
+      border-radius: 14px;
+      background: #eef2ff;
+      color: #4f46e5;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 8px;
+    }
+
+    .sample-note-panel {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-form-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      grid-column: 1 / -1;
+    }
+
+    .sample-cal-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sample-cal-title {
+      min-width: 120px;
+      text-align: center;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .sample-chat-log {
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 16px;
+      padding: 12px;
+      background: #f8fafc;
+      min-height: 120px;
+      margin-bottom: 12px;
+    }
+
+    .sample-chat-form {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr auto;
+    }
+
+    .sample-chart__msg {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    .sample-summary {
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    .proof-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .proof-card {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(12, 24, 45, 0.12);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 20px 36px rgba(11, 19, 36, 0.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    .proof-card__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .proof-card__title {
+      font-weight: 700;
+    }
+
+    .proof-card__meta {
+      font-size: 0.82rem;
+      color: var(--portal-muted);
+    }
+
+    .proof-card__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+
+    .proof-card__label {
+      color: var(--portal-muted);
+    }
+
+    .proof-card__value {
+      font-weight: 700;
+    }
+
+    .proof-card__note {
+      font-size: 0.88rem;
+      color: #475569;
+      background: var(--portal-ice);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .proof-card__note--alert {
+      background: rgba(248, 113, 113, 0.12);
+      color: #b91c1c;
+    }
+
+    .proof-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .proof-empty {
+      border: 1px dashed rgba(12, 24, 45, 0.18);
+      border-radius: 18px;
+      padding: 18px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .proof-empty__title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .sample-panel {
+      position: absolute;
+      top: calc(100% + 12px);
+      right: 0;
+      width: min(320px, 90vw);
+      background: #fff;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 18px;
+      box-shadow: 0 22px 40px rgba(15, 23, 42, 0.12);
+      padding: 16px;
+      z-index: 30;
+    }
+
+    .sample-panel__header {
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .sample-panel__list {
+      display: grid;
+      gap: 10px;
+      font-size: 0.9rem;
+    }
+
+    .sample-panel__item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .sample-panel__meta {
+      color: #64748b;
+      font-size: 0.78rem;
+    }
+
+    .sample-panel__link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--portal-accent);
+      font-weight: 600;
+    }
+
+    .sample-panel__actions {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .sample-bell-badge {
+      position: absolute;
+      top: -4px;
+      right: -2px;
+      height: 18px;
+      min-width: 18px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .portal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(2px);
+      z-index: 48;
+    }
+
+    .portal-drawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: min(320px, 85vw);
+      background: #fff;
+      border-right: 1px solid rgba(15, 23, 42, 0.1);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+      padding: 22px;
+      z-index: 49;
+      transform: translateX(-120%);
+      transition: transform 0.25s ease;
+    }
+
+    .portal-drawer--right {
+      left: auto;
+      right: 0;
+      border-right: none;
+      border-left: 1px solid rgba(15, 23, 42, 0.1);
+      transform: translateX(120%);
+    }
+
+    .portal-drawer.is-open {
+      transform: translateX(0);
+    }
+
+    .portal-drawer__title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .portal-drawer__list {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+      font-weight: 600;
+    }
+
+    .portal-drawer__list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--portal-ink);
+    }
+
+    .notify-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .notify-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: #f8fafc;
+      display: grid;
+      gap: 6px;
+    }
+
+    .notify-item__title {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .notify-item__meta {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+
+    .school-banner {
+      position: relative;
+      z-index: 2;
+      padding: 26px 0;
+      background:
+        radial-gradient(circle at 12% 40%, rgba(255, 255, 255, 0.25), transparent 45%),
+        radial-gradient(circle at 90% 20%, rgba(0, 0, 0, 0.08), transparent 55%),
+        linear-gradient(120deg, #1f5fdd, #1aa6d1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      color: #e7f6ff;
+    }
+
+    .school-banner__inner {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .banner-brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .banner-logo {
+      height: 86px;
+      width: 86px;
+      border-radius: 24px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 16px 30px rgba(5, 23, 62, 0.35);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .banner-logo img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 16px;
+      background: #fff;
+      padding: 6px;
+    }
+
+    .banner-app {
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      font-size: 0.7rem;
+      color: rgba(231, 246, 255, 0.8);
+      font-weight: 600;
+    }
+
+    .banner-school {
+      font-size: clamp(1.6rem, 2.8vw, 2.4rem);
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .banner-tagline {
+      color: rgba(231, 246, 255, 0.86);
+      font-size: 0.95rem;
+    }
+
+    .banner-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .banner-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e7f6ff;
+    }
+
+    .banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .banner-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      font-weight: 600;
+      color: #e7f6ff;
+    }
+
+    .banner-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .banner-action--ghost {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .analytics-grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .analytics-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .analytics-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.9rem;
+    }
+
+    .analytics-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .analytics-bar span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(120deg, #0b6e6b, #2bb1a6);
+    }
+
+    .settings-group {
+      border-top: 1px dashed rgba(12, 24, 45, 0.12);
+      padding-top: 10px;
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .settings-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 8px 10px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      font-size: 0.88rem;
+    }
+
+    .settings-toggle input {
+      accent-color: var(--portal-accent-strong);
+    }
+
+    .sample-logout {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(12, 24, 45, 0.12);
+      font-weight: 600;
+      color: var(--portal-ink);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .sample-logout:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 22px rgba(11, 19, 36, 0.12);
+    }
+    .portal-footer {
+      margin-top: 40px;
+      padding: 28px 0 32px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 64, 175, 0.88));
+      color: #e5e7eb;
+    }
+
+    .portal-footer__inner {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      align-items: start;
+    }
+
+    .portal-footer__brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .portal-footer__logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+    }
+
+    .portal-footer__logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 12px;
+      background: #fff;
+      padding: 4px;
+    }
+
+    .portal-footer__title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .portal-footer__subtitle {
+      font-size: 0.82rem;
+      color: rgba(229, 231, 235, 0.75);
+      margin-top: 2px;
+    }
+
+    .portal-footer__label {
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.68rem;
+      color: rgba(229, 231, 235, 0.7);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .portal-footer__contact {
+      display: grid;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+
+    .portal-footer__contact span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .portal-footer__message {
+      font-size: 0.95rem;
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.12);
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      min-height: 56px;
+      transition: opacity 0.35s ease;
+    }
+
+    .portal-footer__message.is-fading {
+      opacity: 0;
+    }
+
+    .portal-footer__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .portal-footer__action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: #fff;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .proof-card.is-hidden {
+      display: none;
+    }
+
+    .proof-grid.is-expanded .proof-card.is-hidden {
+      display: grid;
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-[var(--bg-app)] text-[var(--text)]">
-  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="brand-hero__row">
-        <div class="app-badge">
-          <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }}"/>
+<body class="guardian-portal min-h-screen portal-ui" id="top">
+  <div class="portal-bg"></div>
+  <div class="portal-grid"></div>
+  <div class="portal-frame"></div>
+  {% set pending_count = 0 %}
+  {% if stk_activity %}
+    {% set pending_count = (stk_activity | selectattr('status','equalto','pending') | list | length) %}
+  {% endif %}
+  <header class="portal-header">
+    <div class="portal-shell portal-header__inner">
+      <div class="portal-header__brand">
+        <div class="portal-header__logo">
+          {% if SCHOOL_LOGO_URL %}
+            <img src="{{ url_for('static', filename=SCHOOL_LOGO_URL) }}" alt="{{ student.school_name or SCHOOL_NAME or APP_TITLE }} logo">
+          {% else %}
+            <i data-lucide="graduation-cap"></i>
+          {% endif %}
         </div>
-        <div class="leading-tight">
-          <div class="brand-title text-2xl md:text-3xl">{{ BRAND_NAME }}</div>
-          <div class="brand-subtitle text-xs">Parent / Guardian Portal</div>
+        <div>
+          <div class="portal-header__title">{{ student.school_name or SCHOOL_NAME or BRAND_NAME or 'School' }}</div>
+          <div class="portal-header__subtitle">Parent Portal</div>
+          <div class="portal-header__school">{{ PORTAL_TITLE or APP_TITLE }}</div>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <button id="openMenu" class="md:hidden p-2 rounded-lg border border-gray-200 bg-white text-gray-700 flex items-center gap-1"><i data-lucide="menu"></i> Menu</button>
-        <a href="{{ url_for('guardian.guardian_logout') }}" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"><i data-lucide="log-out"></i> Logout</a>
+      <div class="portal-header__meta">
+        <button id="notifyToggle" class="portal-header__bell" type="button" aria-label="Notifications" aria-controls="notifyDrawer" aria-expanded="false">
+          <i data-lucide="bell"></i>
+          {% if pending_count %}
+          <span class="portal-header__badge">{{ pending_count }}</span>
+          {% endif %}
+        </button>
+        <div class="portal-header__profile">
+          <span class="portal-header__avatar"><i data-lucide="user"></i></span>
+          <span>{{ guardian_name or guardian_full_name or guardian or 'Parent' }}</span>
+        </div>
+        <a class="portal-header__logout" href="{{ url_for('guardian.guardian_logout') }}" title="Logout">
+          <i data-lucide="log-out"></i>
+          <span>Logout</span>
+        </a>
       </div>
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto px-4 py-6 grid md:grid-cols-[240px,1fr] gap-6">
-    <!-- Sidebar: Guardian profile + children selector -->
-    <aside id="side" class="hidden md:block glass rounded-2xl p-5 border border-gray-100 h-fit md:relative md:translate-x-0 md:shadow-none fixed top-0 left-0 w-64 h-full bg-white z-40 shadow-xl translate-x-[-120%] transition-transform">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="kpi__icon" style="width:40px;height:40px"><i data-lucide="users"></i></div>
-        <div>
-          <div class="text-sm text-gray-500">Signed in as</div>
-          <div class="font-semibold">Parent / Guardian</div>
-        </div>
-      </div>
-      <div class="text-xs text-gray-500 mb-2">Children</div>
-      <ul class="space-y-1">
-        <li class="text-sm">
-          <a href="{{ url_for('guardian.guardian_dashboard', token=token) }}" class="text-indigo-700 hover:underline">{{ student.name }}</a>
-        </li>
-        {% for s in siblings %}
-        <li class="text-sm">
-          <a href="#" data-id="{{ s.id }}" class="sib-link text-indigo-700 hover:underline">{{ s.name }}</a>
-        </li>
-        {% endfor %}
-      </ul>
-      <div class="mt-6 rounded-2xl border border-gray-100 bg-white/90 p-4 shadow-sm space-y-3">
-        <div class="flex items-center gap-2 text-xs uppercase tracking-[0.4em] text-gray-400">
-          <i data-lucide="sparkles" class="w-4 h-4 text-emerald-500"></i>
-          Family inspiration
-        </div>
-        <p id="quoteText" class="text-sm text-gray-600 leading-relaxed" aria-live="polite"></p>
-        <div class="h-1 w-full rounded-full bg-gray-200 overflow-hidden">
-          <div id="quoteProgress" class="h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
-        </div>
-      </div>
-    </aside>
-    <div id="overlay" class="fixed inset-0 bg-black/30 z-30 hidden md:hidden"></div>
-    <section class="space-y-6">
-      <div class="glass rounded-2xl p-5 border border-gray-100">
-        <div class="flex items-start justify-between">
-          <div>
-            <div class="text-xs text-gray-500">Student</div>
-            <div class="text-xl font-bold">{{ student.name }}</div>
-            <div class="text-sm text-gray-500">SmartEduPay Enterprise EDU_PAY: {{ student.regNo }} · Class: {{ student.class or student.class_name or '-' }}</div>
-            <div class="text-xs text-gray-500">Year/Term: {{ year }}/{{ term }}</div>
-          </div>
-          <div class="kpi__icon" aria-hidden="true"><i data-lucide="id-card"></i></div>
-        </div>
-        <div class="mt-4">
-          {% if percent is not none %}
-          <div class="mb-1 text-xs text-gray-600">Term progress: {{ percent }}%</div>
-          <div class="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
-            <div class="h-2 bg-gradient-to-r from-blue-600 to-indigo-600" style="width: {{ percent }}%"></div>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-    <section class="glass rounded-2xl p-6 border border-gray-100 space-y-5">
-      <div class="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <div class="rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-emerald-500 to-cyan-500 text-white overflow-hidden relative">
-          <div class="flex items-center gap-4">
-            <div class="h-16 w-16 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-2xl font-bold tracking-wider">{{ ((student.name or 'Child')[:2])|upper }}</div>
-            <div>
-              <div class="text-xs uppercase tracking-[0.4em] text-white/70">Child record</div>
-              <div class="text-2xl font-semibold">{{ student.name }}</div>
-              <div class="text-sm text-white/70">{{ student.class or student.class_name or 'Class TBD' }} · Adm No: {{ student.admission_no or student.regNo or '—' }}</div>
-            </div>
-          </div>
-          <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div class="rounded-2xl bg-white/20 p-3">
-              <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Year/term</div>
-              <div class="text-lg font-semibold">{{ year }}/{{ term }}</div>
-            </div>
-            <div class="rounded-2xl bg-white/20 p-3">
-              <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Balance</div>
-              <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(balance or 0) }}</div>
-            </div>
-          </div>
-          <div class="mt-4">
-            <div class="text-[0.65rem] uppercase tracking-[0.4em] text-white/70">Family roster</div>
-            <div class="flex items-end gap-2 text-sm">
-              <span class="text-lg font-semibold">{{ (siblings|length) + 1 }} child{% if (siblings|length) + 1 != 1 %}ren{% endif %}</span>
-              <span class="text-white/70">connected</span>
-            </div>
-            {% if percent is not none %}
-            <div class="mt-3 h-2 rounded-full bg-white/20">
-              <div class="h-2 rounded-full bg-white" style="width: {{ percent|default(0) }}%"></div>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        <div class="grid gap-4">
-          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-              <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Financial health</div>
-              <div class="text-xs font-semibold text-emerald-600">{{ balance and 'Due now' or 'On track' }}</div>
-            </div>
-            <div class="mt-4 grid grid-cols-3 gap-3 text-sm text-gray-600">
-              <div class="space-y-1">
-                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Paid</div>
-                <div class="text-lg font-semibold text-emerald-600">Ksh {{ '%.0f'|format(paid or 0) }}</div>
-              </div>
-              <div class="space-y-1">
-                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Balance</div>
-                <div class="text-lg font-semibold text-rose-600">Ksh {{ '%.0f'|format(balance or 0) }}</div>
-              </div>
-              <div class="space-y-1">
-                <div class="text-[0.65rem] uppercase tracking-[0.3em]">Progress</div>
-                <div class="text-lg font-semibold text-gray-800">{{ percent is not none and percent ~ '%' or '—' }}</div>
-              </div>
-            </div>
-            <p class="mt-4 text-xs text-gray-500">
-              {% if balance and balance > 0 %}
-                Settle the outstanding balance to keep the ledger updated instantly.
-              {% else %}
-                All clear for this term. New invoices appear here as soon as they are posted.
-              {% endif %}
-            </p>
-          </div>
-          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">School support hub</div>
-            <div class="mt-3 text-sm text-gray-600 space-y-2">
-              <div class="flex items-center justify-between">
-                <span>Accounts email</span>
-                <span class="font-semibold text-gray-900">{{ bursar_email or 'Not provided' }}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span>Accounts phone</span>
-                <span class="font-semibold text-gray-900">{{ bursar_phone or 'Not provided' }}</span>
-              </div>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-2">
-              {% if bursar_email %}
-              <a href="mailto:{{ bursar_email }}" class="btn-secondary px-3 py-2 text-xs rounded-xl">Email bursar</a>
-              {% endif %}
-              {% if bursar_phone %}
-              <a href="tel:{{ bursar_phone }}" class="btn-secondary px-3 py-2 text-xs rounded-xl">Call bursar</a>
-              {% endif %}
-              <a href="#aiForm" class="btn-secondary px-3 py-2 text-xs rounded-xl">Ask SmartBot</a>
-            </div>
-          </div>
-          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Sibling focus</div>
-            <div class="mt-3 space-y-2 text-sm">
-              {% if siblings %}
-                {% for s in siblings %}
-                <div class="grid grid-cols-[1fr,auto] items-center gap-2">
-                  <div class="text-gray-700 font-medium">{{ s.name }}</div>
-                  <div class="text-xs text-gray-500">Class {{ s.class_name or 'n/a' }}</div>
-                </div>
-                {% endfor %}
-              {% else %}
-                <p class="text-gray-500">No other family members registered yet.</p>
-              {% endif %}
-            </div>
-          </div>
-          <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Quick actions</div>
-            <div class="mt-3 space-y-2 text-sm">
-              <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
-                <span>Download latest statement</span>
-                <i data-lucide="download" class="text-sm text-gray-500"></i>
-              </a>
-              <a href="#recent-payments" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
-                <span>Review recent receipts</span>
-                <i data-lucide="list-check" class="text-sm text-gray-500"></i>
-              </a>
-              <a href="#guardian-analytics" class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50">
-                <span>See spending analytics</span>
-                <i data-lucide="bar-chart-2" class="text-sm text-gray-500"></i>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Child Journey Board</h3>
-        <span class="text-xs text-gray-500">Everything you need at a glance</span>
-      </div>
-      <div class="grid gap-4 lg:grid-cols-2">
-        <div id="recent-payments" class="rounded-2xl border border-gray-100 bg-white/80 p-4 space-y-3 text-sm text-gray-600">
-          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Latest ledger hits</div>
-          {% for p in payments[:3] %}
-          <div class="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-            <div class="flex items-center justify-between text-gray-900 font-semibold">
-              <span>{{ p.date }}</span>
-              <span class="text-xs text-gray-500">{{ p.method or 'M-Pesa' }}</span>
-            </div>
-            <div class="flex items-center justify-between text-sm">
-              <span>Ref {{ p.reference or '—' }}</span>
-              <span class="font-semibold">KES {{ '%.0f'|format(p.amount or 0) }}</span>
-            </div>
-          </div>
-          {% else %}
-          <p class="text-xs text-gray-500">No payments recorded yet. Use the Pay Now card above to initiate a new checkout.</p>
-          {% endfor %}
-        </div>
-        <div class="rounded-2xl border border-gray-100 bg-white/80 p-4 space-y-3 text-sm text-gray-600">
-          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Upcoming tasks & updates</div>
-          {% for note in announcements[:3] %}
-          <div class="flex items-start gap-3">
-            <div class="w-2 h-2 mt-1 rounded-full bg-emerald-500"></div>
-            <div>
-              <div class="font-semibold text-gray-900">{{ note.title or note.subject or 'Update' }}</div>
-              <p class="text-xs text-gray-500">{{ note.category|default('notice') }} · {{ note.created_at }}</p>
-            </div>
-          </div>
-          {% else %}
-          <p class="text-xs text-gray-500">No announcements yet. The school will post timely notices and deadlines here.</p>
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Parent Playbook</h3>
-        <span class="text-xs text-gray-500">Tips to make every term smoother</span>
-      </div>
-      <div class="grid gap-4 md:grid-cols-3 text-sm text-gray-600">
-        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
-          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Stay informed</div>
-          <p class="text-gray-800 font-semibold">Turn on SMS/email alerts</p>
-          <p class="text-xs text-gray-500">Enable WhatsApp or email reminders so we ping you when invoices are posted or receipts are available.</p>
-        </div>
-        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
-          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Track progress</div>
-          <p class="text-gray-800 font-semibold">Use Smart summary</p>
-          <p class="text-xs text-gray-500">The Smart summary above tallies fee completion; refresh after each payment to keep the percentage current.</p>
-        </div>
-        <div class="rounded-2xl border border-gray-100 bg-white/80 p-3 space-y-2">
-          <div class="text-xs uppercase tracking-[0.3em] text-gray-500">Ask SmartBot</div>
-          <p class="text-gray-800 font-semibold">Questions? Ask away</p>
-          <p class="text-xs text-gray-500">Use the SmartEduPay SmartBot (top of the page) to ask anything about balances, invoices, or receipts—no queue, instant replies.</p>
-        </div>
-      </div>
-      <div class="mt-4 text-xs text-gray-500 space-y-2">
-        <p class="flex items-center gap-2"><i data-lucide="check-circle" class="text-emerald-500"></i> Keep admission and class details up to date with the school office so the portal reflects the right child.</p>
-        <p class="flex items-center gap-2"><i data-lucide="shield" class="text-sky-500"></i> Log out after use and never share your token so your child’s fee information stays safe.</p>
-        <p class="flex items-center gap-2"><i data-lucide="clock-3" class="text-indigo-500"></i> Pay at your convenience—the balance card shows exactly what is overdue and automatically posts once Daraja confirms.</p>
-      </div>
-    </section>
-    <div class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center gap-3 mb-4">
-        <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="M-Pesa" class="h-9 w-auto object-contain">
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-[0.4em] text-gray-500">Pay via</div>
-          <div class="text-xl font-semibold text-gray-800">M-Pesa</div>
-        </div>
-      </div>
-      <div class="grid grid-cols-3 gap-4 text-center">
-        <div>
-          <div class="text-xs text-gray-500">Total Fee</div>
-          <div class="text-lg font-semibold">Ksh {{ '%.0f'|format(expected or 0) }}</div>
-        </div>
-          <div>
-            <div class="text-xs text-gray-500">Paid</div>
-            <div class="text-lg font-semibold text-emerald-600">Ksh {{ '%.0f'|format(paid or 0) }}</div>
-          </div>
-          <div>
-            <div class="text-xs text-gray-500">Balance</div>
-            <div class="text-lg font-semibold text-rose-600">Ksh {{ '%.0f'|format(balance or 0) }}</div>
-          </div>
-        </div>
-        <div class="mt-3 text-xs text-gray-500">
-          {% if balance and balance > 0 %}
-          <span class="font-semibold text-rose-600">Overdue: Ksh {{ '{:,.2f}'.format(balance) }}</span> · Pay this amount to record it against the student fee ledger.
-          {% else %}
-          <span class="font-semibold text-emerald-600">No outstanding balance.</span> Payments appear on the fee record immediately after Daraja confirms.
-          {% endif %}
-        </div>
-        <form id="payForm" class="mt-4 grid md:grid-cols-3 gap-3 items-end">
-          <input type="hidden" name="token" value="{{ token }}" />
-          <div>
-            <label class="text-xs text-gray-600">Phone Number (M‑Pesa)</label>
-            <input name="phone" placeholder="07xx..." class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
-          </div>
-          <div>
-            <label class="text-xs text-gray-600 flex items-center justify-between">
-              <span>Amount (KES)</span>
-              <button type="button" id="fillFull" class="text-[11px] text-indigo-700 hover:underline">Use full balance</button>
-            </label>
-            <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="w-full mt-1 px-3 py-2.5 border rounded-lg"/>
-          </div>
-          <button type="submit" class="btn-primary rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="smartphone"></i> Pay Now with M-Pesa</button>
-        </form>
-        <div id="payMsg" class="text-sm mt-2"></div>
-        <div id="payTrackWrapper" class="hidden mt-2 flex items-center gap-2 text-xs text-gray-600">
-          <span id="payTrack"></span>
-          <button type="button" id="payTrackCancel" class="hidden text-[11px] text-rose-600 hover:text-rose-900 focus:outline-none focus:underline">Cancel</button>
-        </div>
-        {% if paypal_client_id %}
-        <div class="mt-4">
-          <div class="text-xs text-gray-500 mb-1">Or pay securely with PayPal</div>
-          <div id="paypal-button-container"></div>
+  <div id="notifyOverlay" class="portal-overlay hidden" aria-hidden="true"></div>
+  <aside id="notifyDrawer" class="portal-drawer portal-drawer--right" aria-hidden="true">
+    <div class="portal-drawer__title">Notifications</div>
+    <div class="portal-drawer__list">
+      <div class="notify-list">
+        {% if pending_count and pending_count > 0 %}
+        <div class="notify-item">
+          <div class="notify-item__title">Pending M-Pesa approvals</div>
+          <div class="notify-item__meta">{{ pending_count }} payment(s) awaiting confirmation.</div>
         </div>
         {% endif %}
-        <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
-          <div class="text-xs text-gray-500">Need help? {% if bursar_phone %}Call {{ bursar_phone }}{% endif %}{% if bursar_email %} or email {{ bursar_email }}{% endif %}.</div>
-          <div class="flex items-center gap-2">
-            <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-2"><i data-lucide="download"></i> Download Statement</a>
+        {% if proof_statuses and proof_statuses|length > 0 %}
+          {% for proof in proof_statuses[:3] %}
+          <div class="notify-item">
+            <div class="notify-item__title">Proof #{{ proof.id }} {{ proof.status_label }}</div>
+            <div class="notify-item__meta">{{ proof.created_at or 'Recently updated' }}</div>
+          </div>
+          {% endfor %}
+        {% endif %}
+        {% if (not pending_count) and (not proof_statuses or proof_statuses|length == 0) %}
+        <div class="notify-item">
+          <div class="notify-item__title">All caught up</div>
+          <div class="notify-item__meta">No new alerts right now.</div>
+        </div>
+        {% endif %}
+      </div>
+      <a href="#proofStatus"><i data-lucide="bell-ring"></i> View proof updates</a>
+      <a href="#recent-payments"><i data-lucide="receipt"></i> Review payments</a>
+    </div>
+  </aside>
+  
+  
+
+  
+
+  <main class="sample-shell sample-layout">
+    <section class="sample-hero">
+      <div class="sample-hero__copy">
+        <div class="sample-hero__label">Parent portal</div>
+        <h1>Welcome back, Parent</h1>
+        <p>Here is an overview of your child's school fees and recent activity.</p>
+      </div>
+      <div class="sample-hero__actions">
+        <div class="sample-child-card">
+          <div class="sample-child-icon">
+            <i data-lucide="graduation-cap"></i>
+          </div>
+          <div>
+            <div class="sample-child-name">{{ student.name }}</div>
+            <div class="sample-child-meta">{{ student.class or student.class_name or 'Class' }}</div>
+          </div>
+        </div>
+        <a href="#payForm" class="sample-primary-btn">
+          <i data-lucide="credit-card"></i>
+          Pay All Dues
+        </a>
+      </div>
+    </section>
+
+    <section class="sample-kpis">
+      <div class="sample-kpi sample-kpi--paid">
+        <div class="sample-kpi__label">Total Paid</div>
+        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(paid or 0) }}</div>
+        <div class="sample-kpi__sub">This academic year</div>
+      </div>
+      <div class="sample-kpi sample-kpi--balance">
+        <div class="sample-kpi__label">Outstanding Balance</div>
+        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+        <div class="sample-kpi__sub">{{ balance and 'Pending items' or 'All clear' }}</div>
+      </div>
+      <div class="sample-kpi sample-kpi--lite">
+        <div class="sample-kpi__label">Next Payment</div>
+        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+        <div class="sample-kpi__sub">Due this term</div>
+      </div>
+      <div class="sample-kpi sample-kpi--lite">
+        <div class="sample-kpi__label">Overdue Amount</div>
+        <div class="sample-kpi__value">Ksh {{ balance and '%.0f'|format(balance or 0) or '0' }}</div>
+        <div class="sample-kpi__sub">{{ balance and '1 overdue payment' or 'No overdue payments' }}</div>
+      </div>
+    </section>
+
+    <section class="sample-section guardian-analytics-panel">
+      <div class="sample-section__header">
+        <div>
+          <h2>Parent Analytics</h2>
+          <p>Insights from your latest transactions.</p>
+        </div>
+        <div class="portal-kpi">
+          Last payment: KES {{ '%.0f'|format(analytics.last_payment_amount or 0) }}
+        </div>
+      </div>
+      <div class="guardian-analytics-metrics sample-grid-2">
+        <div class="guardian-analytics-metric">
+          <div class="sample-kpi__label">Avg monthly paid</div>
+          <div class="sample-kpi__value">KES {{ '%.0f'|format(analytics.avg_monthly or 0) }}</div>
+          <div class="sample-kpi__sub">{{ analytics.active_months or 0 }} active months</div>
+        </div>
+        <div class="guardian-analytics-metric">
+          <div class="sample-kpi__label">Growth vs last month</div>
+          <div class="sample-kpi__value">{{ analytics.monthly.growth if analytics and analytics.monthly else 0 }}%</div>
+          <div class="sample-kpi__sub">Trend based on 12 months</div>
+        </div>
+        <div class="guardian-analytics-metric">
+          <div class="sample-kpi__label">Last payment date</div>
+          <div class="sample-kpi__value">{{ analytics.last_payment_date or 'No payments yet' }}</div>
+          <div class="sample-kpi__sub">Most recent receipt</div>
+        </div>
+      </div>
+      <div class="sample-split">
+        <div class="sample-info-panel">
+          <div class="sample-info-title">Top payment methods</div>
+          {% set method_max = 0 %}
+          {% for m in analytics.methods %}
+            {% if m.total > method_max %}
+              {% set method_max = m.total %}
+            {% endif %}
+          {% endfor %}
+          <div class="analytics-list">
+            {% for m in analytics.methods %}
+            <div>
+              <div class="analytics-row">
+                <span>{{ m.method }}</span>
+                <span class="font-semibold">KES {{ '%.0f'|format(m.total or 0) }}</span>
+              </div>
+              <div class="analytics-bar">
+                <span style="width: {{ method_max and ((m.total / method_max) * 100) or 0 }}%"></span>
+              </div>
+            </div>
+            {% else %}
+            <div class="text-sm text-gray-500">No method breakdown available yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="sample-info-panel">
+          <div class="sample-info-title">Payment momentum</div>
+          <p class="text-sm text-gray-600">
+            {% if analytics and analytics.monthly and (analytics.monthly.growth or 0) > 0 %}
+              Your payments are up {{ analytics.monthly.growth }}% this month. Keep the momentum going.
+            {% elif analytics and analytics.monthly and (analytics.monthly.growth or 0) < 0 %}
+              Payments dipped {{ analytics.monthly.growth|abs }}% this month. Consider scheduling a top-up.
+            {% else %}
+              Payment activity is steady this month. Stay on track with upcoming dues.
+            {% endif %}
+          </p>
+          <div class="sample-pill-row">
+            <span>Secure receipts</span>
+            <span>Auto-ledger sync</span>
+            <span>Parent verified</span>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Recent Payments</h3>
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Recent Transactions</h2>
+          <p>Your payment activity</p>
+        </div>
+        <a href="#recent-payments" class="sample-link">View All <i data-lucide="arrow-up-right"></i></a>
+      </div>
+      <div class="sample-list">
+        {% for p in payments[:4] %}
+        <div class="sample-list__item">
+          <div class="sample-list__icon"><i data-lucide="receipt"></i></div>
+          <div class="sample-list__info">
+            <div class="sample-list__title">{{ p.reference or p.method or 'Payment' }}</div>
+            <div class="sample-list__meta">{{ p.date }}</div>
+          </div>
+          <div class="sample-list__amount">Ksh {{ '%.0f'|format(p.amount or 0) }}</div>
+          <div class="sample-status sample-status--paid">Paid</div>
+        </div>
+        {% else %}
+        <div class="sample-empty">No recent transactions yet.</div>
+        {% endfor %}
+        <div id="listSearchEmpty" class="sample-empty hidden">No matches found.</div>
+      </div>
+    </section>
+
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Payment History</h2>
+          <p>Monthly payment overview</p>
+        </div>
+      </div>
+      <div class="sample-chart">
+        <canvas id="payChart" height="140"></canvas>
+        <div id="payChartMsg" class="sample-chart__msg"></div>
+      </div>
+    </section>
+
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Quick Actions</h2>
+          <p>Common tasks at your fingertips</p>
+        </div>
+      </div>
+      <div class="sample-actions-grid">
+        <a href="#payForm" class="sample-action-card">
+          <div class="sample-action-icon sample-action-icon--indigo"><i data-lucide="credit-card"></i></div>
+          <div class="sample-action-title">Make Payment</div>
+          <div class="sample-action-sub">Pay fees instantly</div>
+        </a>
+        <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="sample-action-card">
+          <div class="sample-action-icon sample-action-icon--green"><i data-lucide="file-text"></i></div>
+          <div class="sample-action-title">View Statements</div>
+          <div class="sample-action-sub">Download receipts</div>
+        </a>
+        <a href="#uploadProof" class="sample-action-card">
+          <div class="sample-action-icon sample-action-icon--orange"><i data-lucide="upload"></i></div>
+          <div class="sample-action-title">Upload Proof</div>
+          <div class="sample-action-sub">Attach a receipt</div>
+        </a>
+        <a href="#msgForm" class="sample-action-card">
+          <div class="sample-action-icon sample-action-icon--slate"><i data-lucide="message-square"></i></div>
+          <div class="sample-action-title">Contact School</div>
+          <div class="sample-action-sub">Send a message</div>
+        </a>
+      </div>
+    </section>
+
+    <section class="sample-section sample-card" id="payFormSection">
+      <div class="sample-section__header">
+        <div>
+          <h2>Make a Payment</h2>
+          <p>Record M-Pesa payments instantly.</p>
+        </div>
+      </div>
+      <form id="payForm" class="sample-form-grid">
+        <input type="hidden" name="token" value="{{ token }}" />
+        <div>
+          <label class="sample-label">Phone Number (M-Pesa)</label>
+          <input name="phone" placeholder="07xx..." class="sample-input" />
+        </div>
+        <div>
+          <label class="sample-label sample-label--row">
+            <span>Amount (KES)</span>
+            <button type="button" id="fillFull" class="sample-link">Use full balance</button>
+          </label>
+          <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="sample-input" />
+        </div>
+        <button type="submit" class="sample-primary-btn sample-primary-btn--full">
+          <i data-lucide="smartphone"></i>
+          Pay Now with M-Pesa
+        </button>
+      </form>
+      <div id="payMsg" class="sample-help"></div>
+      <div id="payTrackWrapper" class="hidden sample-track">
+        <span id="payTrack"></span>
+        <button type="button" id="payTrackCancel" class="hidden sample-link">Cancel STK push</button>
+      </div>
+      {% if paypal_client_id %}
+      <div class="sample-divider"></div>
+      <div class="sample-help">Or pay securely with PayPal</div>
+      <div id="paypal-button-container"></div>
+      {% endif %}
+    </section>
+
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Paybill Bank Payment</h2>
+          <p>Pay from any Kenyan bank, then paste the M-Pesa confirmation to verify instantly.</p>
+        </div>
+      </div>
+      <div class="sample-split">
+        <div class="sample-info-panel">
+          <div class="sample-info-title">School Paybill</div>
+          <p class="text-sm text-gray-600">All Kenyan banks supported. Use the student details as the account number.</p>
+          <div class="sample-pill-row">
+            <span>Equity</span>
+            <span>KCB</span>
+            <span>Co-op</span>
+            <span>NCBA</span>
+            <span>Absa</span>
+            <span>Stanbic</span>
+            <span>DTB</span>
+            <span>I&M</span>
+            <span>Family</span>
+            <span>Standard Chartered</span>
+          </div>
+          <div class="sample-note-panel mt-4">
+            <div class="sample-note-title">Paybill details</div>
+            <p><strong>Paybill:</strong> {{ SCHOOL_PAYBILL or 'Set in admin settings' }}</p>
+            <p><strong>Account number:</strong> {{ student.admission_no or student.id }}</p>
+            <p class="text-xs text-gray-500">Use the student admission number or student ID as the account reference.</p>
+          </div>
+        </div>
+        <div class="sample-form-panel">
+          <div class="sample-form-header">
+            <div>
+              <div class="sample-form-title">Send M-Pesa confirmation</div>
+              <div class="sample-form-sub">Paste the full message to attach it to {{ student.name }}.</div>
+            </div>
+          </div>
+          <form id="paybillForm" class="sample-form-stack">
+            <input type="hidden" name="account_ref" value="{{ student.admission_no or student.id }}">
+            <div class="sample-form-row">
+              <div>
+                <label class="sample-label">Amount (KES)</label>
+                <input type="number" name="amount" min="1" step="1" class="sample-input" placeholder="e.g. 1500" required>
+              </div>
+              <div>
+                <label class="sample-label">Payment date</label>
+                <input type="date" name="payment_date" class="sample-input">
+              </div>
+            </div>
+            <div>
+              <label class="sample-label">Bank</label>
+              <select name="bank_name" class="sample-input">
+                <option value="M-Pesa">M-Pesa</option>
+                <option value="Equity">Equity</option>
+                <option value="KCB">KCB</option>
+                <option value="Cooperative">Co-operative Bank</option>
+                <option value="NCBA">NCBA</option>
+                <option value="Absa">Absa</option>
+                <option value="Stanbic">Stanbic</option>
+                <option value="DTB">DTB</option>
+                <option value="I&M">I&M</option>
+                <option value="Family Bank">Family Bank</option>
+                <option value="Standard Chartered">Standard Chartered</option>
+              </select>
+            </div>
+            <div>
+              <label class="sample-label">M-Pesa message</label>
+              <textarea name="mpesa_text" class="sample-input" rows="4" placeholder="Paste the full confirmation SMS here." required></textarea>
+            </div>
+            <button type="submit" class="sample-primary-btn sample-primary-btn--full">
+              <i data-lucide="send"></i>
+              Send for verification
+            </button>
+            <div id="paybillStatus" class="sample-help"></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="recent-payments" class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Recent Payments</h2>
+          <p>All recorded receipts for the term.</p>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
@@ -356,124 +2013,186 @@
               <td class="py-2">{{ p.reference or '-' }}</td>
               <td class="py-2">{{ p.method or 'M-Pesa' }}</td>
               <td class="py-2">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Success</span>
+                <span class="sample-status sample-status--paid">Success</span>
               </td>
               <td class="py-2 text-right">{{ '%.0f'|format(p.amount or 0) }}</td>
               <td class="py-2 text-right text-indigo-700"><a href="{{ url_for('guardian.guardian_receipt', payment_id=p.id, token=token) }}" class="hover:underline">Print</a></td>
             </tr>
             {% else %}
-            <tr class="border-t border-gray-100 text-gray-500"><td colspan="4" class="py-4 text-center">No payments yet.</td></tr>
+            <tr class="border-t border-gray-100 text-gray-500 is-empty"><td colspan="6" class="py-4 text-center">No payments yet.</td></tr>
             {% endfor %}
+            <tr id="tableSearchEmpty" class="border-t border-gray-100 text-gray-500 hidden"><td colspan="6" class="py-4 text-center">No matches found.</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- Premium: Spending Analytics -->
-    <section id="guardian-analytics" class="glass rounded-2xl p-5 border border-gray-100 guardian-analytics-panel">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Spending Analytics</h3>
-        <div class="text-xs text-gray-500" id="termSummary"></div>
-      </div>
-      <div class="grid gap-4 lg:grid-cols-[1.4fr,0.6fr]">
+    <section class="sample-section sample-card" id="uploadProof">
+      <div class="sample-section__header">
         <div>
-          <canvas id="payChart" height="140"></canvas>
-          <div id="payMsg" class="text-xs text-gray-300 mt-2"></div>
+          <h2>Upload Payment Proof</h2>
+          <p>Attach a slip or paste statement text.</p>
         </div>
-        <div class="guardian-analytics-metrics grid gap-3">
-          <div class="guardian-analytics-metric">
-            <p class="text-[0.65rem] uppercase tracking-[0.4em]">Paid term</p>
-            <p class="text-xl font-semibold text-slate-900">KES {{ '{:,.0f}'.format(paid or 0) }}</p>
-          </div>
-          <div class="guardian-analytics-metric">
-            <p class="text-[0.65rem] uppercase tracking-[0.4em]">Balance</p>
-            <p class="text-xl font-semibold text-slate-900">KES {{ '{:,.0f}'.format(balance or 0) }}</p>
-          </div>
-          <div class="guardian-analytics-metric">
-            <p class="text-[0.65rem] uppercase tracking-[0.4em]">Progress</p>
-            <p class="text-xl font-semibold text-slate-900">{{ percent or 0 }}%</p>
-          </div>
+      </div>
+      <div class="sample-grid-2">
+        <div class="sample-dropzone">
+          <div class="sample-drop-icon"><i data-lucide="file-plus-2"></i></div>
+          <div class="sample-drop-title">Upload a receipt</div>
+          <div class="sample-drop-sub">We will tag it to {{ student.name }}.</div>
+          <form id="inlineProofForm" action="{{ url_for('guardian.guardian_receipt_upload', token=token) }}" method="post" enctype="multipart/form-data" class="space-y-2">
+            <input type="hidden" name="description" value="Proof upload for {{ student.name }} {{ year }}/{{ term }}">
+            <input type="file" name="receipt" id="inlineProofFile" accept=".png,.jpg,.jpeg,.pdf" class="hidden" />
+            <button type="button" id="inlineProofBtn" class="sample-primary-btn sample-primary-btn--full">
+              <i data-lucide="arrow-up-right"></i>
+              Upload proof
+            </button>
+            <div id="inlineProofStatus" class="sample-help"></div>
+          </form>
+        </div>
+        <div class="sample-note-panel">
+          <div class="sample-note-title">Paste MPesa text</div>
+          <p>Include transaction ID, amount, and timestamp to speed up matching.</p>
+          <button type="button" id="pasteProofBtn" class="sample-secondary-btn">
+            <i data-lucide="clipboard"></i>
+            Paste MPesa text
+          </button>
         </div>
       </div>
     </section>
 
-    <!-- Premium: Notices & Announcements -->
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Notices & Announcements</h3>
-        <div class="text-xs text-gray-500">Latest updates</div>
+    <section class="sample-section sample-card" id="proofStatus">
+      <div class="sample-section__header">
+        <div>
+          <h2 id="proofStatusTitle" title="Press and hold to reveal full history">Proof Status Tracker</h2>
+          <p>Status updates are emailed when proofs are accepted or rejected.</p>
+        </div>
+        <button id="proofRefresh" type="button" class="sample-secondary-btn">
+          <i data-lucide="refresh-cw"></i>
+          Refresh
+        </button>
       </div>
-      <div class="space-y-3">
-        {% for n in announcements %}
-          <div class="p-3 rounded-xl border border-gray-100 bg-white/70">
-            <div class="text-sm font-medium">{{ n.title or n.subject }}</div>
-            <div class="text-xs text-gray-500">{{ n.category|default('notice') }} • {{ n.created_at }}</div>
+      {% if proof_statuses and proof_statuses|length > 0 %}
+      <div class="proof-grid" id="proofGrid" data-total="{{ proof_statuses|length }}">
+        {% for proof in proof_statuses %}
+        <div class="proof-card {% if loop.index > 5 %}is-hidden{% endif %}">
+          <div class="proof-card__top">
+            <div>
+              <div class="proof-card__title">Proof #{{ proof.id }}</div>
+              <div class="proof-card__meta">{{ proof.created_at or 'Recently uploaded' }}</div>
+            </div>
+            <span class="sample-status {{ proof.status_classes }}">{{ proof.status_label }}</span>
           </div>
-        {% else %}
-          <div class="text-sm text-gray-500">No announcements yet.</div>
+          <div class="proof-card__row">
+            <span class="proof-card__label">Amount</span>
+            <span class="proof-card__value">KES {{ '%.0f'|format(proof.amount or 0) }}</span>
+          </div>
+          {% if proof.description %}
+          <div class="proof-card__note">{{ proof.description }}</div>
+          {% endif %}
+          {% if proof.notes %}
+          <div class="proof-card__note proof-card__note--alert">Note: {{ proof.notes }}</div>
+          {% endif %}
+          <div class="proof-card__actions">
+            {% if proof.file_url %}
+            <a class="sample-secondary-btn" href="{{ proof.file_url }}" target="_blank" rel="noopener">
+              <i data-lucide="file-text"></i>
+              View proof
+            </a>
+            {% endif %}
+            <a class="sample-secondary-btn" href="#uploadProof">
+              <i data-lucide="upload-cloud"></i>
+              Upload new
+            </a>
+          </div>
+        </div>
         {% endfor %}
       </div>
+      {% else %}
+      <div class="proof-empty">
+        <div class="proof-empty__title">No proofs uploaded yet.</div>
+        <p class="text-sm text-gray-600">Upload a receipt and track its verification status here.</p>
+        <a class="sample-primary-btn" href="#uploadProof">
+          <i data-lucide="upload-cloud"></i>
+          Upload proof
+        </a>
+      </div>
+      {% endif %}
     </section>
 
-    <!-- Premium: Message the School -->
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <h3 class="text-lg font-semibold mb-3">Message the School</h3>
-      <form id="msgForm" class="grid md:grid-cols-2 gap-3">
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Message the School</h2>
+          <p>Send updates or questions to the accounts office.</p>
+        </div>
+      </div>
+      <form id="msgForm" class="sample-grid-2">
         <input type="hidden" name="token" value="{{ token }}" />
-        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="name" placeholder="Your name (optional)">
-        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="email" placeholder="Your email (optional)">
-        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="phone" placeholder="Phone (optional)">
-        <input class="border border-gray-200 rounded-xl p-2.5 text-sm" name="subject" placeholder="Subject (optional)">
-        <select class="border border-gray-200 rounded-xl p-2.5 text-sm" name="category">
+        <input class="sample-input" name="name" placeholder="Your name (optional)">
+        <input class="sample-input" name="email" placeholder="Your email (optional)">
+        <input class="sample-input" name="phone" placeholder="Phone (optional)">
+        <input class="sample-input" name="subject" placeholder="Subject (optional)">
+        <select class="sample-input" name="category">
           <option>General</option>
           <option>Fees</option>
           <option>Academics</option>
           <option>Support</option>
         </select>
-        <textarea class="border border-gray-200 rounded-xl p-2.5 text-sm md:col-span-2" name="message" rows="4" placeholder="Write your message..."></textarea>
-        <div class="md:col-span-2 flex items-center justify-between">
-          <div id="msgBox" class="text-xs text-gray-500"></div>
-          <button type="submit" class="btn-primary rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-2"><i data-lucide="send"></i> Send Message</button>
+        <textarea class="sample-input" name="message" rows="4" placeholder="Write your message..."></textarea>
+        <div class="sample-form-footer">
+          <div id="msgBox" class="sample-help"></div>
+          <button type="submit" class="sample-primary-btn">
+            <i data-lucide="send"></i>
+            Send Message
+          </button>
         </div>
       </form>
     </section>
 
-    <!-- Premium: Calendar / Important Dates -->
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Calendar</h3>
-        <div class="flex items-center gap-2 text-sm">
-          <button id="calPrev" class="btn-secondary rounded-lg px-2 py-1"><i data-lucide="chevron-left"></i></button>
-          <div id="calTitle" class="min-w-[140px] text-center"></div>
-          <button id="calNext" class="btn-secondary rounded-lg px-2 py-1"><i data-lucide="chevron-right"></i></button>
+    <section class="sample-section sample-card">
+      <div class="sample-grid-2">
+        <div>
+          <div class="sample-section__header">
+            <div>
+              <h2>Calendar</h2>
+              <p>Upcoming school events.</p>
+            </div>
+            <div class="sample-cal-nav">
+              <button id="calPrev" class="sample-icon-btn" type="button"><i data-lucide="chevron-left"></i></button>
+              <div id="calTitle" class="sample-cal-title"></div>
+              <button id="calNext" class="sample-icon-btn" type="button"><i data-lucide="chevron-right"></i></button>
+            </div>
+          </div>
+          <div class="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div id="calGrid" class="grid grid-cols-7 gap-2 text-sm"></div>
+          <div id="calEvents" class="mt-3 text-sm"></div>
+        </div>
+        <div>
+          <div class="sample-section__header">
+            <div>
+              <h2>SmartBot</h2>
+              <p>Ask anything about fees or receipts.</p>
+            </div>
+          </div>
+          <div id="aiLog" class="sample-chat-log"></div>
+          <form id="aiForm" class="sample-chat-form">
+            <input type="hidden" name="token" value="{{ token }}" />
+            <input id="aiQ" class="sample-input" placeholder="Ask a question...">
+            <button class="sample-primary-btn" type="submit"><i data-lucide="message-square"></i> Ask</button>
+          </form>
         </div>
       </div>
-      <div class="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
-        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-      </div>
-      <div id="calGrid" class="grid grid-cols-7 gap-2 text-sm"></div>
-      <div id="calEvents" class="mt-3 text-sm"></div>
     </section>
 
-    <!-- Premium: AI Assistant -->
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <h3 class="text-lg font-semibold mb-3">SmartEduPay SmartBot</h3>
-      <div class="grid md:grid-cols-[1fr,220px] gap-3">
-        <div>
-          <div id="aiLog" class="text-sm p-3 rounded-xl border border-gray-100 bg-white/70 min-h-[80px]"></div>
-        </div>
-        <form id="aiForm" class="flex md:flex-col gap-2">
-          <input type="hidden" name="token" value="{{ token }}" />
-          <input id="aiQ" class="border border-gray-200 rounded-xl p-2.5 text-sm flex-1" placeholder="Ask e.g. What is my child's fee balance?">
-          <button class="btn-primary rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-2" type="submit"><i data-lucide="message-square"></i> Ask</button>
-        </form>
-      </div>
-    </section>
     {% if stk_activity %}
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Recent STK Activity</h3>
-        <div class="text-xs text-gray-500">Refresh pending items to check latest status</div>
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Recent STK Activity</h2>
+          <p>Refresh pending items to check the latest status.</p>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
@@ -495,21 +2214,21 @@
               <td class="py-2">KES {{ '%.0f'|format(r.amount or 0) }}</td>
               <td class="py-2">
                 {% if r.status == 'pending' %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="clock" class="w-3.5 h-3.5"></i> Pending</span>
+                  <span class="sample-status sample-status--pending">Pending</span>
                 {% elif r.status == 'success' %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Success</span>
+                  <span class="sample-status sample-status--paid">Success</span>
                 {% else %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Failed</span>
+                  <span class="sample-status sample-status--overdue">Failed</span>
                 {% endif %}
               </td>
               <td class="py-2 text-gray-600">{{ r.result_desc or '-' }}</td>
               <td class="py-2 text-right">
                 {% if r.status == 'pending' %}
-                  <button class="refresh btn-secondary rounded-lg px-3 py-1.5 text-xs" data-crid="{{ r.checkout_request_id }}">Refresh</button>
+                  <button class="refresh sample-secondary-btn" data-crid="{{ r.checkout_request_id }}">Refresh</button>
                 {% elif r.status == 'success' and r.payment_id %}
                   <a class="text-indigo-700 hover:underline" href="{{ url_for('guardian.guardian_receipt', payment_id=r.payment_id, token=token) }}">Print receipt</a>
                 {% else %}
-                  <span class="text-xs text-gray-400">—</span>
+                  <span class="text-xs text-gray-400">-</span>
                 {% endif %}
               </td>
             </tr>
@@ -519,23 +2238,194 @@
       </div>
     </section>
     {% endif %}
-    <!-- AI fee summary blurb -->
-    <section class="glass rounded-2xl p-5 border border-gray-100">
-      <div class="flex items-start gap-3">
-        <div class="kpi__icon" style="width:40px;height:40px"><i data-lucide="sparkles"></i></div>
-        <div class="text-sm text-gray-700">
-          {% if percent is not none %}
-          <strong>Smart summary:</strong> Your child has cleared <strong>{{ percent }}%</strong> of this term’s fees. Outstanding balance: <strong>Ksh {{ '%.0f'|format(balance or 0) }}</strong>.
-          {% else %}
-          <strong>Smart summary:</strong> No fee summary available for the current term yet.
-          {% endif %}
+
+    <section class="sample-section sample-card">
+      <div class="sample-section__header">
+        <div>
+          <h2>Smart Summary</h2>
+          <p>Progress for the current term.</p>
         </div>
       </div>
+      <div class="sample-summary">
+        {% if percent is not none %}
+        Your child has cleared <strong>{{ percent }}%</strong> of this term's fees. Outstanding balance: <strong>Ksh {{ '%.0f'|format(balance or 0) }}</strong>.
+        {% else %}
+        No fee summary available for the current term yet.
+        {% endif %}
+      </div>
     </section>
+
+    <footer class="portal-footer">
+      <div class="portal-shell portal-footer__inner">
+        <div class="portal-footer__brand">
+          <div class="portal-footer__logo">
+            {% if SCHOOL_LOGO_URL %}
+              <img src="{{ url_for('static', filename=SCHOOL_LOGO_URL) }}" alt="{{ student.school_name or SCHOOL_NAME or APP_TITLE }} logo">
+            {% else %}
+              <i data-lucide="school"></i>
+            {% endif %}
+          </div>
+          <div>
+            <div class="portal-footer__title">{{ student.school_name or SCHOOL_NAME or APP_TITLE }}</div>
+            <div class="portal-footer__subtitle">Parent finance portal</div>
+          </div>
+        </div>
+        <div>
+          <div class="portal-footer__label">Contact</div>
+          <div class="portal-footer__contact">
+            <span><i data-lucide="map-pin"></i> {{ SCHOOL_ADDRESS or 'Main campus' }}</span>
+            <span><i data-lucide="mail"></i> {{ SCHOOL_EMAIL or 'accounts@school.ac.ke' }}</span>
+            <span><i data-lucide="phone"></i> {{ SCHOOL_PHONE or '0700 000 000' }}</span>
+          </div>
+        </div>
+        <div>
+          <div class="portal-footer__label">Encouragement</div>
+          <div id="encouragementText" class="portal-footer__message">Every payment builds a stronger learning journey.</div>
+        </div>
+        <div class="portal-footer__actions">
+          <a class="portal-footer__action" href="#payFormSection"><i data-lucide="wallet"></i> Pay now</a>
+          <a class="portal-footer__action" href="#msgForm"><i data-lucide="send"></i> Message school</a>
+        </div>
+      </div>
+    </footer>
   </main>
 
   <script>
     try { lucide.createIcons(); } catch(e){}
+
+    (function(){
+      const bell = document.getElementById('notifyToggle');
+      const drawer = document.getElementById('notifyDrawer');
+      const overlay = document.getElementById('notifyOverlay');
+      if (!bell || !drawer || !overlay) return;
+      const open = () => {
+        overlay.classList.remove('hidden');
+        drawer.classList.add('is-open');
+        bell.setAttribute('aria-expanded', 'true');
+        drawer.setAttribute('aria-hidden', 'false');
+      };
+      const close = () => {
+        drawer.classList.remove('is-open');
+        bell.setAttribute('aria-expanded', 'false');
+        drawer.setAttribute('aria-hidden', 'true');
+        setTimeout(() => overlay.classList.add('hidden'), 180);
+      };
+      bell.addEventListener('click', () => {
+        if (drawer.classList.contains('is-open')) {
+          close();
+        } else {
+          open();
+        }
+      });
+      overlay.addEventListener('click', close);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+      });
+    })();
+
+    (function(){
+      const toggles = Array.from(document.querySelectorAll('.settings-toggle__input'));
+      if (!toggles.length) return;
+      const storageKey = 'guardianSettings';
+      const loadState = () => {
+        try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch(_) { return {}; }
+      };
+      const saveState = (state) => {
+        try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch(_) {}
+      };
+      const state = loadState();
+      toggles.forEach((input) => {
+        const key = input.getAttribute('data-setting');
+        if (key && state[key] !== undefined) {
+          input.checked = !!state[key];
+        }
+        input.addEventListener('change', () => {
+          if (!key) return;
+          state[key] = input.checked;
+          saveState(state);
+        });
+      });
+    })();
+
+    (function(){
+      const node = document.getElementById('encouragementText');
+      if (!node) return;
+      const messages = [
+        'Every payment keeps your child learning with confidence.',
+        'Small steps today build strong academic futures.',
+        'Consistent support grows curiosity, focus, and confidence.',
+        'Thank you for staying ahead on fees and learning goals.',
+        'Your support fuels steady growth and brighter outcomes.',
+        'On-time payments keep classrooms ready and thriving.',
+        'Daily encouragement helps children build resilience and joy.'
+      ];
+      let idx = 0;
+      setInterval(() => {
+        node.classList.add('is-fading');
+        setTimeout(() => {
+          idx = (idx + 1) % messages.length;
+          node.textContent = messages[idx];
+          node.classList.remove('is-fading');
+        }, 350);
+      }, 5000);
+    })();
+
+    (function(){
+      const input = document.getElementById('transactionSearch');
+      const listItems = Array.from(document.querySelectorAll('.sample-list__item'));
+      const emptyList = document.querySelector('.sample-list .sample-empty');
+      const listSearchEmpty = document.getElementById('listSearchEmpty');
+      const tableRows = Array.from(document.querySelectorAll('#recent-payments tbody tr'))
+        .filter(row => !row.classList.contains('is-empty') && row.id !== 'tableSearchEmpty');
+      const tableEmpty = document.getElementById('tableSearchEmpty');
+      if (!input) return;
+      const normalize = (val) => (val || '').toLowerCase();
+      const applyFilter = () => {
+        const q = normalize(input.value);
+        let listMatches = 0;
+        listItems.forEach(item => {
+          const hit = normalize(item.textContent).includes(q);
+          item.style.display = hit ? '' : 'none';
+          if (hit) listMatches += 1;
+        });
+        if (listSearchEmpty) {
+          listSearchEmpty.classList.toggle('hidden', !(q && listMatches === 0));
+        } else if (emptyList) {
+          emptyList.style.display = listItems.length && !listMatches && q ? '' : 'none';
+          emptyList.textContent = q ? 'No matches found.' : 'No recent transactions yet.';
+        }
+        let tableMatches = 0;
+        tableRows.forEach(row => {
+          const hit = normalize(row.textContent).includes(q);
+          row.style.display = hit ? '' : 'none';
+          if (hit) tableMatches += 1;
+        });
+        if (tableEmpty) {
+          tableEmpty.classList.toggle('hidden', !(q && tableMatches === 0));
+        }
+      };
+      input.addEventListener('input', applyFilter);
+      document.getElementById('clearSearch')?.addEventListener('click', () => {
+        input.value = '';
+        applyFilter();
+      });
+    })();
+
+    (function(){
+      const refreshBtn = document.getElementById('proofRefresh');
+      if (!refreshBtn) return;
+      refreshBtn.addEventListener('click', () => {
+        window.location.reload();
+      });
+    })();
+    (function(){
+      const topLink = document.getElementById('backToTop');
+      if (!topLink) return;
+      topLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    })();
     (function(){
       const form = document.getElementById('payForm');
       const box = document.getElementById('payMsg');
@@ -544,10 +2434,13 @@
       const cancelBtn = document.getElementById('payTrackCancel');
       const fill = document.getElementById('fillFull');
       const amt = form ? form.querySelector('input[name="amount"]') : null;
+      const cancelEndpoint = '{{ url_for('guardian.guardian_cancel_stk_push') }}';
       let trackInterval = null;
+      let currentCheckoutId = null;
 
       const stopTracking = (message) => {
         if (trackInterval) { clearInterval(trackInterval); trackInterval = null; }
+        currentCheckoutId = null;
         if (typeof message === 'string' && track) { track.textContent = message; }
         if (cancelBtn) { cancelBtn.classList.add('hidden'); }
       };
@@ -555,6 +2448,7 @@
       const startTracking = (checkoutId) => {
         if (!track || !trackWrapper || !checkoutId) { return; }
         stopTracking();
+        currentCheckoutId = checkoutId;
         trackWrapper.classList.remove('hidden');
         if (cancelBtn) { cancelBtn.classList.remove('hidden'); }
         track.textContent = 'Awaiting confirmation...';
@@ -574,6 +2468,9 @@
             } else if (s && s.status === 'failed') {
               stopTracking('Payment failed. ' + (s.message||'Try again.'));
               return;
+            } else if (s && s.status === 'canceled') {
+              stopTracking(String(s.message || 'STK push canceled. You can refresh later.'));
+              return;
             }
             track.textContent = 'Awaiting confirmation...';
           } catch(e) { /* ignore */ }
@@ -585,8 +2482,26 @@
       };
 
       if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-          stopTracking('Tracking canceled. You can refresh later.');
+        cancelBtn.addEventListener('click', async () => {
+          let message = 'Tracking canceled. You can refresh later.';
+          if (currentCheckoutId) {
+            try {
+              const r = await fetch(cancelEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: {{ token|tojson }}, crid: currentCheckoutId }),
+              });
+              const payload = await r.json().catch(() => null);
+              if (payload && payload.ok) {
+                message = payload.message || 'STK push canceled. You can refresh later.';
+              } else if (payload && payload.error) {
+                message = payload.error;
+              }
+            } catch (_err) {
+              // keep default message
+            }
+          }
+          stopTracking(message);
         });
       }
 
@@ -667,8 +2582,8 @@
           },
           onError: (err) => { console.warn('PayPal error', err); }
         }).render('#paypal-button-container');
-      }).catch(()=>{});
-    })();
+        }).catch(()=>{});
+      })();
     {% endif %}
     // Mobile sidebar drawer
     (function(){
@@ -717,9 +2632,105 @@
       }catch(_){ }
     })();
 
+    // Inline proof upload (stay on dashboard)
+    (function(){
+      const form = document.getElementById('inlineProofForm');
+      const fileInput = document.getElementById('inlineProofFile');
+      const btn = document.getElementById('inlineProofBtn');
+      const status = document.getElementById('inlineProofStatus');
+      if (!form || !fileInput || !btn) return;
+      const setStatus = (text, tone) => {
+        if (!status) return;
+        status.className = `text-[11px] ${tone || 'text-gray-500'}`;
+        status.textContent = text || '';
+      };
+      btn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        if (!fileInput.files.length) { setStatus(''); return; }
+        const name = fileInput.files[0]?.name || 'file';
+        setStatus(`Uploading ${name}...`, 'text-indigo-600');
+        const data = new FormData(form);
+        fetch(form.action, { method: 'POST', body: data })
+          .then((r) => {
+            if (r.ok) {
+              setStatus('Uploaded for review. Reloading...', 'text-emerald-700');
+              setTimeout(() => window.location.reload(), 900);
+            } else {
+              setStatus('Upload failed. Try again.', 'text-rose-600');
+            }
+          })
+          .catch(() => setStatus('Network error. Try again.', 'text-rose-600'));
+      });
+    })();
+
+    // Hidden reveal for proof history (press + hold or double-click title)
+    (function(){
+      const grid = document.getElementById('proofGrid');
+      const title = document.getElementById('proofStatusTitle');
+      if (!grid || !title) return;
+      const hiddenCards = grid.querySelectorAll('.proof-card.is-hidden');
+      if (!hiddenCards.length) return;
+      const toggle = () => {
+        grid.classList.toggle('is-expanded');
+      };
+      let timer = null;
+      title.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        toggle();
+      });
+      title.addEventListener('pointerdown', () => {
+        timer = setTimeout(toggle, 650);
+      });
+      const clearTimer = () => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+      title.addEventListener('pointerup', clearTimer);
+      title.addEventListener('pointerleave', clearTimer);
+    })();
+
+    // Paybill message submission (records a verification request)
+    (function(){
+      const form = document.getElementById('paybillForm');
+      const status = document.getElementById('paybillStatus');
+      if (!form || !status) return;
+      const setStatus = (msg, tone) => {
+        status.textContent = msg || '';
+        status.className = `text-[12px] ${tone || 'text-gray-500'}`;
+      };
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        setStatus('Sending to school for verification...', 'text-indigo-600');
+        const data = new FormData(form);
+        const payload = {};
+        data.forEach((value, key) => { payload[key] = value; });
+        try {
+          const r = await fetch('{{ url_for('guardian.guardian_payment_mpesa_text') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const j = await r.json();
+          if (j && j.ok) {
+            setStatus(j.message || 'Submitted for verification.', 'text-emerald-700');
+            form.reset();
+            setTimeout(() => window.location.reload(), 900);
+          } else {
+            setStatus(j?.error || 'Could not submit message. Try again.', 'text-rose-600');
+          }
+        } catch (e) {
+          setStatus('Network error. Try again.', 'text-rose-600');
+        }
+      });
+    })();
+
     // Message the school
     (function(){
       const f = document.getElementById('msgForm'); if (!f) return;
+      const pasteBtn = document.getElementById('pasteProofBtn');
+      const msgArea = f.querySelector('textarea[name="message"]');
       f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const box = document.getElementById('msgBox');
@@ -736,6 +2747,13 @@
           }
         }catch(err){
           if (box) { box.textContent = 'Network error.'; box.classList.remove('text-gray-400'); box.classList.add('text-rose-600'); }
+        }
+      });
+      pasteBtn?.addEventListener('click', () => {
+        f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        msgArea?.focus();
+        if (msgArea && !msgArea.value.trim()) {
+          msgArea.value = 'MPesa payment statement:\n- Transaction ID:\n- Amount:\n- Date:\n- Notes:';
         }
       });
     })();
@@ -850,7 +2868,7 @@
     // Chart rendering for spending analytics
     (function(){
       const chartEl = document.getElementById('payChart');
-      const msg = document.getElementById('payMsg');
+      const msg = document.getElementById('payChartMsg');
       const raw = {{ payments|tojson }};
       if (!chartEl) return;
       const parsed = (raw || [])
@@ -873,8 +2891,8 @@
           datasets: [{
             label: 'KES Paid',
             data: amounts,
-            borderColor: '#a855f7',
-            backgroundColor: 'rgba(168,85,247,0.25)',
+            borderColor: '#0f766e',
+            backgroundColor: 'rgba(15,118,110,0.25)',
             borderWidth: 3,
             pointRadius: 4,
             pointBackgroundColor: '#fff',
@@ -888,8 +2906,8 @@
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { grid: { display: false }, ticks: { color: 'rgba(248,250,252,0.8)' } },
-            y: { grid: { color: 'rgba(148,163,184,0.4)' }, ticks: { color: 'rgba(248,250,252,0.8)', callback: val => Number(val).toLocaleString() }, beginAtZero: true },
+            x: { grid: { display: false }, ticks: { color: '#0f172a' } },
+            y: { grid: { color: 'rgba(15,23,42,0.12)' }, ticks: { color: '#334155', callback: val => Number(val).toLocaleString() }, beginAtZero: true },
           },
         },
       });

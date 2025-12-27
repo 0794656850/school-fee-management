@@ -25,6 +25,10 @@ from routes.term_routes import (
 # Extend term routes (bulk flat fees)
 import routes.term_flat_routes  # noqa: F401 - registers extra routes on term_bp
 from utils.notify import normalize_phone
+from utils.timezone_helpers import EAST_AFRICA_TZ, format_east_africa
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from utils.backup import create_backup, format_bytes
 # Gmail API is optional; import lazily/fail-safe to avoid hard import dependency
 try:
     from utils.gmail_api import (
@@ -56,6 +60,10 @@ from utils.users import ensure_user_tables
 from routes.ai_routes import ai_bp
 from utils.audit import log_event
 from utils.ledger import ensure_ledger_table, add_entry
+from utils.db_helpers import ensure_guardian_receipts_table
+from utils.payment_proofs import format_status_label, notify_parent_about_proof
+from utils.payment_sources import log_payment_status, update_payment_source_status
+from utils.auto_credit import auto_apply_credit_if_new_term
 from utils.tenant import (
     ensure_school_id_columns,
     ensure_schools_table,
@@ -75,6 +83,12 @@ app = Flask(__name__)
 
 # Load configuration from Config (falls back to sensible defaults inside Config)
 app.config.from_object(Config)
+
+try:
+    app.jinja_env.filters["eat_time"] = format_east_africa
+    app.jinja_env.filters["format_bytes"] = format_bytes
+except Exception:
+    pass
 
 # Trust reverse proxy headers for scheme/host when enabled
 try:
@@ -259,24 +273,68 @@ app.register_blueprint(newsletter_bp)
 
 
 # Inject branding/config variables into all templates for universal theming
+def _normalize_hex_color(value: str, default: str = "#059669") -> str:
+    if not value:
+        value = default
+    value = value.strip()
+    if not value:
+        value = default
+    if value.startswith("#"):
+        value = value[1:]
+    if len(value) == 3:
+        value = "".join(ch * 2 for ch in value)
+    if len(value) != 6:
+        return default
+    return "#" + value.lower()
+
+
+def _shade_hex_color(hex_color: str, amount: float) -> str:
+    base = _normalize_hex_color(hex_color)
+    try:
+        r = int(base[1:3], 16)
+        g = int(base[3:5], 16)
+        b = int(base[5:7], 16)
+    except Exception:
+        return base
+    def clamp(v: int) -> int:
+        return max(0, min(255, v))
+
+    change = int(round(amount * 255))
+    return "#{:02x}{:02x}{:02x}".format(clamp(r + change), clamp(g + change), clamp(b + change))
+
+
 @app.context_processor
 def inject_branding():
     # Resolve brand/app names with DB settings taking precedence over config defaults
     # Prefer per-school settings, gracefully falling back to app/global config
-    school_name = (
-        get_setting("SCHOOL_NAME")
-        or get_setting("APP_NAME")
-        or app.config.get("APP_NAME")
+    sess = session if session else {}
+    school_id = sess.get("school_id")
+    logged_in = bool(
+        sess.get("user_logged_in")
+        or sess.get("guardian_logged_in")
+        or sess.get("student_logged_in")
     )
-    brand = (
-        get_setting("BRAND_NAME")
-        or (school_name or "Fee Management System")
-    )
-    portal_title = (
-        get_setting("PORTAL_TITLE")
-        or app.config.get("PORTAL_TITLE")
-        or "Fee Management portal"
-    )
+    show_school_profile = bool(school_id and logged_in)
+    default_brand_name = app.config.get("BRAND_NAME") or "SmartEduPay"
+    default_portal = app.config.get("PORTAL_TITLE") or "Fee Management portal"
+    if show_school_profile:
+        school_name = (
+            get_setting("SCHOOL_NAME")
+            or get_setting("APP_NAME")
+            or app.config.get("APP_NAME")
+        )
+        brand = (
+            get_setting("BRAND_NAME")
+            or (school_name or "Fee Management System")
+        )
+        portal_title = (
+            get_setting("PORTAL_TITLE")
+            or default_portal
+        )
+    else:
+        school_name = None
+        brand = default_brand_name
+        portal_title = default_portal
     app_title = ((school_name or brand) + f" {portal_title}").strip()
     # Resolve current academic term/year (best effort)
     cy, ct = None, None
@@ -288,29 +346,38 @@ def inject_branding():
             _conn.close()
     except Exception:
         pass
-    # Per-school first login marker for welcome banner
+    # Per-school first login marker for welcome banner (only when authenticated)
     first_login_at = None
-    try:
-        sid = session.get("school_id") if session else None
-        if sid:
+    if show_school_profile:
+        try:
             _conn = get_db_connection()
             try:
                 cur = _conn.cursor()
-                cur.execute("SELECT first_login_at FROM schools WHERE id=%s", (sid,))
+                cur.execute("SELECT first_login_at, name FROM schools WHERE id=%s", (school_id,))
                 row = cur.fetchone()
                 if row is not None:
                     try:
                         first_login_at = row[0] if not isinstance(row, dict) else row.get("first_login_at")
                     except Exception:
                         first_login_at = None
+                    try:
+                        db_school_name = row[1] if not isinstance(row, dict) else row.get("name")
+                        if db_school_name:
+                            school_name = db_school_name
+                    except Exception:
+                        pass
             finally:
                 _conn.close()
-    except Exception:
-        pass
+        except Exception:
+            pass
     # Resolve per-school logo if uploaded
-    school_logo_url = get_setting("SCHOOL_LOGO_URL")
+    school_logo_url = get_setting("SCHOOL_LOGO_URL") if show_school_profile else ""
     logo_primary = school_logo_url or app.config.get("LOGO_PRIMARY", "css/lovato_logo.jpg")
     logo_secondary = school_logo_url or app.config.get("LOGO_SECONDARY", "css/lovato_logo1.jpg")
+
+    raw_brand_color = (app.config.get("BRAND_COLOR") or "#059669").strip()
+    brand_color = _normalize_hex_color(raw_brand_color)
+    banner_accent = _shade_hex_color(brand_color, -0.18)
 
     # Late payment penalty settings (per-school)
     late_kind = (get_setting("LATE_PENALTY_KIND") or "").strip()  # 'percent' or 'flat'
@@ -341,16 +408,18 @@ def inject_branding():
         "LOGO_PRIMARY": logo_primary,
         "LOGO_SECONDARY": logo_secondary,
         "FAVICON": app.config.get("FAVICON", logo_primary),
-        "BRAND_COLOR": app.config.get("BRAND_COLOR", "#059669"),
+        "BRAND_COLOR": brand_color,
+        "BANNER_COLOR_ACCENT": banner_accent,
         "CURRENT_YEAR": cy,
         "CURRENT_TERM": ct,
         "PRO_PRICE_KES": app.config.get("PRO_PRICE_KES", 1500),
         # School profile (for printables/docs)
         "SCHOOL_NAME": school_name or brand,
-        "SCHOOL_ADDRESS": get_setting("SCHOOL_ADDRESS") or "",
-        "SCHOOL_PHONE": get_setting("SCHOOL_PHONE") or "",
-        "SCHOOL_EMAIL": get_setting("SCHOOL_EMAIL") or "",
-        "SCHOOL_WEBSITE": get_setting("SCHOOL_WEBSITE") or "",
+        "SCHOOL_ADDRESS": (get_setting("SCHOOL_ADDRESS") or "") if show_school_profile else "",
+        "SCHOOL_PHONE": (get_setting("SCHOOL_PHONE") or "") if show_school_profile else "",
+        "SCHOOL_EMAIL": (get_setting("SCHOOL_EMAIL") or "") if show_school_profile else "",
+        "SCHOOL_WEBSITE": (get_setting("SCHOOL_WEBSITE") or "") if show_school_profile else "",
+        "SCHOOL_PAYBILL": (get_setting("SCHOOL_PAYBILL") or "") if show_school_profile else "",
         "SUPPORT_PHONE": app.config.get("SUPPORT_PHONE", "+254794656850"),
         "SCHOOL_FIRST_LOGIN_AT": first_login_at,
         # Penalties (for invoice rendering)
@@ -377,10 +446,14 @@ def require_login_for_app():
     )
     allowed_exact = {
         "/auth/login",
+        "/auth/forgot",
+        "/auth/forgot/simple",
         "/auth/",
         "/auth/entry",
         "/auth/register",
         "/auth/register_school",
+        "/auth/register_school/verify",
+        "/auth/register_school/resend",
         "/admin/login",
         "/choose_school",
         "/healthz",
@@ -595,6 +668,89 @@ def get_db_connection_readonly():
     return conn
 
 
+def apply_credit_to_balance_for_school(db, school_id):
+    """Apply any existing credit to outstanding balances for a school."""
+    if not school_id:
+        return
+    try:
+        cur = db.cursor()
+        cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+        has_balance = bool(cur.fetchone())
+        bal_col = "balance" if has_balance else "fee_balance"
+        cur.execute(
+            f"""
+            UPDATE students
+            SET
+                {bal_col} = CASE
+                    WHEN COALESCE({bal_col},0) <= 0 OR COALESCE(credit,0) <= 0 THEN {bal_col}
+                    WHEN COALESCE(credit,0) >= COALESCE({bal_col},0) THEN 0
+                    ELSE COALESCE({bal_col},0) - COALESCE(credit,0)
+                END,
+                credit = CASE
+                    WHEN COALESCE({bal_col},0) <= 0 OR COALESCE(credit,0) <= 0 THEN credit
+                    WHEN COALESCE(credit,0) >= COALESCE({bal_col},0) THEN COALESCE(credit,0) - COALESCE({bal_col},0)
+                    ELSE 0
+                END
+            WHERE school_id=%s AND COALESCE({bal_col},0) > 0 AND COALESCE(credit,0) > 0
+            """,
+            (school_id,),
+        )
+        try:
+            db.commit()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def apply_credit_to_balance_for_student(db, school_id, student_id):
+    """Apply any existing credit to a single student's outstanding balance."""
+    if not school_id or not student_id:
+        return 0.0
+    try:
+        cur = db.cursor(dictionary=True)
+        cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+        has_balance = bool(cur.fetchone())
+        bal_col = "balance" if has_balance else "fee_balance"
+        cur.execute(
+            f"SELECT COALESCE({bal_col},0) AS bal, COALESCE(credit,0) AS credit FROM students WHERE id=%s AND school_id=%s",
+            (student_id, school_id),
+        )
+        row = cur.fetchone() or {}
+        bal = float(row.get("bal") or 0)
+        credit = float(row.get("credit") or 0)
+        if bal <= 0 or credit <= 0:
+            return 0.0
+        apply_amt = min(bal, credit)
+        cur2 = db.cursor()
+        cur2.execute(
+            f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
+            (apply_amt, apply_amt, student_id, school_id),
+        )
+        try:
+            ensure_ledger_table(db)
+            add_entry(
+                db,
+                school_id=int(school_id),
+                student_id=int(student_id),
+                entry_type="credit",
+                amount=float(apply_amt),
+                ref="auto-credit-settle",
+                description="Auto-applied credit to clear outstanding balance",
+                link_type="auto_settle",
+                link_id=None,
+            )
+        except Exception:
+            pass
+        try:
+            db.commit()
+        except Exception:
+            pass
+        return float(apply_amt or 0)
+    except Exception:
+        return 0.0
+
+
 def _bootstrap_db_safely():
     """Attempt DB schema bootstrap without blocking app startup."""
     try:
@@ -712,6 +868,10 @@ def dashboard():
         current_year, current_term = get_or_seed_current_term(db)
     except Exception:
         current_year, current_term = None, None
+    try:
+        apply_credit_to_balance_for_school(db, session.get("school_id"))
+    except Exception:
+        pass
 
     # Totals
     cursor.execute("SELECT COUNT(*) AS total FROM students WHERE school_id=%s", (session.get("school_id"),))
@@ -834,6 +994,10 @@ def dashboard_data():
     """Return real-time dashboard totals."""
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
+    try:
+        apply_credit_to_balance_for_school(db, session.get("school_id"))
+    except Exception:
+        pass
 
     cursor.execute("SHOW COLUMNS FROM students LIKE 'balance'")
     has_balance = bool(cursor.fetchone())
@@ -919,20 +1083,25 @@ def dashboard_data():
         expected_term_total = 0.0
         term_collection_rate = 0.0
 
-    db.close()
-    resp = jsonify({
-        "total_students": total_students,
-        "total_collected": float(total_collected or 0),
-        "total_balance": float(total_balance or 0),
-        "total_credit": float(total_credit or 0),
-        "term_outstanding": float(term_outstanding or 0),
-        "expected_term_total": float(expected_term_total or 0),
-        "term_collection_rate": float(term_collection_rate or 0)
-    })
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
+    try:
+        resp = jsonify({
+            "total_students": total_students,
+            "total_collected": float(total_collected or 0),
+            "total_balance": float(total_balance or 0),
+            "total_credit": float(total_credit or 0),
+            "term_outstanding": float(term_outstanding or 0),
+            "expected_term_total": float(expected_term_total or 0),
+            "term_collection_rate": float(term_collection_rate or 0)
+        })
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 # ---------- LEDGER VIEW ----------
@@ -983,6 +1152,10 @@ def forecast_collections():
 def students():
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
+    try:
+        apply_credit_to_balance_for_school(db, session.get("school_id"))
+    except Exception:
+        pass
     cursor.execute("SELECT * FROM students WHERE school_id=%s ORDER BY id DESC", (session.get("school_id"),))
     students = cursor.fetchall()
     db.close()
@@ -1570,6 +1743,9 @@ def check_student_exists():
 @app.route("/export_students")
 def export_students():
     """Export all student records as CSV."""
+    school_id = session.get("school_id")
+    if not school_id:
+        return Response("School selection required.", status=403)
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
     cursor.execute(
@@ -1584,18 +1760,17 @@ def export_students():
         WHERE school_id=%s
         ORDER BY class_name, name
         """,
-        (session.get("school_id"),),
+        (school_id,),
     )
     students = cursor.fetchall()
     db.close()
 
-    if not students:
-        return Response("No students found.", mimetype="text/plain")
-
+    fieldnames = ["Name", "Admission No", "Class", "Balance (KES)", "Credit (KES)"]
     output = StringIO()
-    writer = csv.DictWriter(output, fieldnames=students[0].keys())
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    writer.writerows(students)
+    if students:
+        writer.writerows(students)
     output.seek(0)
 
     return Response(
@@ -1954,6 +2129,20 @@ def student_detail(student_id):
     """View student profile and payments."""
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
+    credit_applied_amount = 0.0
+    try:
+        credit_applied_amount = apply_credit_to_balance_for_student(
+            db,
+            session.get("school_id"),
+            student_id,
+        )
+        if credit_applied_amount > 0:
+            flash(
+                f"Auto-settled KES {credit_applied_amount:,.2f} from available credit to clear outstanding balance.",
+                "success",
+            )
+    except Exception:
+        credit_applied_amount = 0.0
 
     cursor.execute("SELECT * FROM students WHERE id = %s AND school_id=%s", (student_id, session.get("school_id")))
     student = cursor.fetchone()
@@ -2006,11 +2195,54 @@ def student_detail(student_id):
             (student_id, session.get("school_id"))
         )
         transfers_in = cursor.fetchall()
+        proofs = []
+        ensure_guardian_receipts_table(db)
+        cursor.execute(
+            """
+            SELECT id, guardian_name, guardian_email, guardian_phone,
+                   description, notes, amount, payment_date, status,
+                   file_path, rejection_reason, created_at
+            FROM guardian_receipts
+            WHERE student_id=%s AND school_id=%s
+            ORDER BY created_at DESC
+            """,
+            (student_id, session.get("school_id")),
+        )
+        proofs = cursor.fetchall() or []
+        for proof in proofs:
+            proof["status_label"] = format_status_label(proof.get("status"))
+            proof["analysis"] = (proof.get("analysis") or "").strip()
+            proof["notes"] = (proof.get("notes") or proof.get("admin_note") or proof.get("rejection_reason") or "").strip()
     except Exception:
         overpays = []
         transfers_out = []
         transfers_in = []
-    db.close()
+        proofs = []
+    auto_credit_notice = None
+    try:
+        if student:
+            ensure_academic_terms_table(db)
+            cy, ct = get_or_seed_current_term(db)
+            auto_credit_notice = auto_apply_credit_if_new_term(
+                db,
+                student,
+                int(session.get("school_id") or 0),
+                cy,
+                ct,
+                url_for("guardian.guardian_login", _external=True),
+            )
+            if auto_credit_notice:
+                balance_col = "balance" if "balance" in student else ("fee_balance" if "fee_balance" in student else "balance")
+                student[balance_col] = auto_credit_notice.get("new_balance", student.get(balance_col, 0))
+                student["credit"] = auto_credit_notice.get("new_credit", student.get("credit", 0))
+                flash(auto_credit_notice.get("message", "Overpayment automatically applied to the current term."), "success")
+    except Exception:
+        pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
     if not student:
         flash("Student not found.", "error")
@@ -2030,8 +2262,244 @@ def student_detail(student_id):
         overpays=overpays,
         transfers_out=transfers_out,
         transfers_in=transfers_in,
+        proofs=proofs,
+        credit_applied_amount=credit_applied_amount,
         datetime=datetime,
     )
+
+
+@app.route("/guardian-proof/<int:receipt_id>/review", methods=["POST"])
+def guardian_proof_review(receipt_id):
+    school_id = session.get("school_id")
+    if not school_id:
+        flash("Select a school before reviewing payment proofs.", "warning")
+        return redirect(url_for("students"))
+
+    db = get_db_connection()
+    try:
+        ensure_guardian_receipts_table(db)
+        cur = db.cursor(dictionary=True)
+        cur.execute(
+            "SELECT * FROM guardian_receipts WHERE id=%s AND school_id=%s",
+            (receipt_id, school_id),
+        )
+        proof = cur.fetchone()
+        if not proof:
+            flash("Payment proof not found or already removed.", "warning")
+            return redirect(url_for("students"))
+
+        student_id = int(proof.get("student_id") or 0)
+        redirect_target = (
+            url_for("student_detail", student_id=student_id)
+            if student_id
+            else url_for("students")
+        )
+        current_status = (proof.get("status") or "").lower()
+        if current_status in ("accepted", "rejected"):
+            flash("This proof has already been resolved.", "info")
+            return redirect(redirect_target)
+
+        action = (request.form.get("action") or "").strip().lower()
+        if action not in ("accept", "reject"):
+            flash("Select an action for the proof.", "warning")
+            return redirect(redirect_target)
+
+        now = datetime.utcnow()
+        actor = session.get("username") or session.get("user_email") or "Admin"
+
+        if action == "accept":
+            amount = float(proof.get("amount") or 0)
+            if amount <= 0:
+                flash("Proof needs an amount before we can record it.", "warning")
+                return redirect(redirect_target)
+
+            try:
+                ensure_payments_term_columns(db)
+            except Exception:
+                pass
+            try:
+                cy, ct = get_or_seed_current_term(db)
+            except Exception:
+                cy, ct = now.year, 1
+            if ct not in (1, 2, 3):
+                ct = 1
+
+            balance_col = "balance"
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            if not cur.fetchone():
+                balance_col = "fee_balance"
+
+            cur.execute(
+                f"SELECT name, {balance_col}, credit FROM students WHERE id=%s AND school_id=%s",
+                (student_id, school_id),
+            )
+            student_row = cur.fetchone()
+            if not student_row:
+                flash("Associated student record is missing.", "error")
+                return redirect(redirect_target)
+
+            current_balance = float(student_row.get(balance_col) or 0)
+            current_credit = float(student_row.get("credit") or 0)
+            new_balance = 0 if amount >= current_balance else (current_balance - amount)
+            new_credit = current_credit + max(amount - current_balance, 0)
+
+            payment_date_value = proof.get("payment_date") or now
+            if payment_date_value and not isinstance(payment_date_value, datetime):
+                try:
+                    payment_date_value = datetime.combine(payment_date_value, datetime.min.time())
+                except Exception:
+                    payment_date_value = now
+            payment_date_value = payment_date_value or now
+
+            reference = f"proof-{receipt_id}"
+            payment_cursor = db.cursor()
+            payment_cursor.execute(
+                "INSERT INTO payments (student_id, amount, method, term, year, reference, date, school_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    student_id,
+                    amount,
+                    "Guardian proof",
+                    ct,
+                    cy,
+                    reference,
+                    payment_date_value,
+                    school_id,
+                ),
+            )
+            payment_id = payment_cursor.lastrowid
+
+            cur.execute(
+                f"UPDATE students SET {balance_col} = %s, credit = %s WHERE id = %s AND school_id=%s",
+                (new_balance, new_credit, student_id, school_id),
+            )
+
+            admin_note = (
+                request.form.get("admin_note")
+                or f"Auto-recorded KES {amount:,.2f} from guardian proof."
+            )
+            cur.execute(
+                """
+                UPDATE guardian_receipts
+                SET status=%s, verified_by=%s, verified_at=%s, updated_at=%s,
+                    admin_note=%s, rejection_reason=NULL, payment_id=%s
+                WHERE id=%s AND school_id=%s
+                """,
+                (
+                    "accepted",
+                    actor,
+                    now,
+                    now,
+                    admin_note,
+                    payment_id,
+                    receipt_id,
+                    school_id,
+                ),
+            )
+            try:
+                update_payment_source_status(db=db, source_ref=str(receipt_id), status="accepted")
+                log_payment_status(
+                    db=db,
+                    school_id=int(school_id),
+                    student_id=int(student_id),
+                    receipt_id=int(receipt_id),
+                    status="accepted",
+                    actor=actor,
+                    note=admin_note,
+                )
+            except Exception:
+                pass
+            db.commit()
+
+            try:
+                ensure_ledger_table(db)
+                add_entry(
+                    db,
+                    school_id=int(school_id),
+                    student_id=int(student_id),
+                    entry_type="credit",
+                    amount=float(amount),
+                    ref=reference,
+                    description="Guardian proof recorded",
+                    link_type="payment",
+                    link_id=int(payment_id),
+                )
+            except Exception:
+                pass
+
+            student_name = student_row.get("name") or f"Student #{student_id}"
+            proof_payload = dict(proof)
+            proof_payload.update(
+                {
+                    "status": "accepted",
+                    "admin_note": admin_note,
+                    "rejection_reason": None,
+                }
+            )
+            try:
+                notify_parent_about_proof(
+                    proof=proof_payload,
+                    student_name=student_name,
+                    status="accepted",
+                )
+            except Exception:
+                pass
+
+            flash("Proof accepted and payment recorded on the ledger.", "success")
+            return redirect(redirect_target)
+
+        reason = (request.form.get("rejection_reason") or "").strip() or "Proof rejected. Please upload a clearer receipt."
+        cur.execute(
+            """
+            UPDATE guardian_receipts
+            SET status=%s, rejection_reason=%s, admin_note=%s, verified_by=%s, verified_at=%s, updated_at=%s
+            WHERE id=%s AND school_id=%s
+            """,
+            (
+                "rejected",
+                reason,
+                reason,
+                actor,
+                now,
+                now,
+                receipt_id,
+                school_id,
+            ),
+        )
+        try:
+            update_payment_source_status(db=db, source_ref=str(receipt_id), status="rejected")
+            log_payment_status(
+                db=db,
+                school_id=int(school_id),
+                student_id=int(student_id),
+                receipt_id=int(receipt_id),
+                status="rejected",
+                actor=actor,
+                note=reason,
+            )
+        except Exception:
+            pass
+        db.commit()
+
+        student_name = proof.get("student_name") or f"Student #{student_id}"
+        proof_payload = dict(proof)
+        proof_payload.update({"status": "rejected", "rejection_reason": reason, "admin_note": reason})
+        try:
+            notify_parent_about_proof(
+                proof=proof_payload,
+                student_name=student_name,
+                status="rejected",
+                reason=reason,
+            )
+        except Exception:
+            pass
+
+        flash("Proof rejected. Parents will be prompted to upload a new receipt.", "info")
+        return redirect(redirect_target)
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 # ---------- PAYMENTS ----------
@@ -2414,7 +2882,7 @@ def payment_receipt(payment_id: int):
     # Fetch payment with student info
     cursor.execute(
         """
-        SELECT p.*, s.name AS student_name, s.class_name, s.id AS sid
+        SELECT p.*, s.name AS student_name, s.class_name, s.admission_no, s.id AS sid
         FROM payments p
         JOIN students s ON s.id = p.student_id
         WHERE p.id = %s AND p.school_id=%s
@@ -2454,6 +2922,26 @@ def payment_receipt(payment_id: int):
         or (app.config.get("BRAND_NAME") or "").strip()
         or "School"
     )
+    school_name_value = (
+        (get_setting("SCHOOL_NAME") or "").strip()
+        or brand
+    )
+    logo_source = (
+        (get_setting("SCHOOL_LOGO_URL") or "").strip()
+        or app.config.get("LOGO_PRIMARY", "").strip()
+    )
+    def _resolve_logo_url(source: str | None) -> str:
+        if not source:
+            return ""
+        if source.startswith(("http://", "https://", "//")):
+            return source
+        if source.startswith("/"):
+            return source
+        try:
+            return url_for("static", filename=source)
+        except Exception:
+            return source
+    school_logo_url = _resolve_logo_url(logo_source)
     # Build a verification URL for authenticity (scannable)
     try:
         verify_url = url_for('payment_receipt', payment_id=payment_id, _external=True)
@@ -2488,6 +2976,46 @@ def payment_receipt(payment_id: int):
         },
     )
 
+    admission_no = (payment.get("admission_no") or "").strip()
+    received_from = payment.get("student_name") or "Student"
+    if admission_no:
+        received_from = f"{received_from} ({admission_no})"
+
+    payment_date_value = payment.get("payment_date") or payment.get("date")
+    formatted_payment_date = ""
+    if payment_date_value:
+        try:
+            if hasattr(payment_date_value, "strftime"):
+                formatted_payment_date = payment_date_value.strftime("%d %B %Y %I:%M %p")
+            else:
+                formatted_payment_date = str(payment_date_value)
+        except Exception:
+            formatted_payment_date = str(payment_date_value)
+
+    service_type = (
+        payment.get("service_type")
+        or payment.get("category")
+        or payment.get("description")
+        or "Tuition Fees"
+    )
+    if isinstance(service_type, str):
+        service_type = service_type.strip() or "Tuition Fees"
+    else:
+        service_type = "Tuition Fees"
+
+    invoice_number = (
+        payment.get("invoice_number")
+        or payment.get("reference")
+        or "N/A"
+    )
+
+    erp_receipt_number = payment.get("erp_receipt_number")
+    if not erp_receipt_number:
+        try:
+            erp_receipt_number = f"SLP{int(payment.get('id') or payment_id):07d}"
+        except Exception:
+            erp_receipt_number = f"SLP{payment_id}"
+
     return render_template(
         "receipt.html",
         brand=brand,
@@ -2497,6 +3025,14 @@ def payment_receipt(payment_id: int):
         payment_link=app.config.get("PAYMENT_LINK", ""),
         verify_url=verify_url,
         auth_qr_data=auth_qr_data,
+        slip_received_from=received_from,
+        slip_service_type=service_type,
+        slip_payment_date=formatted_payment_date or "N/A",
+        slip_invoice_number=invoice_number,
+        slip_erp_number=erp_receipt_number,
+        slip_paid_to=brand,
+        slip_school_name=school_name_value,
+        school_logo_url=school_logo_url,
     )
 
 
@@ -4021,6 +4557,35 @@ try:
     _sched = enable_reports_scheduler(app)
 except Exception as _e:
     print("[scheduler] not started:", _e)
+
+
+def _start_backup_scheduler():
+    schedule = app.config.get("BACKUP_SCHEDULE", "0 3 * * *")
+    try:
+        trigger = CronTrigger.from_crontab(schedule, timezone=EAST_AFRICA_TZ)
+    except Exception:
+        trigger = CronTrigger.from_crontab("0 3 * * *", timezone=EAST_AFRICA_TZ)
+    scheduler = BackgroundScheduler(timezone=EAST_AFRICA_TZ)
+
+    def _run_backup_job():
+        with app.app_context():
+            try:
+                result = create_backup(app, reason="scheduled")
+                app.logger.info("Scheduled backup stored at %s", result.get("dir"))
+            except Exception:
+                app.logger.exception("Scheduled backup failed")
+
+    scheduler.add_job(_run_backup_job, trigger=trigger, id="automated_backup", replace_existing=True)
+    scheduler.start()
+    app.config["BACKUP_SCHEDULER"] = scheduler
+
+
+_should_start_backup_scheduler = os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug
+if _should_start_backup_scheduler:
+    try:
+        _start_backup_scheduler()
+    except Exception:
+        app.logger.exception("Failed to start backup scheduler")
 
 if __name__ == "__main__":
     app.run(debug=True)

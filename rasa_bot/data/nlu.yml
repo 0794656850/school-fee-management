@@ -1,0 +1,43 @@
+version: "3.4"
+nlu:
+- intent: greet
+  examples: |
+    - hello
+    - hi there
+    - good morning
+    - hey SmartEduPay
+    - hi bot
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you later
+    - thanks, bye
+- intent: balance_inquiry
+  examples: |
+    - how much do I owe
+    - what's my fee balance
+    - tell me the outstanding amount
+    - balance for this term
+    - what is my child's current balance
+    - do we still have any dues
+- intent: exam_inquiry
+  examples: |
+    - when is the next exam
+    - exam dates
+    - upcoming tests
+    - are there any assessments soon
+    - exam schedule for this term
+- intent: receipt_help
+  examples: |
+    - how do I download the receipt
+    - where is my proof of payment
+    - I need a receipt for my payment
+    - download receipt
+    - proof of payment
+    - I want to print a receipt
+- intent: thank_you
+  examples: |
+    - thanks
+    - thank you
+    - appreciate it

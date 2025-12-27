@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 from utils.security import verify_password, hash_password
 from utils.tenant import slugify_code, get_or_create_school
+from utils.login_otp import generate_login_otp, mask_email, send_portal_login_otp
 
 try:
     from utils.gmail_api import (
@@ -21,6 +22,16 @@ except Exception:
 
 
 student_auth_bp = Blueprint("student_auth", __name__, url_prefix="/s")
+
+LOGIN_OTP_EXPIRES_MINUTES = 20
+
+
+def _student_otp_context() -> dict:
+    return session.get("student_otp_context", {})
+
+
+def _clear_student_otp_context() -> None:
+    session.pop("student_otp_context", None)
 
 
 def _db():
@@ -98,17 +109,118 @@ def student_login():
             if not verify_password(s.get("portal_password_hash"), password):
                 flash("Incorrect password.", "error")
                 return redirect(url_for("student_auth.student_login"))
-            # Success
-            session["student_logged_in"] = True
-            session["student_id"] = int(s["id"])
-            session["student_name"] = s.get("name")
-            session["school_id"] = school_id
-            flash("Welcome!", "success")
-            return redirect(url_for("student_portal.view", token="me"))
+            target_email = (s.get("email") or s.get("parent_email") or "").strip()
+            if not target_email:
+                flash("No email on record. Ask the school to add one to proceed with OTP login.", "warning")
+                return redirect(url_for("student_auth.student_login"))
+            _clear_student_otp_context()
+            otp_code = generate_login_otp()
+            sent = send_portal_login_otp(
+                target_email,
+                s.get("name") or str(s.get("admission_no")) or "Student",
+                "Student Portal",
+                otp_code,
+                LOGIN_OTP_EXPIRES_MINUTES,
+            )
+            if not sent:
+                flash("Failed to send the verification code. Try again shortly.", "error")
+                return redirect(url_for("student_auth.student_login"))
+            session["student_otp_context"] = {
+                "student_id": int(s["id"]),
+                "school_id": school_id,
+                "name": s.get("name") or "",
+                "email": target_email,
+                "code": otp_code,
+                "until": (datetime.now() + timedelta(minutes=LOGIN_OTP_EXPIRES_MINUTES)).timestamp(),
+                "sent_at": datetime.now().timestamp(),
+            }
+            flash("We sent a one-time code to your email. Enter it to continue.", "info")
+            return redirect(url_for("student_auth.student_login_verify"))
         finally:
             try: db.close()
             except Exception: pass
     return render_template("student_login.html")
+
+
+@student_auth_bp.route("/login/verify", methods=["GET", "POST"])
+def student_login_verify():
+    ctx = _student_otp_context()
+    if not ctx:
+        flash("Enter your credentials first so we can send your login code.", "warning")
+        return redirect(url_for("student_auth.student_login"))
+
+    now_ts = datetime.now().timestamp()
+    remaining = max(0, int(ctx.get("until", 0) - now_ts))
+    if remaining <= 0:
+        _clear_student_otp_context()
+        flash("The code expired after 20 minutes. Log in again to receive a fresh one.", "warning")
+        return redirect(url_for("student_auth.student_login"))
+
+    if request.method == "POST":
+        code = (request.form.get("code") or "").strip()
+        if not code:
+            flash("Enter the six-digit code sent to your email.", "warning")
+            return redirect(url_for("student_auth.student_login_verify"))
+        if code != ctx.get("code"):
+            flash("Wrong code. Check your email and try again.", "error")
+            return redirect(url_for("student_auth.student_login_verify"))
+
+        sid = int(ctx.get("student_id") or 0)
+        school_id = int(ctx.get("school_id") or 0)
+        session["student_logged_in"] = True
+        session["student_id"] = sid
+        session["student_name"] = ctx.get("name") or ""
+        session["school_id"] = school_id
+        _clear_student_otp_context()
+        flash("Welcome back! You're logged in.", "success")
+        return redirect(url_for("student_portal.view", token="me"))
+
+    return render_template(
+        "login_otp.html",
+        portal_title="Student portal verification",
+        portal_label="Student OTP",
+        heading="Check your inbox",
+        summary="Enter the code we emailed to confirm it is really you accessing the student portal.",
+        email_display=mask_email(ctx.get("email")),
+        countdown_seconds=remaining,
+        countdown_label=f"{remaining // 60} min {remaining % 60} sec",
+        form_action=url_for("student_auth.student_login_verify"),
+        resend_url=url_for("student_auth.student_login_verify_resend"),
+        back_url=url_for("student_auth.student_login"),
+        portal_note="Codes refresh every 20 minutes for extra safety.",
+    )
+
+
+@student_auth_bp.route("/login/verify/resend", methods=["POST"])
+def student_login_verify_resend():
+    ctx = _student_otp_context()
+    if not ctx:
+        flash("Log in first so we know where to send the new code.", "warning")
+        return redirect(url_for("student_auth.student_login"))
+
+    target_email = ctx.get("email")
+    if not target_email:
+        flash("No email is associated with this account. Ask the school to add one.", "error")
+        return redirect(url_for("student_auth.student_login"))
+
+    otp_code = generate_login_otp()
+    ctx["code"] = otp_code
+    ctx["until"] = (datetime.now() + timedelta(minutes=LOGIN_OTP_EXPIRES_MINUTES)).timestamp()
+    ctx["sent_at"] = datetime.now().timestamp()
+    session["student_otp_context"] = ctx
+    sent = send_portal_login_otp(
+        target_email,
+        ctx.get("name") or "Student",
+        "Student Portal",
+        otp_code,
+        LOGIN_OTP_EXPIRES_MINUTES,
+    )
+    if not sent:
+        flash("Unable to resend the code right now. Try again shortly.", "error")
+        return redirect(url_for("student_auth.student_login_verify"))
+
+    flash("We resent a new code to your email. It will arrive in seconds.", "info")
+    return redirect(url_for("student_auth.student_login_verify"))
 
 
 @student_auth_bp.route("/signup", methods=["GET", "POST"])

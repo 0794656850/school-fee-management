@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}Payment Records - {{ APP_TITLE }}{% endblock %}
+{% block page_title %}Payment Records & Ledger{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <section class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Ledger summary</p>
+        <h2 class="text-2xl font-semibold text-slate-900">All payments</h2>
+        <p class="text-sm text-slate-500">Filtered for the selected scope and ready for export.</p>
+      </div>
+      <div class="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.3em]">
+        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-slate-600">Showing {{ payments|length }} rows (limit {{ limit }})</span>
+        <a href="{{ export_url }}" class="rounded-full border border-indigo-100 bg-indigo-50 px-4 py-2 text-indigo-700 hover:bg-indigo-100 transition">Export CSV</a>
+        <a href="{{ url_for('admin.payment_records') }}" class="rounded-full border border-slate-200 px-4 py-2 text-slate-600 hover:border-slate-300 transition">Reset filters</a>
+      </div>
+    </div>
+    <div class="mt-6 grid gap-4 md:grid-cols-4">
+      <article class="rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white">
+        <p class="text-[0.65rem] uppercase tracking-[0.4em] text-slate-200">Transactions</p>
+        <p class="mt-2 text-3xl font-semibold">{{ summary.total_count }}</p>
+        <p class="text-xs text-slate-200">Records returned by the filters</p>
+      </article>
+      <article class="rounded-2xl border border-slate-100 bg-slate-50 p-5 text-slate-900">
+        <p class="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Total collected</p>
+        <p class="mt-2 text-2xl font-semibold">KES {{ "{:,.2f}".format(summary.total_amount) }}</p>
+        <p class="text-xs text-slate-500">Over all selected payments</p>
+      </article>
+      <article class="rounded-2xl border border-slate-100 bg-slate-50 p-5 text-slate-900">
+        <p class="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Average payment</p>
+        <p class="mt-2 text-2xl font-semibold">KES {{ "{:,.2f}".format(summary.avg_amount) }}</p>
+        <p class="text-xs text-slate-500">Mean amount in this view</p>
+      </article>
+      <article class="rounded-2xl border border-slate-100 bg-slate-50 p-5 text-slate-900">
+        <p class="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Largest payment</p>
+        <p class="mt-2 text-2xl font-semibold">KES {{ "{:,.2f}".format(summary.max_amount) }}</p>
+        <p class="text-xs text-slate-500">Peak single entry</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Filters</p>
+        <h3 class="text-lg font-semibold text-slate-900">Narrow your view</h3>
+      </div>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <a href="#payments-table" class="rounded-full border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-100 transition">Jump to table</a>
+      </div>
+    </div>
+    <form method="get" class="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <label class="text-xs text-slate-500">
+        Student name / admission no
+        <input type="text" name="student" value="{{ filters.student }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1" placeholder="Viona, 2024A045">
+      </label>
+      <label class="text-xs text-slate-500">
+        Payment method
+        <select name="method" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1">
+          <option value="">All channels</option>
+          {% for method in method_choices %}
+          <option value="{{ method }}" {% if method == filters.method %}selected{% endif %}>{{ method }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">
+        Year
+        <input type="number" name="year" min="2000" max="2100" value="{{ filters.year }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1" placeholder="2025">
+      </label>
+      <label class="text-xs text-slate-500">
+        Term
+        <select name="term" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1">
+          <option value="">All terms</option>
+          <option value="1" {% if filters.term == '1' %}selected{% endif %}>Term 1</option>
+          <option value="2" {% if filters.term == '2' %}selected{% endif %}>Term 2</option>
+          <option value="3" {% if filters.term == '3' %}selected{% endif %}>Term 3</option>
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">
+        Start date
+        <input type="date" name="start_date" value="{{ filters.start_date }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1">
+      </label>
+      <label class="text-xs text-slate-500">
+        End date
+        <input type="date" name="end_date" value="{{ filters.end_date }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1">
+      </label>
+      <label class="text-xs text-slate-500">
+        Min amount
+        <input type="number" name="min_amount" step="0.01" value="{{ filters.min_amount }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1" placeholder="0">
+      </label>
+      <label class="text-xs text-slate-500">
+        Max amount
+        <input type="number" name="max_amount" step="0.01" value="{{ filters.max_amount }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-200 focus:ring-1" placeholder="50000">
+      </label>
+      <div class="md:col-span-3 lg:col-span-2 flex items-end justify-end gap-2">
+        <button type="submit" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white hover:bg-indigo-500 transition">Apply filters</button>
+        <a href="{{ export_url }}" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 hover:border-slate-400 transition">Download view</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+    <div class="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Trend</p>
+          <h3 class="text-lg font-semibold text-slate-900">Monthly collections</h3>
+        </div>
+        <span class="text-xs text-slate-500">Last 12 months</span>
+      </div>
+      <div class="mt-4 h-64">
+        <canvas id="paymentTrendChart" class="h-full w-full"></canvas>
+        {% if not trend_rows %}
+        <p class="mt-2 text-center text-xs text-slate-500">No monthly payments recorded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm space-y-4">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Method mix</p>
+        <h3 class="text-lg font-semibold text-slate-900">Payment channels</h3>
+      </div>
+      <div class="flex flex-wrap gap-4">
+        <canvas id="methodPieChart" width="180" height="180"></canvas>
+        <ul class="space-y-2 text-sm text-slate-600">
+          {% for method in method_rows %}
+          <li class="flex items-center justify-between">
+            <span>{{ method.method or 'Other' }}</span>
+            <span class="font-semibold text-slate-900">KES {{ "{:,.0f}".format(method.total or 0) }}</span>
+          </li>
+          {% else %}
+          <li class="text-xs text-slate-500">No payment channels recorded yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-2">
+    <div class="space-y-4">
+      <div class="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Top students</p>
+            <h3 class="text-lg font-semibold text-slate-900">Families leading the ledger</h3>
+          </div>
+        </div>
+        <ul class="mt-4 space-y-3 text-sm">
+          {% for student in top_students %}
+          <li class="flex items-center justify-between gap-3">
+            <div>
+              <p class="font-semibold text-slate-900">{{ student.student_name }}</p>
+              <p class="text-xs text-slate-500">{{ student.class_name }}</p>
+            </div>
+            <span class="text-sm font-semibold text-indigo-700">KES {{ "{:,.0f}".format(student.total or 0) }}</span>
+          </li>
+          {% else %}
+          <li class="text-xs text-slate-500">No students have paid yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Top classes</p>
+            <h3 class="text-lg font-semibold text-slate-900">Class momentum</h3>
+          </div>
+        </div>
+        <ul class="mt-4 space-y-3 text-sm">
+          {% for cls in class_totals %}
+          <li class="flex items-center justify-between gap-3">
+            <span>{{ cls.class_name }}</span>
+            <span class="font-semibold text-slate-900">KES {{ "{:,.0f}".format(cls.total or 0) }}</span>
+          </li>
+          {% else %}
+          <li class="text-xs text-slate-500">No class data yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-sm text-white space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[0.6rem] uppercase tracking-[0.4em] text-slate-200">Scope snapshot</p>
+          <h3 class="text-lg font-semibold">Active filters</h3>
+        </div>
+      </div>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-slate-300">Student</span><span>{{ filters.student or "Any" }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-300">Method</span><span>{{ filters.method or "Any channel" }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-300">Year</span><span>{{ filters.year or "Any" }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-300">Term</span><span>{{ filters.term or "Any" }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-300">Date range</span>
+          <span>{{ filters.start_date or "Start" }} → {{ filters.end_date or "End" }}</span></div>
+        <div class="flex justify-between">
+          <span class="text-slate-300">Amount range</span>
+          <span>
+            {% if filters.min_amount or filters.max_amount %}
+              {{ filters.min_amount or "Min" }} - {{ filters.max_amount or "Max" }}
+            {% else %}
+              All sizes
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="payments-table" class="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Ledger</p>
+        <h3 class="text-lg font-semibold text-slate-900">Recent payment records</h3>
+      </div>
+      <span class="text-xs text-slate-500">Latest first</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">
+          <tr>
+            <th class="px-3 py-2 text-left">#</th>
+            <th class="px-3 py-2 text-left">Student</th>
+            <th class="px-3 py-2 text-left">Class</th>
+            <th class="px-3 py-2 text-left">Year / Term</th>
+            <th class="px-3 py-2 text-left">Amount</th>
+            <th class="px-3 py-2 text-left">Method</th>
+            <th class="px-3 py-2 text-left">Reference</th>
+            <th class="px-3 py-2 text-left">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payments %}
+          <tr class="border-b border-slate-100 hover:bg-slate-50">
+            <td class="px-3 py-3">{{ loop.index }}</td>
+            <td class="px-3 py-3 font-semibold text-slate-900">{{ payment.student_name or 'Unknown' }}</td>
+            <td class="px-3 py-3 text-slate-600">{{ payment.class_name or 'Unassigned' }}</td>
+            <td class="px-3 py-3 text-slate-600">{{ payment.year or '—' }} / {{ payment.term or '—' }}</td>
+            <td class="px-3 py-3 text-slate-900 font-semibold">KES {{ "{:,.2f}".format(payment.amount or 0) }}</td>
+            <td class="px-3 py-3 text-slate-600">{{ payment.method or 'Other' }}</td>
+            <td class="px-3 py-3 text-slate-600">{{ payment.reference or '—' }}</td>
+            <td class="px-3 py-3 text-slate-600">{{ payment.date or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="px-3 py-6 text-center text-xs text-slate-500">No payments match the current filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const trendChartEl = document.getElementById("paymentTrendChart");
+    const methodChartEl = document.getElementById("methodPieChart");
+    const trendData = {{ trend_rows|tojson }};
+    const methodData = {{ method_rows|tojson }};
+
+    const trendLabels = trendData.map(row => row.ym || "N/A");
+    const trendValues = trendData.map(row => Number(row.total || 0));
+    const methodLabels = methodData.map(row => row.method || "Other");
+    const methodTotals = methodData.map(row => Number(row.total || 0));
+
+    if (trendChartEl) {
+      new Chart(trendChartEl, {
+        type: "line",
+        data: {
+          labels: trendLabels.length ? trendLabels : ["No data"],
+          datasets: [{
+            label: "KES collected",
+            data: trendLabels.length ? trendValues : [0],
+            borderColor: "#1d4ed8",
+            backgroundColor: "rgba(37,99,235,0.25)",
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: "#fff",
+            pointBorderColor: "#1d4ed8",
+            tension: 0.4,
+            fill: true,
+          }],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: "#475569" } },
+            y: { beginAtZero: true, ticks: { color: "#475569" } },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: context => `KES ${Number(context.parsed.y || 0).toLocaleString()}` } },
+          },
+        },
+      });
+    }
+
+    if (methodChartEl) {
+      new Chart(methodChartEl, {
+        type: "doughnut",
+        data: {
+          labels: methodLabels.length ? methodLabels : ["No data"],
+          datasets: [{
+            data: methodLabels.length ? methodTotals : [1],
+            backgroundColor: ["#0ea5e9", "#22c55e", "#6366f1", "#f97316", "#ec4899", "#10b981"],
+            hoverOffset: 6,
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "bottom", labels: { color: "#475569", boxWidth: 12 } },
+          },
+        },
+      });
+    }
+  });
+</script>
+{% endblock %}

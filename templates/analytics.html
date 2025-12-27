@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% block title %}SmartEduPay Analytics · {{ APP_TITLE }}{% endblock %}
+{% block title %}SmartEduPay Analytics | {{ APP_TITLE }}{% endblock %}
 {% block page_title %}SmartEduPay Insights{% endblock %}
+{% block body_class %}analytics-page{% endblock %}
 
 {% block content %}
 {% set mom_pct = analytics_payload.mom.percent_change if analytics_payload.mom else 0 %}
@@ -9,7 +10,7 @@
   <section class="analytics-hero relative overflow-hidden rounded-3xl p-8 text-white shadow-[0_35px_60px_rgba(15,23,42,0.6)]">
     <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
       <div class="max-w-2xl space-y-4">
-        <p class="text-xs uppercase tracking-[0.4em] text-slate-300">Fee Pulse · Live</p>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-300">Fee Pulse | Live</p>
         <h1 class="text-3xl md:text-4xl font-semibold">Premium analytics for SmartEduPay</h1>
         <p class="text-sm text-slate-200">Your collections, class health, and alerts refreshed as each payment closes the books.</p>
         <div class="flex flex-wrap gap-3">

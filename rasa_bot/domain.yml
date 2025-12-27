@@ -1,0 +1,24 @@
+version: "3.4"
+intents:
+  - greet
+  - goodbye
+  - balance_inquiry
+  - exam_inquiry
+  - receipt_help
+  - thank_you
+responses:
+  utter_greet:
+    - text: "Hi there! I'm SmartEduPay's guardian helper. Ask me about balances, notices, or receipts."
+  utter_goodbye:
+    - text: "Take care! If you have more questions, just send another message."
+  utter_balance_hint:
+    - text: "To help you fastest, I can explain your balance, upcoming exams, or how to download receipts."
+  utter_exam_info:
+    - text: "Check the Notices feed for the latest exam announcements; I can also flag a reminder if needed."
+  utter_receipt_help:
+    - text: "Open Recent Payments and click Print to download a receipt, or upload proof if you need manual review."
+  utter_default:
+    - text: "I'm still learning. Try asking about fee balances, upcoming exams, or receipts."
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true

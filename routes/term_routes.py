@@ -17,6 +17,8 @@ from utils.classes import promote_class_name
 from utils.settings import get_setting, set_school_setting
 from routes.newsletter_routes import ensure_newsletters_table
 from utils.ai import ai_is_configured, chat_anything
+from utils.auto_credit import auto_apply_credit_for_school
+from utils.ledger import ensure_ledger_table, add_entry
 from markupsafe import escape
 
 try:
@@ -197,6 +199,65 @@ def _detect_balance_column(conn) -> str:
     return "balance" if has_balance else "fee_balance"
 
 
+def _apply_credit_to_balance_for_school(conn, school_id):
+    """Apply existing credit to outstanding balances for a school."""
+    if not school_id:
+        return 0
+    try:
+        bal_col = _detect_balance_column(conn)
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT id, COALESCE({bal_col},0) AS bal, COALESCE(credit,0) AS credit
+            FROM students
+            WHERE school_id=%s AND COALESCE({bal_col},0) > 0 AND COALESCE(credit,0) > 0
+            """,
+            (school_id,),
+        )
+        rows = cur.fetchall() or []
+        if not rows:
+            return 0
+        ucur = conn.cursor()
+        applied_count = 0
+        try:
+            ensure_ledger_table(conn)
+        except Exception:
+            pass
+        for row in rows:
+            sid = int(row.get("id") or 0)
+            bal = float(row.get("bal") or 0)
+            credit = float(row.get("credit") or 0)
+            apply_amt = min(bal, credit)
+            if sid <= 0 or apply_amt <= 0:
+                continue
+            ucur.execute(
+                f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
+                (apply_amt, apply_amt, sid, school_id),
+            )
+            try:
+                add_entry(
+                    conn,
+                    school_id=int(school_id),
+                    student_id=int(sid),
+                    entry_type="credit",
+                    amount=float(apply_amt),
+                    ref="auto-credit-settle",
+                    description="Auto-applied credit during term fee setup",
+                    link_type="auto_settle",
+                    link_id=None,
+                )
+            except Exception:
+                pass
+            applied_count += 1
+        try:
+            conn.commit()
+        except Exception:
+            pass
+        return applied_count
+    except Exception:
+        return 0
+
+
 def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]:
     """Send premium term memo emails to all students for the specified year/term.
 
@@ -286,7 +347,7 @@ def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]
             pass
 
 
-def _apply_term_fee_amount(db, student_id, year, term, fee_amount, bal_col, school_id):
+def _apply_term_fee_amount(db, student_id, year, term, fee_amount, bal_col, school_id, *, apply_credit=True):
     cur = db.cursor(dictionary=True)
     pcur = db.cursor()
     try:
@@ -339,31 +400,32 @@ def _apply_term_fee_amount(db, student_id, year, term, fee_amount, bal_col, scho
                 (delta, student_id, school_id),
             )
 
-        try:
-            cur.execute(
-                "SELECT COALESCE(credit,0) AS credit, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE id=%s AND school_id=%s",
-                (student_id, school_id),
-            )
-            row = cur.fetchone() or {"credit": 0, "bal": 0}
-            avail = float(row.get("credit") or 0)
-            bal_now = float(row.get("bal") or 0)
-            apply = min(avail, max(bal_now, 0))
-            if apply > 0:
-                pcur.execute(
-                    f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
-                    (apply, apply, student_id, school_id),
+        if apply_credit:
+            try:
+                cur.execute(
+                    "SELECT COALESCE(credit,0) AS credit, COALESCE(" + bal_col + ",0) AS bal FROM students WHERE id=%s AND school_id=%s",
+                    (student_id, school_id),
                 )
-                try:
-                    payment_cur = db.cursor()
-                    payment_cur.execute(
-                        "INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id) VALUES (%s,%s,%s,%s,NOW(),%s,%s,%s)",
-                        (student_id, apply, 'Credit Transfer', 'Auto-apply starting term credit', year, term, school_id),
+                row = cur.fetchone() or {"credit": 0, "bal": 0}
+                avail = float(row.get("credit") or 0)
+                bal_now = float(row.get("bal") or 0)
+                apply = min(avail, max(bal_now, 0))
+                if apply > 0:
+                    pcur.execute(
+                        f"UPDATE students SET {bal_col} = {bal_col} - %s, credit = credit - %s WHERE id=%s AND school_id=%s",
+                        (apply, apply, student_id, school_id),
                     )
-                    payment_cur.close()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                    try:
+                        payment_cur = db.cursor()
+                        payment_cur.execute(
+                            "INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id) VALUES (%s,%s,%s,%s,NOW(),%s,%s,%s)",
+                            (student_id, apply, 'Credit Transfer', 'Auto-apply starting term credit', year, term, school_id),
+                        )
+                        payment_cur.close()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
         return {
             "delta": delta,
@@ -377,8 +439,101 @@ def _apply_term_fee_amount(db, student_id, year, term, fee_amount, bal_col, scho
             cur.close()
         except Exception:
             pass
+
+
+def _seed_term_fees_for_term(db, year, term, school_id=None):
+    """Create flat term fee rows for students who do not yet have a record for the opening term."""
+    ensure_term_fees_table(db)
+    try:
+        ensure_student_fee_items_table(db)
+    except Exception:
+        pass
+    bal_col = _detect_balance_column(db)
+    cur = db.cursor(dictionary=True)
+    try:
+        student_query = "SELECT id, class_name FROM students"
+        params = []
+        if school_id:
+            student_query += " WHERE school_id=%s"
+            params.append(school_id)
+        cur.execute(student_query, tuple(params))
+        students = cur.fetchall() or []
+        if not students:
+            return 0
+        existing_ids = set()
+        cur.execute("SELECT student_id FROM term_fees WHERE year=%s AND term=%s", (year, term))
+        existing_ids.update(int(row["student_id"]) for row in (cur.fetchall() or []))
+        if len(existing_ids) == len(students):
+            return 0
+
+        ids = [int(s["id"]) for s in students]
+        placeholders = ",".join(["%s"] * len(ids))
+        items_totals = {}
+        if ids:
+            cur.execute(
+                f"SELECT student_id, COALESCE(SUM(amount),0) AS total FROM student_term_fee_items WHERE year=%s AND term=%s AND student_id IN ({placeholders}) GROUP BY student_id",
+                (year, term, *ids),
+            )
+            items_totals = {int(r["student_id"]): float(r.get("total") or 0) for r in (cur.fetchall() or [])}
+
+        class_totals = {}
         try:
-            pcur.close()
+            cur.execute(
+                "SELECT class_name, COALESCE(SUM(amount),0) AS total FROM class_fee_defaults WHERE year=%s AND term=%s GROUP BY class_name",
+                (year, term),
+            )
+            for row in (cur.fetchall() or []):
+                name = (row.get("class_name") or "").strip()
+                total = float(row.get("total") or 0)
+                if name:
+                    class_totals[name] = total
+        except Exception:
+            class_totals = {}
+
+        global_default = 0.0
+        try:
+            cur.execute("SELECT COALESCE(SUM(default_amount),0) AS total FROM fee_components")
+            global_default = float((cur.fetchone() or {}).get("total") or 0)
+        except Exception:
+            global_default = 0.0
+
+        prev_map: dict[int, dict[str, object]] = {}
+        if ids:
+            cur.execute(
+                f"SELECT student_id, year, term, COALESCE(final_fee, fee_amount,0) AS last_fee FROM term_fees WHERE student_id IN ({placeholders}) AND NOT (year=%s AND term=%s) ORDER BY student_id, year DESC, term DESC",
+                (*ids, year, term),
+            )
+            for row in (cur.fetchall() or []):
+                student_id = int(row["student_id"])
+                year_val = int(row.get("year") or 0)
+                term_val = int(row.get("term") or 0)
+                key = (year_val, term_val)
+                fee_val = float(row.get("last_fee") or 0)
+                existing = prev_map.get(student_id)
+                if not existing or key > existing["snapshot"]:
+                    prev_map[student_id] = {"snapshot": key, "fee": fee_val}
+
+        seeded = 0
+        for student in students:
+            sid = int(student["id"])
+            if sid in existing_ids:
+                continue
+            amount_due = float(items_totals.get(sid) or 0)
+            if amount_due <= 0:
+                klass = (student.get("class_name") or "").strip()
+                class_default = class_totals.get(klass)
+                if class_default:
+                    amount_due = float(class_default)
+            if amount_due <= 0 and sid in prev_map:
+                amount_due = float(prev_map[sid]["fee"])
+            if amount_due <= 0 and global_default > 0:
+                amount_due = float(global_default)
+            _apply_term_fee_amount(db, sid, year, term, amount_due, bal_col, school_id, apply_credit=True)
+            seeded += 1
+        return seeded
+    finally:
+        try:
+            cur.close()
         except Exception:
             pass
 
@@ -1266,6 +1421,21 @@ def open_term_route():
             _publish_term_event(db, year, term, "open", {"timestamp": datetime.utcnow()})
         except Exception:
             pass
+        try:
+            seeded_fee_count = _seed_term_fees_for_term(db, year, term, sid)
+            if seeded_fee_count:
+                current_app.logger.debug("Seeded %d term fee records for Term %s/%s", seeded_fee_count, year, term)
+        except Exception as exc:
+            current_app.logger.debug("Failed to seed term fees during opening: %s", exc)
+        notices = []
+        try:
+            if sid:
+                portal_url = url_for("guardian.guardian_login", _external=True)
+                notices = auto_apply_credit_for_school(db, sid, year, term, portal_url)
+        except Exception:
+            notices = []
+        if notices:
+            flash(f"Auto-applied overpayments for {len(notices)} guardians.", "success")
         flash("Term opened.", "success")
     except Exception as e:
         try:
@@ -1380,6 +1550,23 @@ def manage_term_fees():
     try:
         ensure_academic_terms_table(db)
         ensure_term_fees_table(db)
+        credit_settled_count = 0
+        try:
+            credit_settled_count = _apply_credit_to_balance_for_school(
+                db,
+                session.get("school_id") if session else None,
+            )
+        except Exception:
+            credit_settled_count = 0
+        if credit_settled_count > 0:
+            try:
+                flash(
+                    f"Credit auto-settled for {credit_settled_count} student account"
+                    f"{'s' if credit_settled_count != 1 else ''}.",
+                    "success",
+                )
+            except Exception:
+                pass
         pro = is_pro_enabled()
         if pro:
             ensure_fee_components_table(db)

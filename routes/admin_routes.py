@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify
+import csv
+from io import StringIO
+from datetime import datetime, timedelta
+
+from apscheduler.triggers.cron import CronTrigger
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify, Response
 from typing import Any
-from datetime import datetime
 import mysql.connector
 
 from extensions import limiter
@@ -24,7 +28,14 @@ from utils.users import (
     set_user_password,
     set_user_active,
 )
-from utils.security import hash_password
+from utils.backup import (
+    BackupException,
+    backup_root_for_school,
+    create_backup,
+    get_backup_history,
+    restore_backup_snapshot,
+)
+from utils.timezone_helpers import EAST_AFRICA_TZ, east_africa_now, format_east_africa
 from routes.reminder_routes import DEFAULT_REMINDER_TEMPLATE
 
 
@@ -79,6 +90,96 @@ def _require_admin():
     return redirect(url_for("admin.login"))
 
 
+def _get_global_admin_password() -> str:
+    config_value = (current_app.config.get("ADMIN_PASSWORD") or "").strip()
+    if config_value:
+        return config_value
+    saved_school = session.pop("school_id", None)
+    try:
+        return (get_setting("ADMIN_PASSWORD") or "").strip()
+    finally:
+        if saved_school is not None:
+            session["school_id"] = saved_school
+
+
+def _verify_admin_current_password(candidate: str) -> bool:
+    stored_admin = _get_global_admin_password() or "9133"
+    if verify_password(stored_admin, candidate):
+        return True
+
+    portal_password = (get_setting("APP_LOGIN_PASSWORD") or "").strip()
+    if portal_password and verify_password(portal_password, candidate):
+        return True
+
+    return False
+
+
+def _build_payment_filter_state(sid: int):
+    args = request.args
+    student = (args.get("student") or "").strip()
+    method = (args.get("method") or "").strip()
+    year = (args.get("year") or "").strip()
+    term = (args.get("term") or "").strip()
+    start_date = (args.get("start_date") or "").strip()
+    end_date = (args.get("end_date") or "").strip()
+    min_amount = (args.get("min_amount") or "").strip()
+    max_amount = (args.get("max_amount") or "").strip()
+    filters = {
+        "student": student,
+        "method": method,
+        "year": year,
+        "term": term,
+        "start_date": start_date,
+        "end_date": end_date,
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+    }
+
+    conds = ["p.school_id=%s"]
+    params = [sid]
+
+    if student:
+        term_like = f"%{student.lower()}%"
+        conds.append("(LOWER(s.name) LIKE %s OR LOWER(s.admission_no) LIKE %s OR LOWER(COALESCE(p.reference,'')) LIKE %s)")
+        params.extend([term_like, term_like, term_like])
+    if method:
+        conds.append("p.method = %s")
+        params.append(method)
+    if year:
+        try:
+            conds.append("p.year = %s")
+            params.append(int(year))
+        except ValueError:
+            pass
+    if term:
+        try:
+            conds.append("p.term = %s")
+            params.append(int(term))
+        except ValueError:
+            pass
+    if start_date:
+        conds.append("p.date >= %s")
+        params.append(start_date)
+    if end_date:
+        conds.append("p.date <= %s")
+        params.append(end_date)
+    if min_amount:
+        try:
+            conds.append("p.amount >= %s")
+            params.append(float(min_amount))
+        except ValueError:
+            pass
+    if max_amount:
+        try:
+            conds.append("p.amount <= %s")
+            params.append(float(max_amount))
+        except ValueError:
+            pass
+
+    where = " AND ".join(conds)
+    return filters, where, params
+
+
 def _serialize_audit_log(log: dict[str, Any]) -> dict[str, Any]:
     ts = log.get("created_at")
     return {
@@ -104,8 +205,7 @@ def _serialize_audit_log(log: dict[str, Any]) -> dict[str, Any]:
 def login():
     if request.method == "POST":
         password = request.form.get("password", "").strip()
-        stored = (get_setting("ADMIN_PASSWORD") or "").strip() or "9133"
-        if verify_password(stored, password):
+        if _verify_admin_current_password(password):
             session["is_admin"] = True
             flash("Welcome, admin!", "success")
             return redirect(url_for("admin.dashboard"))
@@ -164,6 +264,170 @@ def dashboard():
         upgrade_link=upgrade_url(),
         mpesa_ok=mpesa_ok,
     )
+
+
+@admin_bp.route("/payment-records")
+def payment_records():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before reviewing payments.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.payment_records")))
+
+    filters, where, params = _build_payment_filter_state(sid)
+    limit_raw = request.args.get("limit")
+    try:
+        limit = int(limit_raw)
+    except (TypeError, ValueError):
+        limit = 200
+    limit = max(50, min(limit, 2000))
+
+    db = _db()
+    try:
+        cur = db.cursor(dictionary=True)
+        cur.execute("SELECT DISTINCT COALESCE(method,'Other') AS method FROM payments WHERE school_id=%s ORDER BY method ASC", (sid,))
+        method_choices = [row["method"] for row in cur.fetchall() if row and row.get("method")]
+
+        payment_sql = f"""
+            SELECT
+                p.id,
+                s.name AS student_name,
+                s.class_name,
+                p.year,
+                p.term,
+                p.amount,
+                p.method,
+                p.reference,
+                DATE_FORMAT(p.date, '%Y-%m-%d') AS date
+            FROM payments p
+            LEFT JOIN students s ON s.id = p.student_id
+            WHERE {where}
+            ORDER BY p.date DESC, p.id DESC
+            LIMIT %s
+        """
+        cur.execute(payment_sql, params + [limit])
+        payments = cur.fetchall() or []
+
+        summary_sql = f"""
+            SELECT
+                COUNT(*) AS total_count,
+                COALESCE(SUM(amount), 0) AS total_amount,
+                COALESCE(AVG(amount), 0) AS avg_amount,
+                COALESCE(MAX(amount), 0) AS max_amount
+            FROM payments p
+            LEFT JOIN students s ON s.id = p.student_id
+            WHERE {where}
+        """
+        cur.execute(summary_sql, params)
+        row = cur.fetchone() or {}
+        summary = {
+            "total_count": int(row.get("total_count") or 0),
+            "total_amount": float(row.get("total_amount") or 0),
+            "avg_amount": float(row.get("avg_amount") or 0),
+            "max_amount": float(row.get("max_amount") or 0),
+        }
+
+        trend_sql = f"""
+            SELECT DATE_FORMAT(p.date, '%%Y-%%m') AS ym, COALESCE(SUM(p.amount), 0) AS total
+            FROM payments p
+            LEFT JOIN students s ON s.id = p.student_id
+            WHERE {where} AND p.date >= %s
+            GROUP BY ym
+            ORDER BY ym ASC
+        """
+        trend_start = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        cur.execute(trend_sql, params + [trend_start])
+        trend_rows = cur.fetchall() or []
+
+        method_sql = f"""
+            SELECT COALESCE(p.method,'Other') AS method, COALESCE(SUM(p.amount), 0) AS total
+            FROM payments p
+            LEFT JOIN students s ON s.id = p.student_id
+            WHERE {where}
+            GROUP BY method
+            ORDER BY total DESC
+            LIMIT 8
+        """
+        cur.execute(method_sql, params)
+        method_rows = cur.fetchall() or []
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    export_url = url_for("admin.payment_records_export", **request.args.to_dict(flat=True))
+
+    return render_template(
+        "admin/payment_records.html",
+        payments=payments,
+        filters=filters,
+        summary=summary,
+        trend_rows=trend_rows,
+        method_rows=method_rows,
+        method_choices=method_choices,
+        export_url=export_url,
+        limit=limit,
+    )
+
+
+@admin_bp.route("/payment-records/export")
+def payment_records_export():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before reviewing payments.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.payment_records_export")))
+
+    filters, where, params = _build_payment_filter_state(sid)
+    db = _db()
+    try:
+        cur = db.cursor(dictionary=True)
+        export_sql = f"""
+            SELECT
+                DATE_FORMAT(p.date, '%%Y-%%m-%%d') AS date,
+                s.name AS student_name,
+                s.class_name,
+                p.year,
+                p.term,
+                p.amount,
+                p.method,
+                p.reference
+            FROM payments p
+            LEFT JOIN students s ON s.id = p.student_id
+            WHERE {where}
+            ORDER BY p.date DESC, p.id DESC
+        """
+        cur.execute(export_sql, params)
+        rows = cur.fetchall() or []
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    csv_buffer = StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(["Date", "Student", "Class", "Year", "Term", "Amount (KES)", "Method", "Reference"])
+    for row in rows:
+        writer.writerow([
+            row.get("date") or "",
+            row.get("student_name") or "",
+            row.get("class_name") or "",
+            row.get("year") or "",
+            row.get("term") or "",
+            row.get("amount") or "",
+            row.get("method") or "",
+            row.get("reference") or "",
+        ])
+
+    resp = Response(csv_buffer.getvalue(), mimetype="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = "attachment; filename=fee_payment_records.csv"
+    return resp
 
 
 @admin_bp.route("/users", methods=["GET", "POST"])
@@ -440,6 +704,7 @@ def school_profile():
         "SCHOOL_PHONE",
         "SCHOOL_EMAIL",
         "SCHOOL_WEBSITE",
+        "SCHOOL_PAYBILL",
     ]
     penalty_keys = [
         "LATE_PENALTY_KIND",
@@ -509,6 +774,30 @@ def school_profile():
     return render_template("school_profile.html", values=values)
 
 
+@admin_bp.route("/school/delete", methods=["POST"])
+def school_profile_delete():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before deleting its profile.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.school_profile")))
+    confirmation = (request.form.get("delete_confirmation") or "").strip().lower()
+    reason = (request.form.get("delete_reason") or "").strip()
+    if confirmation not in ("delete", "delete school", "archive"):
+        flash("Type DELETE or DELETE SCHOOL to confirm profile removal.", "warning")
+        return redirect(url_for("admin.school_profile"))
+    now = datetime.utcnow()
+    set_school_setting("SCHOOL_PROFILE_DELETED_AT", now.isoformat(), school_id=sid)
+    set_school_setting("SCHOOL_STATUS", "archived", school_id=sid)
+    set_school_setting("SCHOOL_PROFILE_DELETE_REASON", reason, school_id=sid)
+    session.pop("school_id", None)
+    session.pop("school_code", None)
+    flash("School profile archived. Please contact support if you need to restore it.", "success")
+    return redirect(url_for("auth.entry"))
+
+
 @admin_bp.route("/settings", methods=["GET", "POST"])
 def access_settings():
     guard = _require_admin()
@@ -540,8 +829,8 @@ def access_settings():
             current = (request.form.get("current_password") or "").strip()
             new = (request.form.get("new_password") or "").strip()
             confirm = (request.form.get("confirm_password") or "").strip()
-            stored = (get_setting("ADMIN_PASSWORD") or "").strip() or "9133"
-            if not verify_password(stored, current):
+            stored = _get_global_admin_password() or "9133"
+            if not _verify_admin_current_password(current):
                 flash("Current password is incorrect.", "error")
                 return redirect(url_for("admin.access_settings"))
             if not new or len(new) < 6:
@@ -553,8 +842,15 @@ def access_settings():
             if verify_password(stored, new):
                 flash("New password must be different from the current one.", "warning")
                 return redirect(url_for("admin.access_settings"))
+            new_hash = hash_password(new)
             try:
-                set_setting("ADMIN_PASSWORD", hash_password(new))
+                set_setting("ADMIN_PASSWORD", new_hash)
+                current_app.config["ADMIN_PASSWORD"] = new_hash
+                try:
+                    if sid:
+                        set_school_setting("APP_LOGIN_PASSWORD", new_hash, school_id=sid)
+                except Exception:
+                    pass
                 flash("Admin password updated successfully.", "success")
             except Exception as e:
                 flash(f"Failed to update password: {e}", "error")
@@ -661,9 +957,9 @@ def admin_security():
         current = (request.form.get("current_password") or "").strip()
         new = (request.form.get("new_password") or "").strip()
         confirm = (request.form.get("confirm_password") or "").strip()
+        stored = _get_global_admin_password() or "9133"
 
-        stored = (get_setting("ADMIN_PASSWORD") or "").strip() or "9133"
-        if not verify_password(stored, current):
+        if not _verify_admin_current_password(current):
             flash("Current password is incorrect.", "error")
             return redirect(url_for("admin.admin_security"))
         if not new or len(new) < 6:
@@ -683,5 +979,115 @@ def admin_security():
         return redirect(url_for("admin.admin_security"))
 
     return redirect(url_for("admin.access_settings"))
+
+
+@admin_bp.route("/backups", methods=["GET", "POST"])
+def admin_backups():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before managing backups.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.admin_backups")))
+
+    history = []
+    if request.method == "POST":
+        try:
+            result = create_backup(current_app, reason="manual admin trigger", school_id=sid)
+            flash(
+                f"Backup created ({format_east_africa(result['timestamp'], '%b %d, %Y %H:%M')}) and stored in history.",
+                "success",
+            )
+        except BackupException as exc:
+            flash(f"Backup failed: {exc}", "error")
+
+    history = get_backup_history(current_app, limit=8, school_id=sid)
+
+    schedule_str = current_app.config.get("BACKUP_SCHEDULE", "0 3 * * *")
+    try:
+        trigger = CronTrigger.from_crontab(schedule_str, timezone=EAST_AFRICA_TZ)
+        next_run = trigger.get_next_fire_time(None, east_africa_now())
+        next_run_readable = format_east_africa(next_run, "%b %d, %Y %H:%M") if next_run else None
+    except Exception:
+        next_run_readable = None
+
+    backup_root = backup_root_for_school(current_app, sid)
+    backup_directory = str(backup_root)
+    backup_keep_days = current_app.config.get("BACKUP_KEEP_DAYS", 60)
+    return render_template(
+        "admin_backups.html",
+        history=history,
+        schedule=schedule_str,
+        next_run=next_run_readable,
+        backup_directory=backup_directory,
+        backup_keep_days=backup_keep_days,
+    )
+
+
+@admin_bp.route("/backups/restore", methods=["POST"])
+def admin_backups_restore():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before restoring backups.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.admin_backups")))
+
+    history = get_backup_history(current_app, limit=1, school_id=sid)
+    if not history:
+        flash("No backup history available to restore.", "warning")
+        return redirect(url_for("admin.admin_backups"))
+
+    latest = history[0]
+    snapshot_path = latest.get("snapshot")
+    if not snapshot_path:
+        flash("Latest backup has no snapshot file to restore.", "error")
+        return redirect(url_for("admin.admin_backups"))
+
+    from pathlib import Path
+    snapshot = Path(snapshot_path)
+    if not snapshot.exists():
+        flash("Snapshot file is missing. Cannot restore.", "error")
+        return redirect(url_for("admin.admin_backups"))
+
+    try:
+        restore_result = restore_backup_snapshot(latest, current_app)
+    except BackupException as exc:
+        flash(f"Restore failed: {exc}", "error")
+        return redirect(url_for("admin.admin_backups"))
+
+    db_info = restore_result.get("database") or {}
+    db_status = db_info.get("status")
+    if db_status != "ok":
+        reason = db_info.get("reason") or "unknown error"
+        flash(f"Database restore failed: {reason}", "error")
+        return redirect(url_for("admin.admin_backups"))
+
+    assets_result = restore_result.get("assets") or []
+    asset_issues = [a for a in assets_result if a.get("status") != "ok"]
+
+    flash(
+        f"Restored data from {format_east_africa(latest.get('timestamp'), '%b %d, %Y %H:%M')} (snapshot: {snapshot.name}).",
+        "success",
+    )
+    if asset_issues:
+        flash(
+            f"{len(asset_issues)} asset archive(s) failed to restore; check logs for details.",
+            "warning",
+        )
+    log_event(
+        "backup_restore",
+        detail=(
+            f"Restore triggered for snapshot {snapshot.name} (db import ok, "
+            f"{len(assets_result) - len(asset_issues)} assets refreshed, "
+            f"{len(asset_issues)} issues)"
+        ),
+        target="backup:latest",
+    )
+    return redirect(url_for("admin.admin_backups"))
 
 

@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" role="img" aria-label="M-Pesa logo">
-  <title>M-Pesa</title>
-  <rect x="70" y="10" width="36" height="60" rx="10" fill="#dae7d5"/>
-  <path d="M79 30c8-5 15-8 22-10 0 0-10 20-22 25-8 3-19-5-0-15z" fill="#d81d1d"/>
-  <path d="M90 30c5-3 18-11 24-4 0 0-7 12-20 14-12 2-13-4-4-10z" fill="#f43c24"/>
-  <text x="0" y="53" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="42" fill="#2fb642">M</text>
-  <text x="30" y="53" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="42" fill="#2fb642">PESA</text>
-</svg>

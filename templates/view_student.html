@@ -5,105 +5,158 @@
 
 <div class="max-w-4xl mx-auto bg-white shadow-sm border border-gray-200 rounded-2xl p-8">
 
-  <!-- Printable School Header (enhanced) -->
-  <div class="print-header hidden print:block mb-6">
-    <div class="rounded-xl overflow-hidden border border-gray-200">
-      <div class="px-6 py-4 text-white" style="background: linear-gradient(135deg, #4338ca, #06b6d4)">
-        <div class="flex items-center gap-4">
-          <img src="{{ url_for('static', filename=LOGO_PRIMARY) }}" alt="{{ BRAND_NAME }} Logo" class="w-14 h-14 rounded-lg bg-white/10 ring-1 ring-white/30" onerror="this.style.display='none'">
-          <div class="flex-1">
-            <h1 class="text-xl font-extrabold tracking-wide">{{ BRAND_NAME }} {{ PORTAL_TITLE }}</h1>
-            <p class="text-xs opacity-90">Official Student Fee Record</p>
-          </div>
-          <div class="text-right">
-            <div class="inline-block text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full bg-white/15 ring-1 ring-white/30">Print Copy</div>
+  <section style="display:none;" class="print-hero print-only group relative mb-6 overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 text-white shadow-2xl">
+    <div class="print-hero__glow absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.3),_transparent_55%)]"></div>
+    <div class="relative flex flex-col gap-4 px-6 py-6 sm:px-10">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.4em] text-cyan-200 opacity-90">{{ BRAND_NAME }} {{ PORTAL_TITLE }}</p>
+          <p class="text-sm uppercase tracking-[0.6em] text-cyan-100/80">PRINT COPY</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="text-right text-[12px] uppercase tracking-[0.4em] text-cyan-200">{% if CURRENT_TERM %}Term {{ CURRENT_TERM }}{% else %}Term ?{% endif %} | {{ CURRENT_YEAR or '2027' }}</div>
+          <div class="h-10 w-10 rounded-2xl border border-white/30 bg-white/10 p-1 overflow-hidden">
+            <img src="{{ SCHOOL_LOGO_URL or LOGO_PRIMARY }}" alt="{{ SCHOOL_NAME }} logo" class="h-full w-full object-contain">
           </div>
         </div>
       </div>
-      <div class="px-6 py-4 bg-white">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-500 text-white flex items-center justify-center text-lg font-bold select-none">
-              {% set initials = (student.name or 'S')[:1] %}{{ initials }}
-            </div>
-            <div>
-              <div class="text-lg font-semibold text-gray-900">{{ student.name }}</div>
-              <div class="text-sm text-gray-600">Adm No: {{ student.admission_no or 'N/A' }} • Class: {{ student.class_name or 'N/A' }}</div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div id="printStudentQR" class="inline-block p-2 border border-gray-200 rounded-lg"></div>
-            <div class="text-[10px] text-gray-500 mt-1">Student ID for records</div>
-          </div>
+      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div>
+          <h1 class="text-3xl font-black tracking-tight text-white drop-shadow">{{ student.name }}</h1>
+          <p class="text-sm text-cyan-100/70">Adm No: {{ student.admission_no or 'N/A' }} | Class: {{ student.class_name or 'N/A' }}</p>
+          <p class="text-[10px] uppercase tracking-[0.6em] text-cyan-200/80 mt-2">Student ID for records</p>
         </div>
+        <div class="flex flex-col items-end gap-1 text-xs uppercase tracking-[0.35em]">
+          <span class="rounded-full border border-white/20 px-3 py-1 text-[11px]">{{ BRAND_NAME|upper }}</span>
+          <span class="text-[10px] text-cyan-100/70">{{ SCHOOL_NAME|upper }}</span>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-4">
+        <div class="text-[10px] uppercase tracking-[0.5em] text-cyan-100/80">
+          Scan to open this profile
+        </div>
+        <div id="printStudentQR" class="w-20 h-20 rounded-xl border border-white/30 bg-white/10 p-1"></div>
+      </div>
+      <div class="flex flex-col gap-2 text-[11px] text-cyan-200/90">
+        <div class="flex items-center justify-between">
+          <span>Accountability, clarity, and trust in every ledger</span>
+          <span class="text-[10px] text-cyan-100/70">Page 1/4</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span>{{ datetime.now().strftime("%m/%d/%y, %I:%M %p") }} | Student Profile - {{ student.name }}</span>
+          <span class="text-[10px] text-cyan-100/70">{{ request.url }}</span>
+        </div>
+      </div>
+      <div class="hidden md:flex flex-row items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-[11px] tracking-[0.4em] uppercase text-white/90">
+        <span>Current Balance</span>
+        <span class="text-lg font-black text-cyan-100">KES {{ "{:,.2f}".format(student.balance or student.fee_balance or 0) }}</span>
+        <span class="text-sm font-semibold text-slate-200">Credit: KES {{ "{:,.2f}".format(student.credit or 0) }}</span>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- Header -->
-  <div class="flex justify-between items-center mb-6">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-800">{{ student.name }}</h1>
-      <p class="text-gray-600">Admission No: {{ student.admission_no or "N/A" }}</p>
-      <p class="text-gray-600">Class: {{ student.class_name or "N/A" }}</p>
+  <div class="flex flex-col gap-6 mb-6 no-print">
+    <div class="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-emerald-50 p-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="h-12 w-12 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center justify-center overflow-hidden">
+          <img src="{{ SCHOOL_LOGO_URL or LOGO_PRIMARY }}" alt="{{ SCHOOL_NAME }} logo" class="h-full w-full object-contain">
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Student Profile</p>
+          <h2 class="text-lg font-semibold text-slate-800">{{ SCHOOL_NAME or BRAND_NAME }}</h2>
+          <p class="text-xs text-slate-500">{{ PORTAL_TITLE }}</p>
+          <div class="mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.3em] text-slate-500">
+            <span class="rounded-full border border-slate-200 bg-white px-3 py-1">Term {{ CURRENT_TERM or '-' }} | {{ CURRENT_YEAR or '----' }}</span>
+            {% if SCHOOL_PAYBILL %}
+            <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">Paybill {{ SCHOOL_PAYBILL }}</span>
+            {% endif %}
+            {% if SCHOOL_PHONE %}
+            <span class="rounded-full border border-slate-200 bg-white px-3 py-1">{{ SCHOOL_PHONE }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="flex gap-3 no-print">
-      <!-- Add Payment -->
-      <a href="{{ url_for('payments', student_id=student.id) }}"
-         class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
-        <i data-lucide="credit-card"></i> Add Payment
-      </a>
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">{{ student.name }}</h1>
+        <p class="text-gray-600">Admission No: {{ student.admission_no or "N/A" }}</p>
+        <p class="text-gray-600">Class: {{ student.class_name or "N/A" }}</p>
+      </div>
 
-      <!-- Back -->
-      <a href="{{ url_for('students') }}"
-         class="px-4 py-2 border border-gray-300 hover:bg-gray-100 rounded-lg flex items-center gap-2 transition">
-        <i data-lucide="arrow-left"></i> Back to Students
-      </a>
+      <div class="flex flex-wrap gap-3 no-print md:justify-end">
+        <!-- Add Payment -->
+        <a href="{{ url_for('payments', student_id=student.id) }}"
+           class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
+          <i data-lucide="credit-card"></i> Add Payment
+        </a>
 
-      <!-- Delete Student -->
-      <form action="{{ url_for('delete_student', student_id=student.id) }}" method="POST" onsubmit="return confirm('Delete this student and all related records? This cannot be undone.');">
-        <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
-          <i data-lucide="trash-2"></i> Delete
+        <!-- Back -->
+        <a href="{{ url_for('students') }}"
+           class="px-4 py-2 border border-gray-300 hover:bg-gray-100 rounded-lg flex items-center gap-2 transition">
+          <i data-lucide="arrow-left"></i> Back to Students
+        </a>
+
+        <!-- Delete Student -->
+        <form action="{{ url_for('delete_student', student_id=student.id) }}" method="POST" onsubmit="return confirm('Delete this student and all related records? This cannot be undone.');">
+          <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
+            <i data-lucide="trash-2"></i> Delete
+          </button>
+        </form>
+
+        <!-- Print Button -->
+        <button onclick="window.print()"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
+          <i data-lucide="printer"></i> Print Profile
         </button>
-      </form>
-
-      <!-- 🖨️ Print Button -->
-      <button onclick="window.print()"
-              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm transition">
-        <i data-lucide="printer"></i> Print Profile
-      </button>
+      </div>
     </div>
   </div>
 
-  <!-- Balances -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
-    <div class="bg-gray-50 rounded-xl p-4 border">
-      <p class="text-gray-500 text-sm">Current Balance</p>
-      <p class="text-2xl font-semibold text-blue-700">
-        KES {{ "{:,.2f}".format(student.balance or student.fee_balance or 0) }}
-      </p>
+  {% if credit_applied_amount and credit_applied_amount > 0 %}
+  <div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 flex items-center gap-2">
+    <i data-lucide="sparkles" class="w-4 h-4"></i>
+    <div class="text-sm">
+      <span class="font-semibold">Credit auto-applied:</span>
+      KES {{ "{:,.2f}".format(credit_applied_amount) }} used to settle outstanding balance.
     </div>
-    <div class="bg-gray-50 rounded-xl p-4 border">
-      <p class="text-gray-500 text-sm">Credit Balance</p>
-      <p class="text-2xl font-semibold text-green-700">
-        KES {{ "{:,.2f}".format(student.credit or 0) }}
-      </p>
-    </div>
-    <div class="bg-gray-50 rounded-xl p-4 border">
-      <p class="text-gray-500 text-sm">Net Status</p>
-      {% if (student.balance or student.fee_balance) > 0 %}
-        <p class="text-2xl font-semibold text-red-600">
-          Owes: KES {{ "{:,.2f}".format(student.balance or student.fee_balance) }}
-        </p>
-      {% elif (student.credit or 0) > 0 %}
-        <p class="text-2xl font-semibold text-green-600">
-          In Credit: KES {{ "{:,.2f}".format(student.credit) }}
-        </p>
+  </div>
+  {% endif %}
+
+  <div class="summary-board mb-6 grid gap-4 md:grid-cols-3">
+    {% set _balance = (student.balance or student.fee_balance or 0) | float %}
+    {% set _credit = (student.credit or 0) | float %}
+    {% set _net = _balance - _credit %}
+    <article class="stat-card stat-card--primary">
+      <p class="stat-card__label uppercase tracking-[0.4em] text-white/70">Current Balance</p>
+      <div class="stat-card__value text-3xl font-black">KES {{ "{:,.2f}".format(_balance) }}</div>
+      <p class="stat-card__hint">Balance as of {{ datetime.now().strftime("%Y-%m-%d") }}</p>
+    </article>
+    <article class="stat-card stat-card--accent">
+      <p class="stat-card__label uppercase tracking-[0.4em] text-slate-600">Credit Balance</p>
+      <div class="stat-card__value text-3xl font-black text-emerald-400">
+        KES {{ "{:,.2f}".format(_credit) }}
+      </div>
+      <p class="stat-card__hint text-slate-400">Available credit to offset future terms</p>
+    </article>
+    <article class="stat-card stat-card--status">
+      <p class="stat-card__label uppercase tracking-[0.4em] text-slate-600">Net Status</p>
+      {% if _net > 0 %}
+        <div class="stat-card__value text-3xl font-black text-rose-500">Owes</div>
+        <p class="stat-card__figure">KES {{ "{:,.2f}".format(_net) }}</p>
+      {% elif _net < 0 %}
+        <div class="stat-card__value text-3xl font-black text-emerald-500">In Credit</div>
+        <p class="stat-card__figure">KES {{ "{:,.2f}".format(_net * -1) }}</p>
       {% else %}
-        <p class="text-2xl font-semibold text-gray-700">Settled</p>
+        <div class="stat-card__value text-3xl font-black text-slate-700">Settled</div>
+        <p class="stat-card__figure text-slate-500">No outstanding balance</p>
       {% endif %}
-    </div>
+      <div class="stat-card__status uppercase tracking-[0.4em] text-[10px] text-slate-500">
+        {{ "Term " ~ (CURRENT_TERM or '-') }} | {{ CURRENT_YEAR or '----' }}
+      </div>
+    </article>
   </div>
 
   <!-- Quick Add Payment (inline) -->
@@ -165,48 +218,166 @@
   </div>
 
   <!-- Payment History -->
-  <div>
-    <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center gap-2">
-      <i data-lucide="file-text"></i> Payment History
-    </h2>
+  <section class="content-panel mb-8">
+    <div class="section-head">
+      <div class="section-head__titles">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <i data-lucide="file-text"></i> Payment History
+        </h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-500 mt-1">Official ledger | Term {{ CURRENT_TERM or '-' }} | {{ CURRENT_YEAR or '----' }}</p>
+      </div>
+      <span class="section-head__tag">Owes: KES {{ "{:,.2f}".format(student.balance or student.fee_balance or 0) }}</span>
+    </div>
 
     {% if payments %}
-      <table class="min-w-full border border-gray-200 text-sm rounded-lg overflow-hidden">
-        <thead class="bg-gray-50 text-gray-600">
-          <tr>
-            <th class="px-4 py-2 border-b text-left">#</th>
-            <th class="px-4 py-2 border-b text-left">Year</th>
-            <th class="px-4 py-2 border-b text-left">Term</th>
-            <th class="px-4 py-2 border-b text-left">Amount (KES)</th>
-            <th class="px-4 py-2 border-b text-left">Method</th>
-            <th class="px-4 py-2 border-b text-left">Reference</th>
-            <th class="px-4 py-2 border-b text-left">Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for payment in payments %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-4 py-2 border-b">{{ loop.index }}</td>
-              <td class="px-4 py-2 border-b">{{ payment.year or 'N/A' }}</td>
-              <td class="px-4 py-2 border-b">{{ payment.term or 'N/A' }}</td>
-              <td class="px-4 py-2 border-b">KES {{ "{:,.2f}".format(payment.amount) }}</td>
-              <td class="px-4 py-2 border-b">{{ payment.method }}</td>
-              <td class="px-4 py-2 border-b">{{ payment.reference }}</td>
-              <td class="px-4 py-2 border-b">{{ payment.date.strftime("%Y-%m-%d %H:%M") }}</td>
+      <div class="overflow-x-auto rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600 text-[11px] uppercase tracking-[0.3em]">
+            <tr>
+              <th class="px-4 py-3 border-b text-left">#</th>
+              <th class="px-4 py-3 border-b text-left">Year</th>
+              <th class="px-4 py-3 border-b text-left">Term</th>
+              <th class="px-4 py-3 border-b text-left">Amount (KES)</th>
+              <th class="px-4 py-3 border-b text-left">Method</th>
+              <th class="px-4 py-3 border-b text-left">Reference</th>
+              <th class="px-4 py-3 border-b text-left">Date</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for payment in payments %}
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-3 border-b font-semibold">{{ loop.index }}</td>
+                <td class="px-4 py-3 border-b">{{ payment.year or 'N/A' }}</td>
+                <td class="px-4 py-3 border-b">{{ payment.term or 'N/A' }}</td>
+                <td class="px-4 py-3 border-b text-emerald-600 font-semibold">KES {{ "{:,.2f}".format(payment.amount) }}</td>
+                <td class="px-4 py-3 border-b uppercase">{{ payment.method }}</td>
+                <td class="px-4 py-3 border-b">{{ payment.reference }}</td>
+                <td class="px-4 py-3 border-b">{{ payment.date.strftime("%Y-%m-%d %H:%M") if payment.date else (payment.date or 'N/A') }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <p class="text-gray-500 italic">No payments found for this student.</p>
     {% endif %}
-  </div>
+  </section>
+
+  <section class="content-panel mb-8">
+    <div class="section-head">
+      <div class="section-head__titles">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <i data-lucide="upload"></i> Guardian Payment Proofs
+        </h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-500 mt-1">Document trail</p>
+      </div>
+      <span class="section-head__tag">{{ proofs|length if proofs else 0 }} proof(s)</span>
+    </div>
+    {% if proofs and proofs|length > 0 %}
+      <div class="space-y-4">
+        {% for proof in proofs %}
+        <article class="border rounded-2xl p-4 shadow-sm bg-white flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="space-y-1">
+              <p class="text-sm text-gray-500">Uploaded {{ proof.created_at.strftime("%Y-%m-%d %H:%M") if proof.created_at and proof.created_at.__class__.__name__ != 'str' else proof.created_at or 'just now' }}</p>
+              <h3 class="text-lg font-semibold text-gray-800">{{ proof.guardian_name or 'Parent / Guardian' }}</h3>
+            </div>
+            <span class="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-indigo-700 border-indigo-100 bg-indigo-50">
+              <i data-lucide="tag"></i>
+              {{ proof.status_label or 'Pending Review' }}
+            </span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+            <div>
+              <p class="text-xs uppercase tracking-[0.4em] text-gray-400">Amount</p>
+              <p class="text-lg font-semibold text-slate-800">{{ proof.amount is not none and 'KES ' ~ '{:,.2f}'.format(proof.amount) or 'N/A' }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-[0.4em] text-gray-400">Payment Date</p>
+              <p>{{ proof.payment_date.strftime("%Y-%m-%d") if proof.payment_date and proof.payment_date.__class__.__name__ != 'str' else proof.payment_date or 'Unknown' }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-[0.4em] text-gray-400">Contact</p>
+              <p>{{ proof.guardian_phone or proof.guardian_email or 'Not provided' }}</p>
+            </div>
+          </div>
+          {% if proof.description %}
+          <p class="text-sm text-gray-700 border-l-4 border-indigo-200 pl-3">
+            {{ proof.description }}
+          </p>
+          {% endif %}
+          {% if proof.notes %}
+          <p class="text-sm text-gray-600 text-indigo-700">
+            <strong>Admin note:</strong> {{ proof.notes }}
+          </p>
+          {% endif %}
+          {% if proof.analysis %}
+          <p class="text-sm text-indigo-700 border-l-4 border-indigo-200 pl-3">
+            <strong>Auto-scan insight:</strong> {{ proof.analysis }}
+          </p>
+          {% endif %}
+          <div class="flex flex-wrap items-center gap-3 text-sm">
+            {% if proof.file_path %}
+            <a href="{{ url_for('static', filename=proof.file_path) }}" target="_blank"
+               class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-50 transition">
+              <i data-lucide="file-text"></i> View proof
+            </a>
+            {% endif %}
+            {% if proof.rejection_reason %}
+            <span class="text-xs italic text-rose-600">Reason: {{ proof.rejection_reason }}</span>
+            {% endif %}
+          </div>
+          {% if proof.status not in ("accepted", "rejected") %}
+          <div class="pt-3 border-t border-slate-100 border-dashed space-y-2 text-xs text-gray-600">
+            <form action="{{ url_for('guardian_proof_review', receipt_id=proof.id) }}" method="POST" class="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="action" value="accept">
+              <input name="admin_note" type="text" placeholder="Optional admin note before recording" class="flex-1 min-w-[180px] rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none">
+              <button type="submit" class="rounded-full bg-emerald-600 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white hover:bg-emerald-500 transition">
+                Accept & record payment
+              </button>
+            </form>
+            <form action="{{ url_for('guardian_proof_review', receipt_id=proof.id) }}" method="POST" class="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="action" value="reject">
+              <input name="rejection_reason" type="text" placeholder="Optional rejection reason" class="flex-1 min-w-[180px] rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+              <button type="submit" class="rounded-full border border-rose-400 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-rose-600 hover:border-rose-500 transition">
+                Reject proof
+              </button>
+            </form>
+          </div>
+          {% elif proof.status == "accepted" %}
+          <div class="pt-3 border-t border-slate-100 border-dashed text-xs text-gray-500 flex flex-wrap items-center gap-2">
+            <button type="button" disabled class="rounded-full bg-emerald-100 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-700">
+              Already recorded
+            </button>
+            <span>Payment was recorded and ledger updated.</span>
+          </div>
+          {% elif proof.status == "rejected" %}
+          <div class="pt-3 border-t border-slate-100 border-dashed text-xs text-gray-500 flex flex-wrap items-center gap-2">
+            <button type="button" disabled class="rounded-full border border-rose-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-rose-600">
+              Already rejected
+            </button>
+            <span>Guardian notified; please request a new upload.</span>
+          </div>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-gray-500 italic">No guardian payment proofs on file yet.</p>
+    {% endif %}
+  </section>
 
   <!-- Overpay Records -->
-  <div class="mt-8">
-    <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center gap-2">
-      <i data-lucide="coins"></i> Overpay Records
-    </h2>
+  <section class="content-panel mb-8">
+    <div class="section-head">
+      <div class="section-head__titles">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <i data-lucide="coins"></i> Overpay Records
+        </h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-500 mt-1">Refund trail</p>
+      </div>
+      <span class="section-head__tag">Overpay status</span>
+    </div>
     {% if overpays and overpays|length > 0 %}
       <table class="min-w-full border border-gray-200 text-sm rounded-lg overflow-hidden">
         <thead class="bg-gray-50 text-gray-600">
@@ -233,13 +404,19 @@
     {% else %}
       <p class="text-gray-500 italic">No overpay records for this student.</p>
     {% endif %}
-  </div>
+  </section>
 
   <!-- Credit Activities (Apply / Refund) -->
-  <div class="mt-8">
-    <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center gap-2">
-      <i data-lucide="activity"></i> Credit Activities
-    </h2>
+  <section class="content-panel mb-8">
+    <div class="section-head">
+      <div class="section-head__titles">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <i data-lucide="activity"></i> Credit Activities
+        </h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-500 mt-1">Payments & refunds</p>
+      </div>
+      <span class="section-head__tag">{{ credit_ops|length if credit_ops else 0 }} record(s)</span>
+    </div>
     {% if credit_ops and credit_ops|length > 0 %}
       <table class="min-w-full border border-gray-200 text-sm rounded-lg overflow-hidden">
         <thead class="bg-gray-50 text-gray-600">
@@ -268,10 +445,20 @@
     {% else %}
       <p class="text-gray-500 italic">No credit activities for this student.</p>
     {% endif %}
-  </div>
+  </section>
 
   <!-- Credit Transfers -->
-  <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+  <section class="content-panel mb-8">
+    <div class="section-head">
+      <div class="section-head__titles">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <i data-lucide="git-merge"></i> Credit Transfers
+        </h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-gray-500 mt-1">Internal credit movements</p>
+      </div>
+      <span class="section-head__tag">In / Out</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <!-- Transfers Out -->
     <div>
       <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -341,9 +528,10 @@
         <p class="text-gray-500 italic">No incoming credit transfers.</p>
       {% endif %}
     </div>
-  </div>
+    </div>
+  </section>
 
-  <!-- Signature Section (Print Only) -->
+    <!-- Signature Section (Print Only) -->
   <div class="mt-12 text-sm text-gray-700 print:block hidden">
     <hr class="my-4 border-gray-300">
     <div class="flex justify-between">
@@ -365,18 +553,125 @@ if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>
 
 <style>
+.print-hero {
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+.print-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 25px 40px rgba(15, 23, 42, 0.4);
+}
+.print-hero__glow {
+  filter: blur(40px);
+}
+  .print-only {
+    display: none;
+  }
+.summary-board {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.05), rgba(15, 118, 110, 0.08));
+  padding: 0.25rem;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.stat-card {
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.25;
+  background: radial-gradient(circle at top right, rgba(255,255,255,0.5), transparent 45%);
+}
+.stat-card--primary {
+  background: linear-gradient(135deg, #0f172a, #0ea5e9);
+  color: white;
+}
+.stat-card--accent {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: white;
+  color: #0f172a;
+}
+.stat-card--status {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(15, 118, 110, 0.4);
+  background: white;
+}
+.stat-card__label {
+  font-size: 0.65rem;
+}
+.stat-card__value {
+  font-size: 2.2rem;
+}
+.stat-card__figure {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+.stat-card__hint {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.stat-card__status {
+  border-top: 1px dashed rgba(15, 23, 42, 0.2);
+  padding-top: 0.65rem;
+}
+.content-panel {
+  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 1.25rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.08);
+}
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+.section-head__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.section-head__tag {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+.section-head__tag strong {
+  font-weight: 700;
+}
+@media (max-width: 768px) {
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .stat-card {
+    min-height: 160px;
+  }
+}
+
 @media print {
   /* Hide buttons, navbars, and interactive elements */
   nav, header, footer, button, a[href], .no-print {
     display: none !important;
   }
-
-  /* Show school header and signature section */
-  .print-header {
-    display: block !important;
-  }
-
-  .print\:block {
+  .print-only {
     display: block !important;
   }
 
@@ -403,6 +698,10 @@ if (typeof lucide !== 'undefined') lucide.createIcons();
   /* Improve table printing across pages */
   table { page-break-inside: auto; }
   tr    { page-break-inside: avoid; page-break-after: auto; }
+
+  .print-only {
+    display: block !important;
+  }
 }
 </style>
 
@@ -430,3 +729,5 @@ if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>
 
 {% endblock %}
+
+

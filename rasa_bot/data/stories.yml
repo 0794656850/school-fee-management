@@ -1,0 +1,31 @@
+version: "3.4"
+stories:
+- story: balance overview request
+  steps:
+  - intent: balance_inquiry
+  - action: utter_balance_hint
+
+- story: exam update request
+  steps:
+  - intent: exam_inquiry
+  - action: utter_exam_info
+
+- story: receipt help request
+  steps:
+  - intent: receipt_help
+  - action: utter_receipt_help
+
+- story: friendly greeting
+  steps:
+  - intent: greet
+  - action: utter_greet
+
+- story: gratitude
+  steps:
+  - intent: thank_you
+  - action: utter_greet
+
+- story: goodbye
+  steps:
+  - intent: goodbye
+  - action: utter_goodbye
