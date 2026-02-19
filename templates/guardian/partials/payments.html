@@ -1,0 +1,208 @@
+<section class="sample-section sample-card" id="payFormSection">
+  <div class="sample-section__header">
+    <div>
+      <h2>Make a Payment</h2>
+      <p>Record M-Pesa payments instantly.</p>
+    </div>
+  </div>
+  <form id="payForm" class="sample-form-grid">
+    <input type="hidden" name="token" value="{{ token }}" />
+    <div>
+      <label class="sample-label">Phone Number (M-Pesa)</label>
+      <input name="phone" placeholder="07xx..." class="sample-input" />
+    </div>
+    <div>
+      <label class="sample-label sample-label--row">
+        <span>Amount (KES)</span>
+        <button type="button" id="fillFull" class="sample-link">Use full balance</button>
+      </label>
+      <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="sample-input" />
+    </div>
+    <button type="submit" class="sample-primary-btn sample-primary-btn--full">
+      <i data-lucide="smartphone"></i>
+      Pay Now with M-Pesa
+    </button>
+  </form>
+  <div id="payMsg" class="sample-help"></div>
+  <div id="payTrackWrapper" class="hidden sample-track">
+    <span id="payTrack"></span>
+    <button type="button" id="payTrackCancel" class="hidden sample-link">Cancel STK push</button>
+  </div>
+  {% if paypal_client_id %}
+  <div class="sample-divider"></div>
+  <div class="sample-help">Or pay securely with PayPal</div>
+  <div id="paypal-button-container"></div>
+  {% endif %}
+</section>
+
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Paybill Bank Payment</h2>
+      <p>Pay from any Kenyan bank, then paste the M-Pesa confirmation to verify instantly.</p>
+    </div>
+  </div>
+  <div class="sample-split">
+    <div class="sample-info-panel">
+      <div class="sample-info-title">School Paybill</div>
+      <p class="text-sm text-gray-600">All Kenyan banks supported. Use the student details as the account number.</p>
+      <div class="sample-pill-row">
+        <span>Equity</span>
+        <span>KCB</span>
+        <span>Co-op</span>
+        <span>NCBA</span>
+        <span>Absa</span>
+        <span>Stanbic</span>
+        <span>DTB</span>
+        <span>I&M</span>
+        <span>Family</span>
+        <span>Standard Chartered</span>
+      </div>
+      <div class="sample-note-panel mt-4">
+        <div class="sample-note-title">Paybill details</div>
+        <p><strong>Paybill:</strong> {{ SCHOOL_PAYBILL or 'Set in admin settings' }}</p>
+        <p><strong>Account number:</strong> {{ student.admission_no or student.id }}</p>
+        <p class="text-xs text-gray-500">Use the student admission number or student ID as the account reference.</p>
+      </div>
+    </div>
+    <div class="sample-form-panel">
+      <div class="sample-form-header">
+        <div>
+          <div class="sample-form-title">Send M-Pesa confirmation</div>
+          <div class="sample-form-sub">Paste the full message to attach it to {{ student.name }}.</div>
+        </div>
+      </div>
+      <form id="paybillForm" class="sample-form-stack">
+        <input type="hidden" name="account_ref" value="{{ student.admission_no or student.id }}">
+        <div class="sample-form-row">
+          <div>
+            <label class="sample-label">Amount (KES)</label>
+            <input type="number" name="amount" min="1" step="1" class="sample-input" placeholder="e.g. 1500" required>
+          </div>
+          <div>
+            <label class="sample-label">Payment date</label>
+            <input type="date" name="payment_date" class="sample-input">
+          </div>
+        </div>
+        <div>
+          <label class="sample-label">Bank</label>
+          <select name="bank_name" class="sample-input">
+            <option value="M-Pesa">M-Pesa</option>
+            <option value="Equity">Equity</option>
+            <option value="KCB">KCB</option>
+            <option value="Cooperative">Co-operative Bank</option>
+            <option value="NCBA">NCBA</option>
+            <option value="Absa">Absa</option>
+            <option value="Stanbic">Stanbic</option>
+            <option value="DTB">DTB</option>
+            <option value="I&M">I&M</option>
+            <option value="Family Bank">Family Bank</option>
+            <option value="Standard Chartered">Standard Chartered</option>
+          </select>
+        </div>
+        <div>
+          <label class="sample-label">M-Pesa message</label>
+          <textarea name="mpesa_text" class="sample-input" rows="4" placeholder="Paste the full confirmation SMS here." required></textarea>
+        </div>
+        <button type="submit" class="sample-primary-btn sample-primary-btn--full">
+          <i data-lucide="send"></i>
+          Send for verification
+        </button>
+        <div id="paybillStatus" class="sample-help"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="recent-payments" class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Recent Payments</h2>
+      <p>All recorded receipts for the term.</p>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-gray-500">
+          <th class="py-2">Date</th>
+          <th class="py-2">Reference</th>
+          <th class="py-2">Method</th>
+          <th class="py-2">Status</th>
+          <th class="py-2 text-right">Amount (KES)</th>
+          <th class="py-2 text-right">Receipt</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr class="border-t border-gray-100">
+          <td class="py-2">{{ p.date }}</td>
+          <td class="py-2">{{ p.reference or '-' }}</td>
+          <td class="py-2">{{ p.method or 'M-Pesa' }}</td>
+          <td class="py-2">
+            <span class="sample-status sample-status--paid">Success</span>
+          </td>
+          <td class="py-2 text-right">{{ '%.0f'|format(p.amount or 0) }}</td>
+          <td class="py-2 text-right text-indigo-700"><a href="{{ url_for('guardian.guardian_receipt', payment_id=p.id, token=token) }}" class="hover:underline">Print</a></td>
+        </tr>
+        {% else %}
+        <tr class="border-t border-gray-100 text-gray-500 is-empty"><td colspan="6" class="py-4 text-center">No payments yet.</td></tr>
+        {% endfor %}
+        <tr id="tableSearchEmpty" class="border-t border-gray-100 text-gray-500 hidden"><td colspan="6" class="py-4 text-center">No matches found.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if stk_activity %}
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Recent STK Activity</h2>
+      <p>Refresh pending items to check the latest status.</p>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-gray-500">
+          <th class="py-2">Updated</th>
+          <th class="py-2">Phone</th>
+          <th class="py-2">Amount</th>
+          <th class="py-2">Status</th>
+          <th class="py-2">Details</th>
+          <th class="py-2 text-right">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in stk_activity %}
+        <tr class="border-t border-gray-100">
+          <td class="py-2">{{ r.updated_at }}</td>
+          <td class="py-2">{{ r.phone }}</td>
+          <td class="py-2">KES {{ '%.0f'|format(r.amount or 0) }}</td>
+          <td class="py-2">
+            {% if r.status == 'pending' %}
+              <span class="sample-status sample-status--pending">Pending</span>
+            {% elif r.status == 'success' %}
+              <span class="sample-status sample-status--paid">Success</span>
+            {% else %}
+              <span class="sample-status sample-status--overdue">Failed</span>
+            {% endif %}
+          </td>
+          <td class="py-2 text-gray-600">{{ r.result_desc or '-' }}</td>
+          <td class="py-2 text-right">
+            {% if r.status == 'pending' %}
+              <button class="refresh sample-secondary-btn" data-crid="{{ r.checkout_request_id }}">Refresh</button>
+            {% elif r.status == 'success' and r.payment_id %}
+              <a class="text-indigo-700 hover:underline" href="{{ url_for('guardian.guardian_receipt', payment_id=r.payment_id, token=token) }}">Print receipt</a>
+            {% else %}
+              <span class="text-xs text-gray-400">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}

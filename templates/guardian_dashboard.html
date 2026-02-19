@@ -12,16 +12,16 @@
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
   <style>
     :root {
-      --portal-ink: #0b1324;
-      --portal-muted: #526175;
-      --portal-card: rgba(255, 255, 255, 0.88);
-      --portal-border: rgba(11, 19, 36, 0.12);
-      --portal-shadow: 0 24px 60px rgba(11, 19, 36, 0.16);
-      --portal-accent: #0f766e;
-      --portal-accent-strong: #0b4a4a;
-      --portal-warm: #f59e0b;
-      --portal-warm-soft: rgba(245, 158, 11, 0.18);
-      --portal-ice: rgba(230, 248, 244, 0.9);
+      --portal-ink: #10213b;
+      --portal-muted: #5b6f8f;
+      --portal-card: #ffffff;
+      --portal-border: #cfe0f3;
+      --portal-shadow: 0 18px 40px rgba(16, 33, 59, 0.12);
+      --portal-accent: #1d4ed8;
+      --portal-accent-strong: #1e40af;
+      --portal-warm: #ff7a59;
+      --portal-warm-soft: #ffe8df;
+      --portal-ice: #edf4ff;
     }
 
     html, body {
@@ -32,7 +32,7 @@
     .guardian-portal {
       font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
       color: var(--portal-ink);
-      background: #f3f9f7;
+      background: #f4f7fb;
       margin: 0;
       padding: 0;
       position: relative;
@@ -51,10 +51,10 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(circle at 8% 8%, rgba(15, 118, 110, 0.22), transparent 42%),
-        radial-gradient(circle at 90% 8%, rgba(245, 158, 11, 0.24), transparent 46%),
-        radial-gradient(circle at 20% 85%, rgba(14, 165, 233, 0.16), transparent 48%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(231, 245, 241, 0.95));
+        radial-gradient(circle at 8% 8%, #d9e8ff 0%, transparent 38%),
+        radial-gradient(circle at 88% 12%, #ffe4dc 0%, transparent 40%),
+        radial-gradient(circle at 20% 86%, #e7f1ff 0%, transparent 46%),
+        linear-gradient(140deg, #f6f9ff 0%, #eef4ff 100%);
       z-index: 0;
       pointer-events: none;
     }
@@ -63,10 +63,10 @@
       position: fixed;
       inset: 0;
       background-image:
-        linear-gradient(rgba(11, 19, 36, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(11, 19, 36, 0.05) 1px, transparent 1px);
-      background-size: 48px 48px;
-      mask-image: radial-gradient(circle at 30% 10%, rgba(0, 0, 0, 0.6), transparent 65%);
+        linear-gradient(rgba(10, 26, 47, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(10, 26, 47, 0.03) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at 24% 8%, rgba(0, 0, 0, 0.55), transparent 68%);
       z-index: 0;
       pointer-events: none;
     }
@@ -75,10 +75,8 @@
       position: fixed;
       inset: 12px;
       border-radius: 28px;
-      border: 1px dashed rgba(11, 19, 36, 0.08);
-      box-shadow:
-        0 0 0 12px rgba(255, 255, 255, 0.35),
-        0 20px 50px rgba(15, 23, 42, 0.1);
+      border: 1px solid rgba(10, 26, 47, 0.06);
+      box-shadow: 0 12px 24px rgba(10, 26, 47, 0.06);
       z-index: 1;
       pointer-events: none;
     }
@@ -101,10 +99,22 @@
       position: sticky;
       top: 0;
       z-index: 40;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      background: linear-gradient(180deg, #ffffff, #f6fafc);
+      backdrop-filter: none;
+      border-bottom: 1px solid #d6e1ea;
+      box-shadow: 0 10px 24px rgba(10, 26, 47, 0.08);
+    }
+
+    .portal-header::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #4f7cff, #ff7a59, transparent);
+      opacity: 0.7;
+      pointer-events: none;
     }
 
     .portal-header__inner {
@@ -114,6 +124,8 @@
       gap: 18px;
       padding: 12px 0;
       flex-wrap: wrap;
+      position: relative;
+      padding-right: clamp(120px, 16vw, 160px);
     }
 
     .portal-header__brand {
@@ -167,6 +179,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      margin-right: 8px;
     }
 
     .portal-header__bell {
@@ -223,31 +236,135 @@
       color: #1d4ed8;
     }
 
-    .portal-header__logout {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      height: 40px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(15, 23, 42, 0.12);
-      background: #fff;
-      color: #0f172a;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      font-size: 12px;
-      font-weight: 600;
-      text-decoration: none;
-      white-space: nowrap;
+    .portal-nav-wrap {
+      position: sticky;
+      top: 72px;
+      z-index: 65;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      background: rgba(244, 247, 251, 0.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     }
 
-    .portal-header__logout i {
+    .portal-page-nav {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 10px;
+      align-items: center;
+      padding: 4px 0 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .portal-page-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .portal-shell--nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .portal-shell--nav .portal-page-nav {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .portal-page-nav__link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 999px;
+      border: 1px solid #d5e0ea;
+      background: #ffffff;
+      color: #1f2937;
+      font-size: 0.96rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      text-decoration: none;
+      box-shadow: 0 6px 12px rgba(10, 26, 47, 0.05);
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+      opacity: 1;
+    }
+
+    .portal-page-nav__link i {
       width: 16px;
       height: 16px;
     }
 
-    .portal-header__logout:hover {
+    .portal-page-nav__link:hover {
+      color: #0f172a;
+      border-color: #0d9488;
+      background: #f2fbf9;
       transform: translateY(-1px);
-      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      box-shadow: 0 10px 18px rgba(10, 26, 47, 0.09);
+    }
+
+    .portal-page-nav__link.is-active {
+      border-color: #1e40af;
+      background: linear-gradient(135deg, #1d4ed8, #1e40af);
+      color: #ffffff;
+      box-shadow: 0 10px 18px rgba(29, 78, 216, 0.28);
+    }
+
+    .portal-page-nav__link--logout {
+      border-color: #ea580c;
+      background: linear-gradient(135deg, #ff7a59, #ea580c);
+      color: #ffffff;
+      box-shadow: 0 10px 18px rgba(234, 88, 12, 0.28);
+      flex-shrink: 0;
+    }
+
+    .portal-page-nav__link--logout:hover {
+      border-color: #c2410c;
+      background: linear-gradient(135deg, #fb8c71, #c2410c);
+      color: #ffffff;
+    }
+
+    @media (max-width: 760px) {
+      .portal-page-nav__link--logout span {
+        display: none;
+      }
+      .portal-page-nav__link--logout {
+        min-width: 44px;
+        padding: 0 12px;
+      }
+    }
+
+    .floating-top {
+      position: fixed;
+      right: clamp(16px, 3vw, 36px);
+      bottom: clamp(18px, 4vw, 40px);
+      z-index: 60;
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: linear-gradient(135deg, #0b6e6b, #f59e0b);
+      box-shadow: 0 18px 32px rgba(11, 19, 36, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .floating-top.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .floating-top:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 40px rgba(11, 19, 36, 0.24);
     }
 
     .guardian-portal .brand-hero__row {
@@ -289,6 +406,21 @@
       min-width: 0;
     }
 
+    .sample-section.sample-card {
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .sample-section.sample-card::after {
+      content: none;
+    }
+
+    .sample-section.sample-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 30px 60px rgba(11, 19, 36, 0.12);
+    }
+
     @media (min-width: 1100px) {
       .portal-card--wide { grid-column: span 12; }
       .portal-card--half { grid-column: span 6; }
@@ -324,25 +456,20 @@
     }
 
     .portal-side::before {
-      content: "";
-      position: absolute;
-      inset: 12px;
-      border-radius: 22px;
-      border: 1px dashed rgba(15, 23, 42, 0.08);
-      pointer-events: none;
+      content: none;
     }
 
     .guardian-portal .glass {
       background: var(--portal-card);
       border: 1px solid var(--portal-border);
       box-shadow: var(--portal-shadow);
-      backdrop-filter: blur(12px);
+      backdrop-filter: none;
     }
 
     .guardian-portal .bg-white\/70,
     .guardian-portal .bg-white\/80,
     .guardian-portal .bg-white\/90 {
-      background: var(--portal-card);
+      background: #ffffff;
     }
 
     .guardian-portal .border-gray-100 {
@@ -398,10 +525,10 @@
     }
 
     .guardian-portal .guardian-analytics-panel {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 253, 250, 0.85));
-      border: 1px solid rgba(15, 118, 110, 0.25);
+      background: linear-gradient(145deg, #ffffff, #f3fbfa);
+      border: 1px solid #bde8e3;
       color: var(--portal-ink);
-      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
+      box-shadow: 0 24px 46px rgba(10, 26, 47, 0.1);
     }
 
     .guardian-portal .guardian-analytics-panel::after {
@@ -412,15 +539,15 @@
     }
 
     .guardian-portal .guardian-analytics-metrics {
-      background: rgba(255, 255, 255, 0.92);
+      background: #ffffff;
       border: 1px solid var(--portal-border);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      box-shadow: none;
     }
 
     .guardian-portal .guardian-analytics-metric {
-      background: rgba(255, 255, 255, 0.72);
+      background: #f8fbfd;
       border: 1px solid var(--portal-border);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      box-shadow: none;
     }
 
     .portal-hero {
@@ -465,9 +592,9 @@
 
     .portal-ui {
       background:
-        radial-gradient(circle at 8% 0%, rgba(17, 126, 121, 0.12), transparent 45%),
-        radial-gradient(circle at 92% 8%, rgba(196, 139, 50, 0.12), transparent 45%),
-        #f6f3ee;
+        radial-gradient(circle at 8% 0%, #dff4f1 0%, transparent 45%),
+        radial-gradient(circle at 92% 8%, #fff0d9 0%, transparent 45%),
+        #f3f7fb;
       color: #0f172a;
     }
 
@@ -482,8 +609,8 @@
       position: sticky;
       top: 0;
       z-index: 20;
-      background: rgba(245, 246, 251, 0.8);
-      backdrop-filter: blur(16px);
+      background: #f5f6fb;
+      backdrop-filter: none;
       border-bottom: 1px solid rgba(15, 23, 42, 0.06);
     }
 
@@ -554,12 +681,18 @@
     }
 
     .sample-layout {
-      padding: 28px 0 60px;
+      padding: 54px 0 60px;
       display: flex;
       flex-direction: column;
       gap: 28px;
       position: relative;
       z-index: 2;
+    }
+
+    @media (max-width: 900px) {
+      .sample-layout {
+        padding-top: 64px;
+      }
     }
 
     .sample-hero {
@@ -609,16 +742,32 @@
       color: #4f46e5;
     }
 
+    .sample-child-name {
+      font-weight: 600;
+    }
+
+    .sample-child-school {
+      font-size: 0.85rem;
+      color: #64748b;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+
+    .sample-child-meta {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
     .sample-primary-btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: linear-gradient(135deg, #0b6e6b, #149189);
+      background: linear-gradient(135deg, #0f766e, #0d9488);
       color: #fff;
       border-radius: 16px;
       padding: 12px 20px;
       font-weight: 600;
-      box-shadow: 0 18px 30px rgba(12, 110, 107, 0.35);
+      box-shadow: 0 14px 24px rgba(13, 148, 136, 0.28);
     }
 
     .sample-primary-btn--full {
@@ -630,19 +779,19 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      border: 1px solid rgba(12, 24, 45, 0.12);
-      background: #fffaf2;
-      color: #0f172a;
+      border: 1px solid #d5e0ea;
+      background: #ffffff;
+      color: #1f2d3d;
       border-radius: 12px;
       padding: 10px 14px;
       font-weight: 600;
     }
 
     .sample-card {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 246, 238, 0.88));
+      background: #ffffff;
       border-radius: 20px;
-      border: 1px solid rgba(12, 24, 45, 0.1);
-      box-shadow: 0 26px 48px rgba(11, 19, 36, 0.12);
+      border: 1px solid #d6e1ea;
+      box-shadow: 0 18px 32px rgba(10, 26, 47, 0.08);
       padding: 24px;
     }
 
@@ -705,6 +854,17 @@
       font-weight: 700;
     }
 
+    .sample-section__header h2::after {
+      content: "";
+      display: block;
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(15, 118, 110, 0.7), rgba(245, 158, 11, 0.7));
+      margin-top: 6px;
+      opacity: 0.6;
+    }
+
     .sample-section__header p {
       color: #64748b;
       font-size: 0.95rem;
@@ -716,6 +876,14 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+    }
+
+    #payFormSection,
+    #uploadProof,
+    #proofStatus,
+    #recent-payments,
+    #msgForm {
+      scroll-margin-top: 110px;
     }
 
     .sample-list {
@@ -1062,8 +1230,8 @@
     }
 
     .proof-card {
-      background: rgba(255, 255, 255, 0.92);
-      border: 1px solid rgba(12, 24, 45, 0.12);
+      background: #ffffff;
+      border: 1px solid #d6e1ea;
       border-radius: 18px;
       padding: 18px;
       box-shadow: 0 20px 36px rgba(11, 19, 36, 0.08);
@@ -1122,11 +1290,11 @@
     }
 
     .proof-empty {
-      border: 1px dashed rgba(12, 24, 45, 0.18);
+      border: 1px dashed #bfcedd;
       border-radius: 18px;
       padding: 18px;
       text-align: center;
-      background: rgba(255, 255, 255, 0.82);
+      background: #ffffff;
     }
 
     .proof-empty__title {
@@ -1209,7 +1377,7 @@
       position: fixed;
       inset: 0;
       background: rgba(15, 23, 42, 0.35);
-      backdrop-filter: blur(2px);
+      backdrop-filter: none;
       z-index: 48;
     }
 
@@ -1490,7 +1658,7 @@
     .portal-footer {
       margin-top: 40px;
       padding: 28px 0 32px;
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 64, 175, 0.88));
+      background: linear-gradient(135deg, #142746, #1f4480);
       color: #e5e7eb;
     }
 
@@ -1513,8 +1681,8 @@
       border-radius: 16px;
       display: grid;
       place-items: center;
-      background: rgba(255, 255, 255, 0.14);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.22);
       color: #fff;
     }
 
@@ -1563,7 +1731,7 @@
     .portal-footer__message {
       font-size: 0.95rem;
       color: #f8fafc;
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.14);
       padding: 12px 14px;
       border-radius: 14px;
       border: 1px solid rgba(255, 255, 255, 0.2);
@@ -1602,9 +1770,38 @@
     .proof-grid.is-expanded .proof-card.is-hidden {
       display: grid;
     }
+
+    .portal-flash-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .portal-flash {
+      border-radius: 14px;
+      padding: 12px 14px;
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-weight: 600;
+      box-shadow: 0 8px 16px rgba(30, 58, 138, 0.08);
+    }
+
+    .portal-flash--warn {
+      border-color: #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .portal-flash--error {
+      border-color: #fecaca;
+      background: #fff1f2;
+      color: #9f1239;
+    }
   </style>
 </head>
 <body class="guardian-portal min-h-screen portal-ui" id="top">
+  {% set active_page = active_page or 'dashboard' %}
+  {% set portal_nav = portal_nav or {} %}
   <div class="portal-bg"></div>
   <div class="portal-grid"></div>
   <div class="portal-frame"></div>
@@ -1639,13 +1836,24 @@
           <span class="portal-header__avatar"><i data-lucide="user"></i></span>
           <span>{{ guardian_name or guardian_full_name or guardian or 'Parent' }}</span>
         </div>
-        <a class="portal-header__logout" href="{{ url_for('guardian.guardian_logout') }}" title="Logout">
-          <i data-lucide="log-out"></i>
-          <span>Logout</span>
-        </a>
       </div>
     </div>
   </header>
+
+  <div class="portal-nav-wrap">
+  <div class="portal-shell portal-shell--nav">
+    <nav class="portal-page-nav" aria-label="Parent portal pages">
+      <a href="{{ portal_nav.get('dashboard', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'dashboard' else '' }}" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+      <a href="{{ portal_nav.get('payments', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'payments' else '' }}" {% if active_page == 'payments' %}aria-current="page"{% endif %}><i data-lucide="wallet"></i><span>Payments</span></a>
+      <a href="{{ portal_nav.get('proofs', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'proofs' else '' }}" {% if active_page == 'proofs' %}aria-current="page"{% endif %}><i data-lucide="badge-check"></i><span>Proofs</span></a>
+      <a href="{{ portal_nav.get('messages', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'messages' else '' }}" {% if active_page == 'messages' %}aria-current="page"{% endif %}><i data-lucide="messages-square"></i><span>Messages</span></a>
+      <a href="{{ portal_nav.get('calendar', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'calendar' else '' }}" {% if active_page == 'calendar' %}aria-current="page"{% endif %}><i data-lucide="calendar-days"></i><span>Calendar</span></a>
+      <a href="{{ portal_nav.get('assistant', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'assistant' else '' }}" {% if active_page == 'assistant' %}aria-current="page"{% endif %}><i data-lucide="bot"></i><span>Assistant</span></a>
+      <a href="{{ portal_nav.get('settings', '#') }}" class="portal-page-nav__link {{ 'is-active' if active_page == 'settings' else '' }}" {% if active_page == 'settings' %}aria-current="page"{% endif %}><i data-lucide="settings"></i><span>Settings</span></a>
+    </nav>
+    <a href="{{ url_for('guardian.guardian_logout') }}" class="portal-page-nav__link portal-page-nav__link--logout" title="Logout"><i data-lucide="log-out"></i><span>Logout</span></a>
+  </div>
+  </div>
 
   <div id="notifyOverlay" class="portal-overlay hidden" aria-hidden="true"></div>
   <aside id="notifyDrawer" class="portal-drawer portal-drawer--right" aria-hidden="true">
@@ -1673,8 +1881,8 @@
         </div>
         {% endif %}
       </div>
-      <a href="#proofStatus"><i data-lucide="bell-ring"></i> View proof updates</a>
-      <a href="#recent-payments"><i data-lucide="receipt"></i> Review payments</a>
+      <a href="{{ portal_nav.get('proofs', '#') }}"><i data-lucide="bell-ring"></i> View proof updates</a>
+      <a href="{{ portal_nav.get('payments', '#') }}"><i data-lucide="receipt"></i> Review payments</a>
     </div>
   </aside>
   
@@ -1683,577 +1891,37 @@
   
 
   <main class="sample-shell sample-layout">
-    <section class="sample-hero">
-      <div class="sample-hero__copy">
-        <div class="sample-hero__label">Parent portal</div>
-        <h1>Welcome back, Parent</h1>
-        <p>Here is an overview of your child's school fees and recent activity.</p>
+    {% with notices = get_flashed_messages(with_categories=true) %}
+    {% if notices %}
+    <div class="portal-flash-stack">
+      {% for category, message in notices %}
+      <div class="portal-flash {% if category in ['warning','info'] %}portal-flash--warn{% elif category == 'error' %}portal-flash--error{% endif %}">
+        {{ message }}
       </div>
-      <div class="sample-hero__actions">
-        <div class="sample-child-card">
-          <div class="sample-child-icon">
-            <i data-lucide="graduation-cap"></i>
-          </div>
-          <div>
-            <div class="sample-child-name">{{ student.name }}</div>
-            <div class="sample-child-meta">{{ student.class or student.class_name or 'Class' }}</div>
-          </div>
-        </div>
-        <a href="#payForm" class="sample-primary-btn">
-          <i data-lucide="credit-card"></i>
-          Pay All Dues
-        </a>
-      </div>
-    </section>
-
-    <section class="sample-kpis">
-      <div class="sample-kpi sample-kpi--paid">
-        <div class="sample-kpi__label">Total Paid</div>
-        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(paid or 0) }}</div>
-        <div class="sample-kpi__sub">This academic year</div>
-      </div>
-      <div class="sample-kpi sample-kpi--balance">
-        <div class="sample-kpi__label">Outstanding Balance</div>
-        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
-        <div class="sample-kpi__sub">{{ balance and 'Pending items' or 'All clear' }}</div>
-      </div>
-      <div class="sample-kpi sample-kpi--lite">
-        <div class="sample-kpi__label">Next Payment</div>
-        <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
-        <div class="sample-kpi__sub">Due this term</div>
-      </div>
-      <div class="sample-kpi sample-kpi--lite">
-        <div class="sample-kpi__label">Overdue Amount</div>
-        <div class="sample-kpi__value">Ksh {{ balance and '%.0f'|format(balance or 0) or '0' }}</div>
-        <div class="sample-kpi__sub">{{ balance and '1 overdue payment' or 'No overdue payments' }}</div>
-      </div>
-    </section>
-
-    <section class="sample-section guardian-analytics-panel">
-      <div class="sample-section__header">
-        <div>
-          <h2>Parent Analytics</h2>
-          <p>Insights from your latest transactions.</p>
-        </div>
-        <div class="portal-kpi">
-          Last payment: KES {{ '%.0f'|format(analytics.last_payment_amount or 0) }}
-        </div>
-      </div>
-      <div class="guardian-analytics-metrics sample-grid-2">
-        <div class="guardian-analytics-metric">
-          <div class="sample-kpi__label">Avg monthly paid</div>
-          <div class="sample-kpi__value">KES {{ '%.0f'|format(analytics.avg_monthly or 0) }}</div>
-          <div class="sample-kpi__sub">{{ analytics.active_months or 0 }} active months</div>
-        </div>
-        <div class="guardian-analytics-metric">
-          <div class="sample-kpi__label">Growth vs last month</div>
-          <div class="sample-kpi__value">{{ analytics.monthly.growth if analytics and analytics.monthly else 0 }}%</div>
-          <div class="sample-kpi__sub">Trend based on 12 months</div>
-        </div>
-        <div class="guardian-analytics-metric">
-          <div class="sample-kpi__label">Last payment date</div>
-          <div class="sample-kpi__value">{{ analytics.last_payment_date or 'No payments yet' }}</div>
-          <div class="sample-kpi__sub">Most recent receipt</div>
-        </div>
-      </div>
-      <div class="sample-split">
-        <div class="sample-info-panel">
-          <div class="sample-info-title">Top payment methods</div>
-          {% set method_max = 0 %}
-          {% for m in analytics.methods %}
-            {% if m.total > method_max %}
-              {% set method_max = m.total %}
-            {% endif %}
-          {% endfor %}
-          <div class="analytics-list">
-            {% for m in analytics.methods %}
-            <div>
-              <div class="analytics-row">
-                <span>{{ m.method }}</span>
-                <span class="font-semibold">KES {{ '%.0f'|format(m.total or 0) }}</span>
-              </div>
-              <div class="analytics-bar">
-                <span style="width: {{ method_max and ((m.total / method_max) * 100) or 0 }}%"></span>
-              </div>
-            </div>
-            {% else %}
-            <div class="text-sm text-gray-500">No method breakdown available yet.</div>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="sample-info-panel">
-          <div class="sample-info-title">Payment momentum</div>
-          <p class="text-sm text-gray-600">
-            {% if analytics and analytics.monthly and (analytics.monthly.growth or 0) > 0 %}
-              Your payments are up {{ analytics.monthly.growth }}% this month. Keep the momentum going.
-            {% elif analytics and analytics.monthly and (analytics.monthly.growth or 0) < 0 %}
-              Payments dipped {{ analytics.monthly.growth|abs }}% this month. Consider scheduling a top-up.
-            {% else %}
-              Payment activity is steady this month. Stay on track with upcoming dues.
-            {% endif %}
-          </p>
-          <div class="sample-pill-row">
-            <span>Secure receipts</span>
-            <span>Auto-ledger sync</span>
-            <span>Parent verified</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Recent Transactions</h2>
-          <p>Your payment activity</p>
-        </div>
-        <a href="#recent-payments" class="sample-link">View All <i data-lucide="arrow-up-right"></i></a>
-      </div>
-      <div class="sample-list">
-        {% for p in payments[:4] %}
-        <div class="sample-list__item">
-          <div class="sample-list__icon"><i data-lucide="receipt"></i></div>
-          <div class="sample-list__info">
-            <div class="sample-list__title">{{ p.reference or p.method or 'Payment' }}</div>
-            <div class="sample-list__meta">{{ p.date }}</div>
-          </div>
-          <div class="sample-list__amount">Ksh {{ '%.0f'|format(p.amount or 0) }}</div>
-          <div class="sample-status sample-status--paid">Paid</div>
-        </div>
-        {% else %}
-        <div class="sample-empty">No recent transactions yet.</div>
-        {% endfor %}
-        <div id="listSearchEmpty" class="sample-empty hidden">No matches found.</div>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Payment History</h2>
-          <p>Monthly payment overview</p>
-        </div>
-      </div>
-      <div class="sample-chart">
-        <canvas id="payChart" height="140"></canvas>
-        <div id="payChartMsg" class="sample-chart__msg"></div>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Quick Actions</h2>
-          <p>Common tasks at your fingertips</p>
-        </div>
-      </div>
-      <div class="sample-actions-grid">
-        <a href="#payForm" class="sample-action-card">
-          <div class="sample-action-icon sample-action-icon--indigo"><i data-lucide="credit-card"></i></div>
-          <div class="sample-action-title">Make Payment</div>
-          <div class="sample-action-sub">Pay fees instantly</div>
-        </a>
-        <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="sample-action-card">
-          <div class="sample-action-icon sample-action-icon--green"><i data-lucide="file-text"></i></div>
-          <div class="sample-action-title">View Statements</div>
-          <div class="sample-action-sub">Download receipts</div>
-        </a>
-        <a href="#uploadProof" class="sample-action-card">
-          <div class="sample-action-icon sample-action-icon--orange"><i data-lucide="upload"></i></div>
-          <div class="sample-action-title">Upload Proof</div>
-          <div class="sample-action-sub">Attach a receipt</div>
-        </a>
-        <a href="#msgForm" class="sample-action-card">
-          <div class="sample-action-icon sample-action-icon--slate"><i data-lucide="message-square"></i></div>
-          <div class="sample-action-title">Contact School</div>
-          <div class="sample-action-sub">Send a message</div>
-        </a>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card" id="payFormSection">
-      <div class="sample-section__header">
-        <div>
-          <h2>Make a Payment</h2>
-          <p>Record M-Pesa payments instantly.</p>
-        </div>
-      </div>
-      <form id="payForm" class="sample-form-grid">
-        <input type="hidden" name="token" value="{{ token }}" />
-        <div>
-          <label class="sample-label">Phone Number (M-Pesa)</label>
-          <input name="phone" placeholder="07xx..." class="sample-input" />
-        </div>
-        <div>
-          <label class="sample-label sample-label--row">
-            <span>Amount (KES)</span>
-            <button type="button" id="fillFull" class="sample-link">Use full balance</button>
-          </label>
-          <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="sample-input" />
-        </div>
-        <button type="submit" class="sample-primary-btn sample-primary-btn--full">
-          <i data-lucide="smartphone"></i>
-          Pay Now with M-Pesa
-        </button>
-      </form>
-      <div id="payMsg" class="sample-help"></div>
-      <div id="payTrackWrapper" class="hidden sample-track">
-        <span id="payTrack"></span>
-        <button type="button" id="payTrackCancel" class="hidden sample-link">Cancel STK push</button>
-      </div>
-      {% if paypal_client_id %}
-      <div class="sample-divider"></div>
-      <div class="sample-help">Or pay securely with PayPal</div>
-      <div id="paypal-button-container"></div>
-      {% endif %}
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Paybill Bank Payment</h2>
-          <p>Pay from any Kenyan bank, then paste the M-Pesa confirmation to verify instantly.</p>
-        </div>
-      </div>
-      <div class="sample-split">
-        <div class="sample-info-panel">
-          <div class="sample-info-title">School Paybill</div>
-          <p class="text-sm text-gray-600">All Kenyan banks supported. Use the student details as the account number.</p>
-          <div class="sample-pill-row">
-            <span>Equity</span>
-            <span>KCB</span>
-            <span>Co-op</span>
-            <span>NCBA</span>
-            <span>Absa</span>
-            <span>Stanbic</span>
-            <span>DTB</span>
-            <span>I&M</span>
-            <span>Family</span>
-            <span>Standard Chartered</span>
-          </div>
-          <div class="sample-note-panel mt-4">
-            <div class="sample-note-title">Paybill details</div>
-            <p><strong>Paybill:</strong> {{ SCHOOL_PAYBILL or 'Set in admin settings' }}</p>
-            <p><strong>Account number:</strong> {{ student.admission_no or student.id }}</p>
-            <p class="text-xs text-gray-500">Use the student admission number or student ID as the account reference.</p>
-          </div>
-        </div>
-        <div class="sample-form-panel">
-          <div class="sample-form-header">
-            <div>
-              <div class="sample-form-title">Send M-Pesa confirmation</div>
-              <div class="sample-form-sub">Paste the full message to attach it to {{ student.name }}.</div>
-            </div>
-          </div>
-          <form id="paybillForm" class="sample-form-stack">
-            <input type="hidden" name="account_ref" value="{{ student.admission_no or student.id }}">
-            <div class="sample-form-row">
-              <div>
-                <label class="sample-label">Amount (KES)</label>
-                <input type="number" name="amount" min="1" step="1" class="sample-input" placeholder="e.g. 1500" required>
-              </div>
-              <div>
-                <label class="sample-label">Payment date</label>
-                <input type="date" name="payment_date" class="sample-input">
-              </div>
-            </div>
-            <div>
-              <label class="sample-label">Bank</label>
-              <select name="bank_name" class="sample-input">
-                <option value="M-Pesa">M-Pesa</option>
-                <option value="Equity">Equity</option>
-                <option value="KCB">KCB</option>
-                <option value="Cooperative">Co-operative Bank</option>
-                <option value="NCBA">NCBA</option>
-                <option value="Absa">Absa</option>
-                <option value="Stanbic">Stanbic</option>
-                <option value="DTB">DTB</option>
-                <option value="I&M">I&M</option>
-                <option value="Family Bank">Family Bank</option>
-                <option value="Standard Chartered">Standard Chartered</option>
-              </select>
-            </div>
-            <div>
-              <label class="sample-label">M-Pesa message</label>
-              <textarea name="mpesa_text" class="sample-input" rows="4" placeholder="Paste the full confirmation SMS here." required></textarea>
-            </div>
-            <button type="submit" class="sample-primary-btn sample-primary-btn--full">
-              <i data-lucide="send"></i>
-              Send for verification
-            </button>
-            <div id="paybillStatus" class="sample-help"></div>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <section id="recent-payments" class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Recent Payments</h2>
-          <p>All recorded receipts for the term.</p>
-        </div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead>
-            <tr class="text-left text-gray-500">
-              <th class="py-2">Date</th>
-              <th class="py-2">Reference</th>
-              <th class="py-2">Method</th>
-              <th class="py-2">Status</th>
-              <th class="py-2 text-right">Amount (KES)</th>
-              <th class="py-2 text-right">Receipt</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in payments %}
-            <tr class="border-t border-gray-100">
-              <td class="py-2">{{ p.date }}</td>
-              <td class="py-2">{{ p.reference or '-' }}</td>
-              <td class="py-2">{{ p.method or 'M-Pesa' }}</td>
-              <td class="py-2">
-                <span class="sample-status sample-status--paid">Success</span>
-              </td>
-              <td class="py-2 text-right">{{ '%.0f'|format(p.amount or 0) }}</td>
-              <td class="py-2 text-right text-indigo-700"><a href="{{ url_for('guardian.guardian_receipt', payment_id=p.id, token=token) }}" class="hover:underline">Print</a></td>
-            </tr>
-            {% else %}
-            <tr class="border-t border-gray-100 text-gray-500 is-empty"><td colspan="6" class="py-4 text-center">No payments yet.</td></tr>
-            {% endfor %}
-            <tr id="tableSearchEmpty" class="border-t border-gray-100 text-gray-500 hidden"><td colspan="6" class="py-4 text-center">No matches found.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card" id="uploadProof">
-      <div class="sample-section__header">
-        <div>
-          <h2>Upload Payment Proof</h2>
-          <p>Attach a slip or paste statement text.</p>
-        </div>
-      </div>
-      <div class="sample-grid-2">
-        <div class="sample-dropzone">
-          <div class="sample-drop-icon"><i data-lucide="file-plus-2"></i></div>
-          <div class="sample-drop-title">Upload a receipt</div>
-          <div class="sample-drop-sub">We will tag it to {{ student.name }}.</div>
-          <form id="inlineProofForm" action="{{ url_for('guardian.guardian_receipt_upload', token=token) }}" method="post" enctype="multipart/form-data" class="space-y-2">
-            <input type="hidden" name="description" value="Proof upload for {{ student.name }} {{ year }}/{{ term }}">
-            <input type="file" name="receipt" id="inlineProofFile" accept=".png,.jpg,.jpeg,.pdf" class="hidden" />
-            <button type="button" id="inlineProofBtn" class="sample-primary-btn sample-primary-btn--full">
-              <i data-lucide="arrow-up-right"></i>
-              Upload proof
-            </button>
-            <div id="inlineProofStatus" class="sample-help"></div>
-          </form>
-        </div>
-        <div class="sample-note-panel">
-          <div class="sample-note-title">Paste MPesa text</div>
-          <p>Include transaction ID, amount, and timestamp to speed up matching.</p>
-          <button type="button" id="pasteProofBtn" class="sample-secondary-btn">
-            <i data-lucide="clipboard"></i>
-            Paste MPesa text
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="sample-section sample-card" id="proofStatus">
-      <div class="sample-section__header">
-        <div>
-          <h2 id="proofStatusTitle" title="Press and hold to reveal full history">Proof Status Tracker</h2>
-          <p>Status updates are emailed when proofs are accepted or rejected.</p>
-        </div>
-        <button id="proofRefresh" type="button" class="sample-secondary-btn">
-          <i data-lucide="refresh-cw"></i>
-          Refresh
-        </button>
-      </div>
-      {% if proof_statuses and proof_statuses|length > 0 %}
-      <div class="proof-grid" id="proofGrid" data-total="{{ proof_statuses|length }}">
-        {% for proof in proof_statuses %}
-        <div class="proof-card {% if loop.index > 5 %}is-hidden{% endif %}">
-          <div class="proof-card__top">
-            <div>
-              <div class="proof-card__title">Proof #{{ proof.id }}</div>
-              <div class="proof-card__meta">{{ proof.created_at or 'Recently uploaded' }}</div>
-            </div>
-            <span class="sample-status {{ proof.status_classes }}">{{ proof.status_label }}</span>
-          </div>
-          <div class="proof-card__row">
-            <span class="proof-card__label">Amount</span>
-            <span class="proof-card__value">KES {{ '%.0f'|format(proof.amount or 0) }}</span>
-          </div>
-          {% if proof.description %}
-          <div class="proof-card__note">{{ proof.description }}</div>
-          {% endif %}
-          {% if proof.notes %}
-          <div class="proof-card__note proof-card__note--alert">Note: {{ proof.notes }}</div>
-          {% endif %}
-          <div class="proof-card__actions">
-            {% if proof.file_url %}
-            <a class="sample-secondary-btn" href="{{ proof.file_url }}" target="_blank" rel="noopener">
-              <i data-lucide="file-text"></i>
-              View proof
-            </a>
-            {% endif %}
-            <a class="sample-secondary-btn" href="#uploadProof">
-              <i data-lucide="upload-cloud"></i>
-              Upload new
-            </a>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="proof-empty">
-        <div class="proof-empty__title">No proofs uploaded yet.</div>
-        <p class="text-sm text-gray-600">Upload a receipt and track its verification status here.</p>
-        <a class="sample-primary-btn" href="#uploadProof">
-          <i data-lucide="upload-cloud"></i>
-          Upload proof
-        </a>
-      </div>
-      {% endif %}
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Message the School</h2>
-          <p>Send updates or questions to the accounts office.</p>
-        </div>
-      </div>
-      <form id="msgForm" class="sample-grid-2">
-        <input type="hidden" name="token" value="{{ token }}" />
-        <input class="sample-input" name="name" placeholder="Your name (optional)">
-        <input class="sample-input" name="email" placeholder="Your email (optional)">
-        <input class="sample-input" name="phone" placeholder="Phone (optional)">
-        <input class="sample-input" name="subject" placeholder="Subject (optional)">
-        <select class="sample-input" name="category">
-          <option>General</option>
-          <option>Fees</option>
-          <option>Academics</option>
-          <option>Support</option>
-        </select>
-        <textarea class="sample-input" name="message" rows="4" placeholder="Write your message..."></textarea>
-        <div class="sample-form-footer">
-          <div id="msgBox" class="sample-help"></div>
-          <button type="submit" class="sample-primary-btn">
-            <i data-lucide="send"></i>
-            Send Message
-          </button>
-        </div>
-      </form>
-    </section>
-
-    <section class="sample-section sample-card">
-      <div class="sample-grid-2">
-        <div>
-          <div class="sample-section__header">
-            <div>
-              <h2>Calendar</h2>
-              <p>Upcoming school events.</p>
-            </div>
-            <div class="sample-cal-nav">
-              <button id="calPrev" class="sample-icon-btn" type="button"><i data-lucide="chevron-left"></i></button>
-              <div id="calTitle" class="sample-cal-title"></div>
-              <button id="calNext" class="sample-icon-btn" type="button"><i data-lucide="chevron-right"></i></button>
-            </div>
-          </div>
-          <div class="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
-            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-          </div>
-          <div id="calGrid" class="grid grid-cols-7 gap-2 text-sm"></div>
-          <div id="calEvents" class="mt-3 text-sm"></div>
-        </div>
-        <div>
-          <div class="sample-section__header">
-            <div>
-              <h2>SmartBot</h2>
-              <p>Ask anything about fees or receipts.</p>
-            </div>
-          </div>
-          <div id="aiLog" class="sample-chat-log"></div>
-          <form id="aiForm" class="sample-chat-form">
-            <input type="hidden" name="token" value="{{ token }}" />
-            <input id="aiQ" class="sample-input" placeholder="Ask a question...">
-            <button class="sample-primary-btn" type="submit"><i data-lucide="message-square"></i> Ask</button>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    {% if stk_activity %}
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Recent STK Activity</h2>
-          <p>Refresh pending items to check the latest status.</p>
-        </div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead>
-            <tr class="text-left text-gray-500">
-              <th class="py-2">Updated</th>
-              <th class="py-2">Phone</th>
-              <th class="py-2">Amount</th>
-              <th class="py-2">Status</th>
-              <th class="py-2">Details</th>
-              <th class="py-2 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in stk_activity %}
-            <tr class="border-t border-gray-100">
-              <td class="py-2">{{ r.updated_at }}</td>
-              <td class="py-2">{{ r.phone }}</td>
-              <td class="py-2">KES {{ '%.0f'|format(r.amount or 0) }}</td>
-              <td class="py-2">
-                {% if r.status == 'pending' %}
-                  <span class="sample-status sample-status--pending">Pending</span>
-                {% elif r.status == 'success' %}
-                  <span class="sample-status sample-status--paid">Success</span>
-                {% else %}
-                  <span class="sample-status sample-status--overdue">Failed</span>
-                {% endif %}
-              </td>
-              <td class="py-2 text-gray-600">{{ r.result_desc or '-' }}</td>
-              <td class="py-2 text-right">
-                {% if r.status == 'pending' %}
-                  <button class="refresh sample-secondary-btn" data-crid="{{ r.checkout_request_id }}">Refresh</button>
-                {% elif r.status == 'success' and r.payment_id %}
-                  <a class="text-indigo-700 hover:underline" href="{{ url_for('guardian.guardian_receipt', payment_id=r.payment_id, token=token) }}">Print receipt</a>
-                {% else %}
-                  <span class="text-xs text-gray-400">-</span>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      {% endfor %}
+    </div>
     {% endif %}
-
-    <section class="sample-section sample-card">
-      <div class="sample-section__header">
-        <div>
-          <h2>Smart Summary</h2>
-          <p>Progress for the current term.</p>
-        </div>
-      </div>
-      <div class="sample-summary">
-        {% if percent is not none %}
-        Your child has cleared <strong>{{ percent }}%</strong> of this term's fees. Outstanding balance: <strong>Ksh {{ '%.0f'|format(balance or 0) }}</strong>.
-        {% else %}
-        No fee summary available for the current term yet.
-        {% endif %}
-      </div>
-    </section>
+    {% endwith %}
+    {% if active_page == 'payments' %}
+      {% include 'guardian/partials/payments.html' %}
+    {% elif active_page == 'proofs' %}
+      {% include 'guardian/partials/proofs.html' %}
+    {% elif active_page == 'messages' %}
+      {% include 'guardian/partials/messages.html' %}
+    {% elif active_page == 'calendar' %}
+      {% set assistant_mode = 'calendar' %}
+      {% include 'guardian/partials/calendar_assistant.html' %}
+    {% elif active_page == 'assistant' %}
+      {% set assistant_mode = 'assistant' %}
+      {% include 'guardian/partials/calendar_assistant.html' %}
+    {% elif active_page == 'settings' %}
+      {% include 'guardian/partials/settings.html' %}
+    {% else %}
+      {% include 'guardian/partials/dashboard.html' %}
+      {% set assistant_mode = 'dashboard' %}
+      {% include 'guardian/partials/calendar_assistant.html' %}
+      {% include 'guardian/partials/dashboard_summary.html' %}
+    {% endif %}
 
     <footer class="portal-footer">
       <div class="portal-shell portal-footer__inner">
@@ -2283,12 +1951,17 @@
           <div id="encouragementText" class="portal-footer__message">Every payment builds a stronger learning journey.</div>
         </div>
         <div class="portal-footer__actions">
-          <a class="portal-footer__action" href="#payFormSection"><i data-lucide="wallet"></i> Pay now</a>
-          <a class="portal-footer__action" href="#msgForm"><i data-lucide="send"></i> Message school</a>
+          <a class="portal-footer__action" href="{{ portal_nav.get('payments', '#') }}#payFormSection"><i data-lucide="wallet"></i> Pay now</a>
+          <a class="portal-footer__action" href="{{ portal_nav.get('messages', '#') }}#msgForm"><i data-lucide="send"></i> Message school</a>
+          <a class="portal-footer__action" href="#top"><i data-lucide="arrow-up"></i> Back to top</a>
         </div>
       </div>
     </footer>
   </main>
+
+  <a href="#top" id="floatingTop" class="floating-top" aria-label="Back to top" title="Back to top">
+    <i data-lucide="arrow-up"></i>
+  </a>
 
   <script>
     try { lucide.createIcons(); } catch(e){}
@@ -2321,6 +1994,20 @@
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') close();
       });
+    })();
+
+    (function(){
+      const btn = document.getElementById('floatingTop');
+      if (!btn) return;
+      const toggle = () => {
+        if (window.scrollY > 280) {
+          btn.classList.add('is-visible');
+        } else {
+          btn.classList.remove('is-visible');
+        }
+      };
+      toggle();
+      window.addEventListener('scroll', toggle, { passive: true });
     })();
 
     (function(){
@@ -2770,6 +2457,14 @@
         log.scrollTop = log.scrollHeight;
       };
       append('Hi, I am SmartEduPay SmartBot. Ask me about fees or exams.','Bot','text-gray-400');
+      document.querySelectorAll('[data-ai-template]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const template = (btn.getAttribute('data-ai-template') || '').trim();
+          if (!template) return;
+          q.value = template;
+          f.dispatchEvent(new Event('submit', { cancelable: true }));
+        });
+      });
       f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const val = (q.value||'').trim();
@@ -2783,7 +2478,11 @@
             body: JSON.stringify({ token: {{ token|tojson }}, question: val }),
           });
           const j = await r.json();
-          append(j.answer || j.text || j.response || j.error || 'Sorry, I could not help right now.','Bot','text-gray-400');
+          const answer = j.answer || j.text || j.response || j.error || 'Sorry, I could not help right now.';
+          const ms = Number(j.server_ms || 0);
+          const source = (j.source || '').trim();
+          const hint = (source || ms) ? ` <span class="text-[11px] text-gray-400">(${source || 'reply'}${ms ? `, ${ms}ms` : ''})</span>` : '';
+          append(`${answer}${hint}`,'Bot','text-gray-400');
         }catch(err){
           append('Network error.','Bot','text-rose-500');
         }

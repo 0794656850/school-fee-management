@@ -1,8 +1,17 @@
 import os
+from pathlib import Path
 
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
+    _root = Path(__file__).resolve().parent
+    _candidates = [
+        _root / ".env",
+        _root / ".env.local",
+        Path.cwd() / ".env",
+    ]
+    for _path in _candidates:
+        if _path.is_file():
+            load_dotenv(_path)
 except Exception:
     # dotenv is optional; environment variables may already be loaded
     pass
@@ -73,6 +82,18 @@ class Config:
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "your_auth_token_here")
     TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "+2547XXXXXXX")
+
+    # --------------------------
+    # 🔹 UjumbeSMS (SMS API)
+    # --------------------------
+    UJUMBE_API_URL = os.environ.get("UJUMBE_API_URL", "https://ujumbesms.co.ke/api/messaging")
+    UJUMBE_SMS_API_KEY = os.environ.get("UJUMBE_SMS_API_KEY", "")
+    UJUMBE_EMAIL = os.environ.get("UJUMBE_EMAIL", "")
+    UJUMBE_SENDER_ID = os.environ.get("UJUMBE_SENDER_ID", "UjumbeSMS")
+    try:
+        UJUMBE_TIMEOUT = int(os.environ.get("UJUMBE_TIMEOUT", "15"))
+    except Exception:
+        UJUMBE_TIMEOUT = 15
 
     # WhatsApp Cloud API (Meta)
     # Required for sending WhatsApp messages via Cloud API

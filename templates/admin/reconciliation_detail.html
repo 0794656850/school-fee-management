@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Reconciliation Detail - {{ APP_TITLE }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Reconciliation Detail</h1>
+      <p class="text-sm text-gray-500 mt-1">{{ info.filename }} · {{ info.total_rows }} rows</p>
+    </div>
+    <a href="{{ url_for('reconciliation.reconciliation_home') }}" class="text-sm text-gray-600 hover:text-gray-800">Back</a>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6">
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-gray-500 uppercase text-xs">
+          <tr>
+            <th class="text-left py-2">Date</th>
+            <th class="text-left py-2">Amount</th>
+            <th class="text-left py-2">Reference</th>
+            <th class="text-left py-2">Payer</th>
+            <th class="text-left py-2">Status</th>
+            <th class="text-left py-2">Matched Payment</th>
+            <th class="text-left py-2">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for r in rows %}
+          <tr>
+            <td class="py-2 text-gray-600">{{ r.txn_date or '-' }}</td>
+            <td class="py-2 text-gray-800">KES {{ '{:,.2f}'.format(r.amount or 0) }}</td>
+            <td class="py-2 text-gray-600">{{ r.reference or '-' }}</td>
+            <td class="py-2 text-gray-600">{{ r.payer_name or '-' }}</td>
+            <td class="py-2 text-gray-600">{{ r.match_status }}</td>
+            <td class="py-2 text-gray-600">{% if r.matched_payment_id %}#{{ r.matched_payment_id }}{% else %}-{% endif %}</td>
+            <td class="py-2">
+              {% if r.match_status == 'pending' %}
+              <form method="POST" action="{{ url_for('reconciliation.reconciliation_match_row', row_id=r.id) }}" class="flex items-center gap-2">
+                <input type="number" name="payment_id" placeholder="Payment ID" class="border rounded p-1 w-28 text-xs" required>
+                <button class="px-2 py-1 text-xs bg-indigo-600 text-white rounded">Match</button>
+              </form>
+              <form method="POST" action="{{ url_for('reconciliation.reconciliation_ignore_row', row_id=r.id) }}" class="mt-1">
+                <button class="text-xs text-gray-500">Ignore</button>
+              </form>
+              {% else %}
+              <span class="text-xs text-gray-400">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

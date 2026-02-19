@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Reconciliation - {{ APP_TITLE }}{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Reconciliation</h1>
+      <p class="text-sm text-gray-500 mt-1">Upload bank/M-Pesa statements and auto-match payments.</p>
+    </div>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+    <h2 class="text-sm font-semibold text-gray-800 mb-3">Upload statement (CSV)</h2>
+    <form method="POST" action="{{ url_for('reconciliation.reconciliation_upload') }}" enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-3">
+      <input type="file" name="statement" accept=".csv" required class="flex-1 border rounded-lg p-2 text-sm" />
+      <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">Import</button>
+    </form>
+    <p class="mt-2 text-xs text-gray-500">Expected headers: date, amount, reference, phone, payer_name (case-insensitive).</p>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm">
+    <div class="p-6 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-800">Recent imports</h2>
+    </div>
+    <div class="p-6">
+      {% if imports %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-gray-500 uppercase text-xs">
+            <tr>
+              <th class="text-left py-2">File</th>
+              <th class="text-left py-2">Rows</th>
+              <th class="text-left py-2">Matched</th>
+              <th class="text-left py-2">Created</th>
+              <th class="text-left py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for r in imports %}
+            <tr>
+              <td class="py-2 text-gray-800">{{ r.filename }}</td>
+              <td class="py-2 text-gray-600">{{ r.total_rows }}</td>
+              <td class="py-2 text-gray-600">{{ r.matched_rows }}</td>
+              <td class="py-2 text-gray-600">{{ r.created_at }}</td>
+              <td class="py-2">
+                <a href="{{ url_for('reconciliation.reconciliation_detail', import_id=r.id) }}" class="text-indigo-600 text-sm font-semibold">Review</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-500">No reconciliation imports yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

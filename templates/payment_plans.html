@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Payment Plans - {{ APP_TITLE }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Payment Plans</h1>
+      <p class="text-sm text-gray-500 mt-1">Track installment schedules and progress.</p>
+    </div>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Create plan</h2>
+    <form method="POST" action="{{ url_for('plans.plans_home') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-xs text-gray-500">Student</label>
+        <select name="student_id" class="w-full border rounded-lg p-2 text-sm" required>
+          <option value="">Select student</option>
+          {% for s in students %}
+          <option value="{{ s.id }}">{{ s.name }}{% if s.class_name %} · {{ s.class_name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Total amount (KES)</label>
+        <input type="number" step="0.01" min="1" name="total_amount" class="w-full border rounded-lg p-2 text-sm" required>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Installments</label>
+        <input type="number" min="1" max="24" name="installments" value="3" class="w-full border rounded-lg p-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Frequency</label>
+        <select name="frequency" class="w-full border rounded-lg p-2 text-sm">
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-weekly</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Start date</label>
+        <input type="date" name="start_date" class="w-full border rounded-lg p-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Year / Term</label>
+        <div class="flex gap-2">
+          <input type="number" name="year" value="{{ current_year or '' }}" class="w-full border rounded-lg p-2 text-sm" placeholder="Year">
+          <input type="number" name="term" value="{{ current_term or '' }}" class="w-full border rounded-lg p-2 text-sm" placeholder="Term">
+        </div>
+      </div>
+      <div class="md:col-span-3">
+        <button class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">Create plan</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm">
+    <div class="p-6 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-800">Recent plans</h2>
+    </div>
+    <div class="p-6">
+      {% if plans %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-gray-500 uppercase text-xs">
+            <tr>
+              <th class="text-left py-2">Student</th>
+              <th class="text-left py-2">Total</th>
+              <th class="text-left py-2">Installments</th>
+              <th class="text-left py-2">Status</th>
+              <th class="text-left py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for p in plans %}
+            <tr>
+              <td class="py-2 text-gray-800">{{ p.student_name }}{% if p.class_name %} · {{ p.class_name }}{% endif %}</td>
+              <td class="py-2 text-gray-600">KES {{ '{:,.2f}'.format(p.total_amount or 0) }}</td>
+              <td class="py-2 text-gray-600">{{ p.installments }} {{ p.frequency }}</td>
+              <td class="py-2 text-gray-600">{{ p.status }}</td>
+              <td class="py-2">
+                <a class="text-indigo-600 text-sm font-semibold" href="{{ url_for('plans.plan_detail', plan_id=p.id) }}">View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-500">No plans yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

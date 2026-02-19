@@ -1,0 +1,190 @@
+<section class="sample-hero">
+  <div class="sample-hero__copy">
+    <div class="sample-hero__label">Parent portal</div>
+    <h1>Welcome back, {{ guardian_name or guardian_full_name or guardian or 'Parent' }}</h1>
+    <p>Here is an overview of your child's school fees and recent activity.</p>
+  </div>
+  <div class="sample-hero__actions">
+    <div class="sample-child-card">
+      <div class="sample-child-icon">
+        <i data-lucide="graduation-cap"></i>
+      </div>
+      <div>
+        <div class="sample-child-name">
+          {{ student.name }}
+          <span class="sample-child-school">{{ student.school_name or SCHOOL_NAME or APP_TITLE }}</span>
+        </div>
+        <div class="sample-child-meta">{{ student.class or student.class_name or 'Class' }}</div>
+      </div>
+    </div>
+    <a href="{{ portal_nav.get('payments', '#') }}#payForm" class="sample-primary-btn">
+      <i data-lucide="credit-card"></i>
+      Pay All Dues
+    </a>
+  </div>
+</section>
+
+<section class="sample-kpis">
+  <div class="sample-kpi sample-kpi--paid">
+    <div class="sample-kpi__label">Total Paid</div>
+    <div class="sample-kpi__value">Ksh {{ '%.0f'|format(paid or 0) }}</div>
+    <div class="sample-kpi__sub">This academic year</div>
+  </div>
+  <div class="sample-kpi sample-kpi--balance">
+    <div class="sample-kpi__label">Outstanding Balance</div>
+    <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+    <div class="sample-kpi__sub">{{ balance and 'Pending items' or 'All clear' }}</div>
+  </div>
+  <div class="sample-kpi sample-kpi--lite">
+    <div class="sample-kpi__label">Next Payment</div>
+    <div class="sample-kpi__value">Ksh {{ '%.0f'|format(balance or 0) }}</div>
+    <div class="sample-kpi__sub">Due this term</div>
+  </div>
+  <div class="sample-kpi sample-kpi--lite">
+    <div class="sample-kpi__label">Overdue Amount</div>
+    <div class="sample-kpi__value">Ksh {{ balance and '%.0f'|format(balance or 0) or '0' }}</div>
+    <div class="sample-kpi__sub">{{ balance and '1 overdue payment' or 'No overdue payments' }}</div>
+  </div>
+</section>
+
+<section class="sample-section guardian-analytics-panel">
+  <div class="sample-section__header">
+    <div>
+      <h2>Parent Analytics</h2>
+      <p>Insights from your latest transactions.</p>
+    </div>
+    <div class="portal-kpi">
+      Last payment: KES {{ '%.0f'|format(analytics.last_payment_amount or 0) }}
+    </div>
+  </div>
+  <div class="guardian-analytics-metrics sample-grid-2">
+    <div class="guardian-analytics-metric">
+      <div class="sample-kpi__label">Avg monthly paid</div>
+      <div class="sample-kpi__value">KES {{ '%.0f'|format(analytics.avg_monthly or 0) }}</div>
+      <div class="sample-kpi__sub">{{ analytics.active_months or 0 }} active months</div>
+    </div>
+    <div class="guardian-analytics-metric">
+      <div class="sample-kpi__label">Growth vs last month</div>
+      <div class="sample-kpi__value">{{ analytics.monthly.growth if analytics and analytics.monthly else 0 }}%</div>
+      <div class="sample-kpi__sub">Trend based on 12 months</div>
+    </div>
+    <div class="guardian-analytics-metric">
+      <div class="sample-kpi__label">Last payment date</div>
+      <div class="sample-kpi__value">{{ analytics.last_payment_date or 'No payments yet' }}</div>
+      <div class="sample-kpi__sub">Most recent receipt</div>
+    </div>
+  </div>
+  <div class="sample-split">
+    <div class="sample-info-panel">
+      <div class="sample-info-title">Top payment methods</div>
+      {% set method_max = 0 %}
+      {% for m in analytics.methods %}
+        {% if m.total > method_max %}
+          {% set method_max = m.total %}
+        {% endif %}
+      {% endfor %}
+      <div class="analytics-list">
+        {% for m in analytics.methods %}
+        <div>
+          <div class="analytics-row">
+            <span>{{ m.method }}</span>
+            <span class="font-semibold">KES {{ '%.0f'|format(m.total or 0) }}</span>
+          </div>
+          <div class="analytics-bar">
+            <span style="width: {{ method_max and ((m.total / method_max) * 100) or 0 }}%"></span>
+          </div>
+        </div>
+        {% else %}
+        <div class="text-sm text-gray-500">No method breakdown available yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="sample-info-panel">
+      <div class="sample-info-title">Payment momentum</div>
+      <p class="text-sm text-gray-600">
+        {% if analytics and analytics.monthly and (analytics.monthly.growth or 0) > 0 %}
+          Your payments are up {{ analytics.monthly.growth }}% this month. Keep the momentum going.
+        {% elif analytics and analytics.monthly and (analytics.monthly.growth or 0) < 0 %}
+          Payments dipped {{ analytics.monthly.growth|abs }}% this month. Consider scheduling a top-up.
+        {% else %}
+          Payment activity is steady this month. Stay on track with upcoming dues.
+        {% endif %}
+      </p>
+      <div class="sample-pill-row">
+        <span>Secure receipts</span>
+        <span>Auto-ledger sync</span>
+        <span>Parent verified</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Recent Transactions</h2>
+      <p>Your payment activity</p>
+    </div>
+    <a href="{{ portal_nav.get('payments', '#') }}#recent-payments" class="sample-link">View All <i data-lucide="arrow-up-right"></i></a>
+  </div>
+  <div class="sample-list">
+    {% for p in payments[:4] %}
+    <div class="sample-list__item">
+      <div class="sample-list__icon"><i data-lucide="receipt"></i></div>
+      <div class="sample-list__info">
+        <div class="sample-list__title">{{ p.reference or p.method or 'Payment' }}</div>
+        <div class="sample-list__meta">{{ p.date }}</div>
+      </div>
+      <div class="sample-list__amount">Ksh {{ '%.0f'|format(p.amount or 0) }}</div>
+      <div class="sample-status sample-status--paid">Paid</div>
+    </div>
+    {% else %}
+    <div class="sample-empty">No recent transactions yet.</div>
+    {% endfor %}
+    <div id="listSearchEmpty" class="sample-empty hidden">No matches found.</div>
+  </div>
+</section>
+
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Payment History</h2>
+      <p>Monthly payment overview</p>
+    </div>
+  </div>
+  <div class="sample-chart">
+    <canvas id="payChart" height="140"></canvas>
+    <div id="payChartMsg" class="sample-chart__msg"></div>
+  </div>
+</section>
+
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Quick Actions</h2>
+      <p>Common tasks at your fingertips</p>
+    </div>
+  </div>
+  <div class="sample-actions-grid">
+    <a href="{{ portal_nav.get('payments', '#') }}#payForm" class="sample-action-card">
+      <div class="sample-action-icon sample-action-icon--indigo"><i data-lucide="credit-card"></i></div>
+      <div class="sample-action-title">Make Payment</div>
+      <div class="sample-action-sub">Pay fees instantly</div>
+    </a>
+    <a href="{{ url_for('student_portal.statement_pdf', token=token) }}" class="sample-action-card">
+      <div class="sample-action-icon sample-action-icon--green"><i data-lucide="file-text"></i></div>
+      <div class="sample-action-title">View Statements</div>
+      <div class="sample-action-sub">Download receipts</div>
+    </a>
+    <a href="{{ portal_nav.get('proofs', '#') }}#uploadProof" class="sample-action-card">
+      <div class="sample-action-icon sample-action-icon--orange"><i data-lucide="upload"></i></div>
+      <div class="sample-action-title">Upload Proof</div>
+      <div class="sample-action-sub">Attach a receipt</div>
+    </a>
+    <a href="{{ portal_nav.get('messages', '#') }}#msgForm" class="sample-action-card">
+      <div class="sample-action-icon sample-action-icon--slate"><i data-lucide="message-square"></i></div>
+      <div class="sample-action-title">Contact School</div>
+      <div class="sample-action-sub">Send a message</div>
+    </a>
+  </div>
+</section>

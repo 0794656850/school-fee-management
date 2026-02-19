@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict
 
 import requests
@@ -14,17 +15,34 @@ def _rasa_url() -> str:
 
 def _timeout() -> float:
     try:
-        return float(os.environ.get("RASA_TIMEOUT_SECONDS", "6"))
+        return float(os.environ.get("RASA_TIMEOUT_SECONDS", "2.5"))
     except ValueError:
-        return 6.0
+        return 2.5
+
+
+_STATUS_CACHE: Dict[str, float | bool] = {"at": 0.0, "ok": False}
 
 
 def rasa_is_available() -> bool:
+    ttl = 45.0
+    try:
+        ttl = float(os.environ.get("RASA_STATUS_CACHE_SECONDS", "45"))
+    except ValueError:
+        ttl = 45.0
+    now = time.monotonic()
+    cached_at = float(_STATUS_CACHE.get("at") or 0.0)
+    if now - cached_at <= ttl:
+        return bool(_STATUS_CACHE.get("ok"))
     url = f"{_rasa_url()}/status"
     try:
         resp = requests.get(url, timeout=_timeout())
-        return resp.ok
+        ok = bool(resp.ok)
+        _STATUS_CACHE["ok"] = ok
+        _STATUS_CACHE["at"] = now
+        return ok
     except RequestException:
+        _STATUS_CACHE["ok"] = False
+        _STATUS_CACHE["at"] = now
         return False
 
 

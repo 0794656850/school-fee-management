@@ -3,6 +3,18 @@
 {% block page_title %}Admin Control Center{% endblock %}
 {% block content %}
 
+<div id="verifyToast" class="fixed top-20 right-6 z-40 hidden max-w-xs rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-xl">
+  <div class="flex items-start gap-2">
+    <span class="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+      <i data-lucide="bell"></i>
+    </span>
+    <div>
+      <div class="font-semibold text-slate-900">New verification request</div>
+      <div class="text-xs text-slate-500">Open the Verifications queue to review it.</div>
+    </div>
+  </div>
+</div>
+
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
   <div class="bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl p-5 shadow">
     <div class="text-sm opacity-90">Students</div>
@@ -157,6 +169,33 @@
   {# System Health removed #}
   {# Schools management disabled: link removed intentionally #}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function(){
+    const toast = document.getElementById('verifyToast');
+    if (!toast) return;
+    let lastCount = Number('{{ PENDING_GUARDIAN_RECEIPTS or 0 }}') || 0;
+    const showToast = () => {
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 4500);
+    };
+    const poll = async () => {
+      try {
+        const r = await fetch('{{ url_for("admin.guardian_receipts_pending_count") }}');
+        const j = await r.json();
+        if (j && j.ok) {
+          const next = Number(j.count || 0);
+          if (next > lastCount) showToast();
+          lastCount = next;
+        }
+      } catch (e) {}
+    };
+    setInterval(poll, 15000);
+    poll();
+  })();
+</script>
 {% endblock %}
 
 

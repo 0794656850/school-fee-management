@@ -76,14 +76,17 @@
   </div>
 </div>
 <script>
-  // Back behavior for signup
+  // Back behavior: use browser history first, then fallback.
   (function(){
     const btn = document.getElementById('stdSignBackBtn');
     if (!btn) return;
     btn.addEventListener('click', () => {
       try {
+        if (window.history && window.history.length > 1) { window.history.back(); return; }
+      } catch(_) {}
+      try {
         const ref = document.referrer || '';
-        if (ref && new URL(ref).origin === window.location.origin) { history.back(); return; }
+        if (ref && new URL(ref).origin === window.location.origin) { window.location.assign(ref); return; }
       } catch(_) {}
       window.location.assign('{{ url_for('student_auth.student_login') }}');
     });

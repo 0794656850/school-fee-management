@@ -11,7 +11,7 @@
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
 </head>
 <body class="min-h-screen bg-[var(--bg-app)] text-[var(--text)]">
-  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
+  <header class="sticky top-0 z-10 bg-white/90 border-b border-gray-100">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="brand-hero__row">
         <div class="app-badge">

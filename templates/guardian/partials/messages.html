@@ -1,0 +1,29 @@
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Message the School</h2>
+      <p>Send updates or questions to the accounts office.</p>
+    </div>
+  </div>
+  <form id="msgForm" class="sample-grid-2">
+    <input type="hidden" name="token" value="{{ token }}" />
+    <input class="sample-input" name="name" placeholder="Your name (optional)">
+    <input class="sample-input" name="email" placeholder="Your email (optional)">
+    <input class="sample-input" name="phone" placeholder="Phone (optional)">
+    <input class="sample-input" name="subject" placeholder="Subject (optional)">
+    <select class="sample-input" name="category">
+      <option>General</option>
+      <option>Fees</option>
+      <option>Academics</option>
+      <option>Support</option>
+    </select>
+    <textarea class="sample-input" name="message" rows="4" placeholder="Write your message..."></textarea>
+    <div class="sample-form-footer">
+      <div id="msgBox" class="sample-help"></div>
+      <button type="submit" class="sample-primary-btn">
+        <i data-lucide="send"></i>
+        Send Message
+      </button>
+    </div>
+  </form>
+</section>

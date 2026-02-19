@@ -373,7 +373,7 @@ def guardian_login():
                     session["school_id"] = school_id
                     token = _sign_token(sid)
                     session["guardian_token"] = token
-                    flash("Login successful.", "success")
+                    flash("Login successful.", "portal_success")
                     return redirect(url_for("guardian.guardian_dashboard"))
                 _clear_guardian_otp_context()
                 target_email = _guardian_email_for_otp(db, sid, school_id)
@@ -408,7 +408,7 @@ def guardian_login():
             session["school_id"] = school_id
             token = _sign_token(sid)
             session["guardian_token"] = token
-            flash("Login successful.", "success")
+            flash("Login successful.", "portal_success")
             return redirect(url_for("guardian.guardian_dashboard"))
         finally:
             try:
@@ -471,7 +471,7 @@ def guardian_login_otp():
             except Exception:
                 pass
         _clear_guardian_otp_context()
-        flash("Login successful.", "success")
+        flash("Login successful.", "portal_success")
         return redirect(url_for("guardian.guardian_dashboard"))
 
     return render_template(
@@ -530,6 +530,10 @@ def guardian_login_otp_resend():
 def guardian_dashboard():
     """Guardian dashboard with student, fees and payments overview."""
     token = (request.args.get("token") or session.get("guardian_token") or "").strip()
+    active_page = (request.args.get("page") or "dashboard").strip().lower()
+    allowed_pages = {"dashboard", "payments", "proofs", "messages", "calendar", "assistant", "settings"}
+    if active_page not in allowed_pages:
+        active_page = "dashboard"
     if not token:
         return redirect(url_for("guardian.guardian_login"))
 
@@ -540,6 +544,10 @@ def guardian_dashboard():
         return redirect(url_for("guardian.guardian_login"))
 
     db = _db(); cur = db.cursor(dictionary=True)
+    try:
+        ensure_parent_portal_columns(db)
+    except Exception:
+        pass
     cur.execute(
         """
         SELECT s.*, sc.name AS school_name, sc.code AS school_code
@@ -817,6 +825,20 @@ def guardian_dashboard():
 
     db.close()
     proof_statuses = _guardian_receipts_for_student(student_id, session.get("school_id") or 0)
+    guardian_display_name = (
+        (student.get("parent_name") or "").strip()
+        or (student.get("name") or "").strip()
+        or "Parent"
+    )
+    portal_nav = {
+        "dashboard": url_for("guardian.guardian_dashboard", token=token, page="dashboard"),
+        "payments": url_for("guardian.guardian_dashboard", token=token, page="payments"),
+        "proofs": url_for("guardian.guardian_dashboard", token=token, page="proofs"),
+        "messages": url_for("guardian.guardian_dashboard", token=token, page="messages"),
+        "calendar": url_for("guardian.guardian_dashboard", token=token, page="calendar"),
+        "assistant": url_for("guardian.guardian_dashboard", token=token, page="assistant"),
+        "settings": url_for("guardian.guardian_dashboard", token=token, page="settings"),
+    }
     return render_template(
         "guardian_dashboard.html",
         student=student,
@@ -838,7 +860,88 @@ def guardian_dashboard():
         analytics=analytics,
         proof_statuses=proof_statuses,
         auto_credit_notice=auto_credit_notice,
+        active_page=active_page,
+        portal_nav=portal_nav,
+        guardian_name=guardian_display_name,
+        guardian_full_name=guardian_display_name,
+        guardian_email=(student.get("parent_email") or "").strip(),
+        guardian_phone=(student.get("parent_phone") or "").strip(),
+        guardian_preferred_channel=(student.get("parent_preferred_channel") or "auto"),
+        guardian_comm_opt_in=bool(int(student.get("parent_comm_opt_in") if student.get("parent_comm_opt_in") is not None else 1)),
+        guardian_email_opt_in=bool(int(student.get("parent_email_opt_in") if student.get("parent_email_opt_in") is not None else 1)),
+        guardian_sms_opt_in=bool(int(student.get("parent_sms_opt_in") if student.get("parent_sms_opt_in") is not None else 1)),
     )
+
+
+@guardian_bp.route("/settings", methods=["POST"])
+def guardian_settings_page():
+    token = (request.args.get("token") or request.form.get("token") or session.get("guardian_token") or "").strip()
+    if not token:
+        return redirect(url_for("guardian.guardian_login"))
+    student_id = _verify_token(token)
+    school_id = int(session.get("school_id") or 0)
+    if not student_id or not school_id:
+        flash("Session expired. Please login again.", "warning")
+        return redirect(url_for("guardian.guardian_login"))
+
+    parent_name = (request.form.get("parent_name") or "").strip()
+    parent_email = (request.form.get("parent_email") or "").strip()
+    parent_phone = (request.form.get("parent_phone") or "").strip()
+    preferred_channel = (request.form.get("preferred_channel") or "auto").strip().lower()
+    if preferred_channel not in {"auto", "email", "sms"}:
+        preferred_channel = "auto"
+    comm_opt_in = 1 if (request.form.get("comm_opt_in") == "on") else 0
+    email_opt_in = 1 if (request.form.get("email_opt_in") == "on") else 0
+    sms_opt_in = 1 if (request.form.get("sms_opt_in") == "on") else 0
+    if not parent_name:
+        flash("Parent name is required.", "warning")
+        return redirect(url_for("guardian.guardian_dashboard", token=token, page="settings"))
+    if parent_email and ("@" not in parent_email or "." not in parent_email):
+        flash("Enter a valid email address.", "warning")
+        return redirect(url_for("guardian.guardian_dashboard", token=token, page="settings"))
+
+    db = _db()
+    try:
+        ensure_parent_portal_columns(db)
+        cur = db.cursor()
+        cur.execute(
+            """
+            UPDATE students
+            SET parent_name=%s,
+                parent_email=%s,
+                parent_phone=%s,
+                parent_preferred_channel=%s,
+                parent_comm_opt_in=%s,
+                parent_email_opt_in=%s,
+                parent_sms_opt_in=%s
+            WHERE id=%s AND school_id=%s
+            """,
+            (
+                parent_name,
+                parent_email,
+                parent_phone,
+                preferred_channel,
+                comm_opt_in,
+                email_opt_in,
+                sms_opt_in,
+                int(student_id),
+                school_id,
+            ),
+        )
+        db.commit()
+        flash("Profile and communication settings updated. School reminders will now use these saved parent contacts.", "portal_success")
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        flash("Unable to save your settings right now. Please try again.", "error")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    return redirect(url_for("guardian.guardian_dashboard", token=token, page="settings"))
 
 
 @guardian_bp.route("/payment-proof/submit", methods=["POST"])

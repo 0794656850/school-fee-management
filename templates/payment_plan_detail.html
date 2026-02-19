@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Payment Plan Detail - {{ APP_TITLE }}{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Payment Plan</h1>
+      <p class="text-sm text-gray-500 mt-1">{{ plan.student_name }}{% if plan.class_name %} · {{ plan.class_name }}{% endif %}</p>
+    </div>
+    <a href="{{ url_for('plans.plans_home') }}" class="text-sm text-gray-600 hover:text-gray-800">Back</a>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div><span class="text-gray-500">Total</span><div class="font-semibold">KES {{ '{:,.2f}'.format(plan.total_amount or 0) }}</div></div>
+      <div><span class="text-gray-500">Installments</span><div class="font-semibold">{{ plan.installments }} ({{ plan.frequency }})</div></div>
+      <div><span class="text-gray-500">Status</span><div class="font-semibold">{{ plan.status }}</div></div>
+      <div><span class="text-gray-500">Year/Term</span><div class="font-semibold">{{ plan.year or '-' }} / {{ plan.term or '-' }}</div></div>
+      <div><span class="text-gray-500">Start date</span><div class="font-semibold">{{ plan.start_date or '-' }}</div></div>
+    </div>
+    {% if plan.status == 'active' %}
+    <form method="POST" action="{{ url_for('plans.plan_cancel', plan_id=plan.id) }}" class="mt-4">
+      <button class="px-3 py-2 text-xs rounded-lg border text-gray-600">Cancel plan</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Installments</h2>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-gray-500 uppercase text-xs">
+          <tr>
+            <th class="text-left py-2">Due date</th>
+            <th class="text-left py-2">Amount</th>
+            <th class="text-left py-2">Paid</th>
+            <th class="text-left py-2">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for i in items %}
+          <tr>
+            <td class="py-2 text-gray-600">{{ i.due_date }}</td>
+            <td class="py-2 text-gray-800">KES {{ '{:,.2f}'.format(i.amount or 0) }}</td>
+            <td class="py-2 text-gray-600">KES {{ '{:,.2f}'.format(i.paid_amount or 0) }}</td>
+            <td class="py-2 text-gray-600">{{ i.status }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

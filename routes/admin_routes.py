@@ -5,8 +5,9 @@ from io import StringIO
 from datetime import datetime, timedelta
 
 from apscheduler.triggers.cron import CronTrigger
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify, Response, send_file
 from typing import Any
+import os
 import mysql.connector
 
 from extensions import limiter
@@ -17,6 +18,10 @@ from utils.security import verify_password, hash_password, is_hashed
 from utils.pro import is_pro_enabled, set_license_key, get_license_key, upgrade_url
 from utils.audit import fetch_audit_logs, log_event
 from utils.db_helpers import ensure_guardian_receipts_table
+from utils.ledger import ensure_ledger_table, add_entry
+from utils.payment_sources import update_payment_source_status, log_payment_status
+from utils.payment_proofs import notify_parent_about_proof
+from utils.payment_plans import apply_payment_to_plan
 from utils.tenant import get_or_create_school, bootstrap_new_school, ensure_schools_table, slugify_code
 from utils.users import (
     ensure_user_tables,
@@ -37,9 +42,34 @@ from utils.backup import (
 )
 from utils.timezone_helpers import EAST_AFRICA_TZ, east_africa_now, format_east_africa
 from routes.reminder_routes import DEFAULT_REMINDER_TEMPLATE
+from routes.term_routes import ensure_payments_term_columns, get_or_seed_current_term
 
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+def _resolve_receipt_file_path(raw_path: str | None) -> str | None:
+    if not raw_path:
+        return None
+    value = str(raw_path).strip()
+    if not value:
+        return None
+    if value.lower().startswith(("http://", "https://")):
+        return value
+    static_root = current_app.static_folder or os.path.join(current_app.root_path, "static")
+    normalized = value.replace("\\", "/")
+    if normalized.startswith("/static/"):
+        normalized = normalized[len("/static/"):]
+    if normalized.startswith("static/"):
+        normalized = normalized[len("static/"):]
+    candidates = []
+    if os.path.isabs(normalized):
+        candidates.append(normalized)
+    candidates.append(os.path.join(static_root, normalized.lstrip("/")))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
 
 
 def _db():
@@ -502,46 +532,380 @@ def guardian_receipts():
         flash("Select a school before reviewing uploads.", "warning")
         return redirect(url_for("choose_school", next=url_for("admin.guardian_receipts")))
 
+    status_filter = (request.args.get("status") or "").strip().lower()
+    allowed_statuses = {"pending", "in_review", "accepted", "verified", "rejected"}
+    if status_filter and status_filter not in allowed_statuses:
+        status_filter = ""
+
     db = _db()
     ensure_guardian_receipts_table(db)
     cur = db.cursor(dictionary=True)
     try:
+        has_parent_name = False
+        try:
+            cur.execute("SHOW COLUMNS FROM students LIKE 'parent_name'")
+            has_parent_name = bool(cur.fetchone())
+        except Exception:
+            has_parent_name = False
+        parent_name_select = "s.parent_name AS parent_name" if has_parent_name else "'' AS parent_name"
         if request.method == "POST":
             rid = int(request.form.get("receipt_id") or 0)
             action = (request.form.get("action") or "").strip().lower()
             if rid and action in ("verify", "reject"):
                 now = datetime.utcnow()
-                status = "verified" if action == "verify" else "rejected"
                 cur.execute(
                     """
-                    UPDATE guardian_receipts
-                    SET status=%s, verified_by=%s, verified_at=%s, updated_at=%s
-                    WHERE id=%s AND school_id=%s
-                    """,
-                    (status, session.get("username") or "Admin", now, now, rid, sid),
+                    SELECT gr.*, s.name AS student_name, s.admission_no, s.class_name,
+                           {parent_name_select}, s.parent_email AS student_parent_email,
+                           s.parent_phone AS student_parent_phone
+                    FROM guardian_receipts gr
+                    LEFT JOIN students s ON s.id = gr.student_id AND s.school_id = gr.school_id
+                    WHERE gr.id=%s AND gr.school_id=%s
+                    """.format(parent_name_select=parent_name_select),
+                    (rid, sid),
                 )
-                db.commit()
-                flash(f"Receipt {status}.", "success")
+                receipt = cur.fetchone()
+                if not receipt:
+                    flash("Payment verification request not found.", "warning")
+                else:
+                    current_status = (receipt.get("status") or "pending").lower()
+                    if current_status in ("accepted", "verified", "rejected"):
+                        flash("This verification request has already been resolved.", "info")
+                    elif action == "verify":
+                        amount = float(receipt.get("amount") or 0)
+                        if amount <= 0:
+                            flash("Verification requires a valid amount.", "warning")
+                        else:
+                            student_id = int(receipt.get("student_id") or 0)
+                            if not student_id:
+                                flash("This payment is missing a linked student.", "error")
+                            else:
+                                try:
+                                    ensure_payments_term_columns(db)
+                                except Exception:
+                                    pass
+                                try:
+                                    cy, ct = get_or_seed_current_term(db)
+                                except Exception:
+                                    cy, ct = now.year, 1
+                                if ct not in (1, 2, 3):
+                                    ct = 1
+
+                                balance_col = "balance"
+                                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                                if not cur.fetchone():
+                                    balance_col = "fee_balance"
+
+                                cur.execute(
+                                    f"SELECT name, {balance_col}, credit FROM students WHERE id=%s AND school_id=%s",
+                                    (student_id, sid),
+                                )
+                                student_row = cur.fetchone()
+                                if not student_row:
+                                    flash("Linked student record is missing.", "error")
+                                else:
+                                    current_balance = float(student_row.get(balance_col) or 0)
+                                    current_credit = float(student_row.get("credit") or 0)
+                                    new_balance = 0 if amount >= current_balance else (current_balance - amount)
+                                    new_credit = current_credit + max(amount - current_balance, 0)
+
+                                    payment_date_value = receipt.get("payment_date") or now
+                                    if payment_date_value and not isinstance(payment_date_value, datetime):
+                                        try:
+                                            payment_date_value = datetime.combine(payment_date_value, datetime.min.time())
+                                        except Exception:
+                                            payment_date_value = now
+                                    payment_date_value = payment_date_value or now
+
+                                    reference = f"paybill-{rid}"
+                                    bank_name = (receipt.get("bank_name") or "M-Pesa").strip()
+                                    method = f"Paybill {bank_name}".strip()
+                                    payment_cursor = db.cursor()
+                                    payment_cursor.execute(
+                                        "INSERT INTO payments (student_id, amount, method, term, year, reference, date, school_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                                        (
+                                            student_id,
+                                            amount,
+                                            method,
+                                            ct,
+                                            cy,
+                                            reference,
+                                            payment_date_value,
+                                            sid,
+                                        ),
+                                    )
+                                    payment_id = payment_cursor.lastrowid
+
+                                    cur.execute(
+                                        f"UPDATE students SET {balance_col}=%s, credit=%s WHERE id=%s AND school_id=%s",
+                                        (new_balance, new_credit, student_id, sid),
+                                    )
+                                    try:
+                                        apply_payment_to_plan(
+                                            db,
+                                            int(sid),
+                                            int(student_id),
+                                            int(payment_id),
+                                            float(amount),
+                                            payment_date_value.date() if payment_date_value else None,
+                                            cy,
+                                            ct,
+                                        )
+                                    except Exception:
+                                        pass
+
+                                    admin_note = (
+                                        request.form.get("admin_note")
+                                        or f"Verified paybill payment KES {amount:,.2f}."
+                                    )
+                                    cur.execute(
+                                        """
+                                        UPDATE guardian_receipts
+                                        SET status=%s, verified_by=%s, verified_at=%s, updated_at=%s,
+                                            admin_note=%s, rejection_reason=NULL, payment_id=%s
+                                        WHERE id=%s AND school_id=%s
+                                        """,
+                                        (
+                                            "accepted",
+                                            session.get("username") or "Admin",
+                                            now,
+                                            now,
+                                            admin_note,
+                                            payment_id,
+                                            rid,
+                                            sid,
+                                        ),
+                                    )
+
+                                    try:
+                                        update_payment_source_status(db=db, source_ref=str(rid), status="accepted")
+                                        log_payment_status(
+                                            db=db,
+                                            school_id=int(sid),
+                                            student_id=int(student_id),
+                                            receipt_id=int(rid),
+                                            status="accepted",
+                                            actor=session.get("username") or "Admin",
+                                            note=admin_note,
+                                        )
+                                    except Exception:
+                                        pass
+
+                                    try:
+                                        ensure_ledger_table(db)
+                                        add_entry(
+                                            db,
+                                            school_id=int(sid),
+                                            student_id=int(student_id),
+                                            entry_type="credit",
+                                            amount=float(amount),
+                                            ref=reference,
+                                            description="Paybill verification recorded",
+                                            link_type="payment",
+                                            link_id=int(payment_id),
+                                        )
+                                    except Exception:
+                                        pass
+
+                                    student_name = student_row.get("name") or f"Student #{student_id}"
+                                    proof_payload = dict(receipt)
+                                    proof_payload.update(
+                                        {
+                                            "status": "accepted",
+                                            "admin_note": admin_note,
+                                            "rejection_reason": None,
+                                        }
+                                    )
+                                    try:
+                                        notify_parent_about_proof(
+                                            proof=proof_payload,
+                                            student_name=student_name,
+                                            status="accepted",
+                                        )
+                                    except Exception:
+                                        pass
+                                    try:
+                                        log_event(
+                                            "guardian_payment_verified",
+                                            target=f"receipt:{rid}",
+                                            detail=f"Verified paybill for student {student_id} (KES {amount:,.2f}).",
+                                        )
+                                    except Exception:
+                                        pass
+
+                                    db.commit()
+                                    flash("Payment verified and recorded for the student.", "success")
+                    else:
+                        reason = (request.form.get("rejection_reason") or "").strip() or "Payment verification rejected."
+                        cur.execute(
+                            """
+                            UPDATE guardian_receipts
+                            SET status=%s, rejection_reason=%s, admin_note=%s,
+                                verified_by=%s, verified_at=%s, updated_at=%s
+                            WHERE id=%s AND school_id=%s
+                            """,
+                            (
+                                "rejected",
+                                reason,
+                                reason,
+                                session.get("username") or "Admin",
+                                now,
+                                now,
+                                rid,
+                                sid,
+                            ),
+                        )
+                        try:
+                            update_payment_source_status(db=db, source_ref=str(rid), status="rejected")
+                            log_payment_status(
+                                db=db,
+                                school_id=int(sid),
+                                student_id=int(receipt.get("student_id") or 0),
+                                receipt_id=int(rid),
+                                status="rejected",
+                                actor=session.get("username") or "Admin",
+                                note=reason,
+                            )
+                        except Exception:
+                            pass
+                        student_name = receipt.get("student_name") or f"Student #{receipt.get('student_id') or ''}"
+                        proof_payload = dict(receipt)
+                        proof_payload.update({"status": "rejected", "rejection_reason": reason, "admin_note": reason})
+                        try:
+                            notify_parent_about_proof(
+                                proof=proof_payload,
+                                student_name=student_name,
+                                status="rejected",
+                                reason=reason,
+                            )
+                        except Exception:
+                            pass
+                        try:
+                            log_event(
+                                "guardian_payment_rejected",
+                                target=f"receipt:{rid}",
+                                detail=f"Rejected paybill for student {receipt.get('student_id') or ''}.",
+                            )
+                        except Exception:
+                            pass
+                        db.commit()
+                        flash("Payment verification rejected.", "info")
+        where_clause = "gr.school_id=%s"
+        params = [sid]
+        if status_filter == "pending":
+            where_clause += " AND gr.status IN ('pending','in_review')"
+        elif status_filter == "verified":
+            where_clause += " AND gr.status IN ('accepted','verified')"
+        elif status_filter:
+            where_clause += " AND gr.status=%s"
+            params.append(status_filter)
         cur.execute(
             """
-            SELECT * FROM guardian_receipts
-            WHERE school_id=%s
-            ORDER BY created_at DESC
+            SELECT gr.*, s.name AS student_name, s.admission_no, s.class_name,
+                   {parent_name_select}, s.parent_email AS student_parent_email,
+                   s.parent_phone AS student_parent_phone
+            FROM guardian_receipts gr
+            LEFT JOIN students s ON s.id = gr.student_id AND s.school_id = gr.school_id
+            WHERE {where_clause}
+            ORDER BY gr.created_at DESC
             LIMIT 50
-            """,
-            (sid,),
+            """.format(parent_name_select=parent_name_select, where_clause=where_clause),
+            params,
         )
         receipts = cur.fetchall() or []
+        for r in receipts:
+            try:
+                raw_path = r.get("file_path")
+                resolved = _resolve_receipt_file_path(raw_path)
+                r["file_missing"] = bool(raw_path) and not resolved
+                if raw_path and not r["file_missing"]:
+                    r["file_url"] = url_for("admin.guardian_receipt_file", receipt_id=int(r.get("id") or 0))
+                else:
+                    r["file_url"] = ""
+            except Exception:
+                r["file_url"] = ""
+                r["file_missing"] = False
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM guardian_receipts WHERE school_id=%s AND status IN ('pending','in_review')",
+            (sid,),
+        )
+        row = cur.fetchone() or {}
+        try:
+            pending_count = int((row.get("cnt") if isinstance(row, dict) else row[0]) or 0)
+        except Exception:
+            pending_count = 0
     finally:
         try:
             db.close()
         except Exception:
             pass
 
-    return render_template("admin/guardian_receipts.html", receipts=receipts)
+    return render_template("admin/guardian_receipts.html", receipts=receipts, pending_count=pending_count)
+
+
+@admin_bp.route("/guardian-receipts/file/<int:receipt_id>")
+def guardian_receipt_file(receipt_id: int):
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before viewing receipt files.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.guardian_receipts")))
+    db = _db()
+    try:
+        ensure_guardian_receipts_table(db)
+        cur = db.cursor(dictionary=True)
+        cur.execute(
+            "SELECT file_path FROM guardian_receipts WHERE id=%s AND school_id=%s",
+            (int(receipt_id), int(sid)),
+        )
+        row = cur.fetchone() or {}
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    raw_path = (row.get("file_path") or "").strip()
+    if not raw_path:
+        return "Receipt file is missing for this record.", 404
+    if raw_path.lower().startswith(("http://", "https://")):
+        return redirect(raw_path)
+    resolved = _resolve_receipt_file_path(raw_path)
+    if not resolved or not os.path.isfile(resolved):
+        return "Receipt file not found on this server. Ask the parent to re-upload.", 404
+    return send_file(resolved)
 
     # The logic below is intentionally bypassed to prevent
     # any Schools management UI or text from rendering.
+
+
+@admin_bp.route("/guardian-receipts/pending-count")
+def guardian_receipts_pending_count():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        return jsonify({"ok": False, "count": 0}), 400
+    db = _db()
+    try:
+        ensure_guardian_receipts_table(db)
+        cur = db.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM guardian_receipts WHERE school_id=%s AND status IN ('pending','in_review')",
+            (sid,),
+        )
+        row = cur.fetchone()
+        count = int((row[0] if row else 0) or 0)
+    except Exception:
+        count = 0
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    return jsonify({"ok": True, "count": count})
 
 
 @admin_bp.route("/whatsapp/test", methods=["POST"])
@@ -717,10 +1081,33 @@ def school_profile():
         if not sid:
             flash("Select a school before saving its profile.", "warning")
             return redirect(url_for("choose_school", next=url_for("admin.school_profile")))
+        app_name = (request.form.get("APP_NAME") or "").strip()
         for k in keys:
             val = (request.form.get(k) or "").strip()
             # Save per-school to avoid cross-tenant conflicts
             set_school_setting(k, val, school_id=sid)
+            # Keep SCHOOL_NAME in sync for downstream consumers
+            if k == "APP_NAME" and val:
+                set_school_setting("SCHOOL_NAME", val, school_id=sid)
+
+        # Persist school display name in schools table for headers/branding
+        if app_name:
+            try:
+                db = _db()
+                ensure_schools_table(db)
+                cur = db.cursor()
+                cur.execute("UPDATE schools SET name=%s WHERE id=%s", (app_name, int(sid)))
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
 
         # Handle logo upload (optional)
         try:
@@ -884,8 +1271,11 @@ def access_settings():
             return redirect(url_for("admin.access_settings"))
 
         elif form_kind == "ai":
-            # Store Vertex AI configuration (env still supported)
+            # Store AI provider configuration (env still supported)
             ai_keys = [
+                "AI_PROVIDER_PREFERENCE",
+                "GOOGLE_API_KEY",
+                "GEMINI_MODEL",
                 "VERTEX_PROJECT_ID",
                 "VERTEX_LOCATION",
                 "GOOGLE_APPLICATION_CREDENTIALS",
@@ -898,7 +1288,7 @@ def access_settings():
                     current_app.config[k] = val
                 except Exception:
                     pass
-            flash("Vertex AI settings saved.", "success")
+            flash("AI provider settings saved.", "success")
             return redirect(url_for("admin.access_settings"))
 
         elif form_kind == "portal":
@@ -936,7 +1326,10 @@ def access_settings():
     values["PORTAL_TOKEN_MAX_AGE_DAYS"] = (get_setting("PORTAL_TOKEN_MAX_AGE_DAYS") or current_app.config.get("PORTAL_TOKEN_MAX_AGE_DAYS", 180))
     values["PORTAL_TOKEN_ROLLOVER_AT"] = (get_setting("PORTAL_TOKEN_ROLLOVER_AT") or "")
 
-    # Vertex AI settings (pre-fill from DB or current config)
+    # AI provider settings (pre-fill from DB or current config)
+    values["AI_PROVIDER_PREFERENCE"] = (get_setting("AI_PROVIDER_PREFERENCE") or current_app.config.get("AI_PROVIDER_PREFERENCE", "google_ai_studio") or "google_ai_studio")
+    values["GOOGLE_API_KEY"] = (get_setting("GOOGLE_API_KEY") or current_app.config.get("GOOGLE_API_KEY", ""))
+    values["GEMINI_MODEL"] = (get_setting("GEMINI_MODEL") or current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"))
     values["VERTEX_PROJECT_ID"] = (get_setting("VERTEX_PROJECT_ID") or current_app.config.get("VERTEX_PROJECT_ID", ""))
     values["VERTEX_LOCATION"] = (get_setting("VERTEX_LOCATION") or current_app.config.get("VERTEX_LOCATION", "us-central1"))
     values["GOOGLE_APPLICATION_CREDENTIALS"] = (get_setting("GOOGLE_APPLICATION_CREDENTIALS") or current_app.config.get("GOOGLE_APPLICATION_CREDENTIALS", ""))

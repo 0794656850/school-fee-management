@@ -9,7 +9,7 @@ from io import StringIO
 from urllib.parse import urlparse
 import os
 from config import Config
-from routes.reminder_routes import reminder_bp
+from routes.reminder_routes import reminder_bp, run_auto_reminders
 from routes.admin_routes import admin_bp
 from routes.auth_routes import auth_bp
 from routes.credit_routes import credit_bp
@@ -58,12 +58,24 @@ from routes.defaulter_routes import recovery_bp
 from utils.settings import get_setting, set_school_setting
 from utils.users import ensure_user_tables
 from routes.ai_routes import ai_bp
+from routes.reconciliation_routes import recon_bp
+from routes.payment_plan_routes import plans_bp
+from routes.refund_routes import refund_bp
 from utils.audit import log_event
 from utils.ledger import ensure_ledger_table, add_entry
-from utils.db_helpers import ensure_guardian_receipts_table
+from utils.db_helpers import (
+    ensure_guardian_receipts_table,
+    ensure_reconciliation_tables,
+    ensure_payment_plan_tables,
+    ensure_refund_requests_table,
+    ensure_reminder_messages_table,
+    ensure_reminder_reads_table,
+    ensure_guardian_push_table,
+)
 from utils.payment_proofs import format_status_label, notify_parent_about_proof
 from utils.payment_sources import log_payment_status, update_payment_source_status
 from utils.auto_credit import auto_apply_credit_if_new_term
+from utils.payment_plans import apply_payment_to_plan
 from utils.tenant import (
     ensure_school_id_columns,
     ensure_schools_table,
@@ -258,6 +270,9 @@ app.register_blueprint(reminder_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(credit_bp)
+app.register_blueprint(plans_bp)
+app.register_blueprint(recon_bp)
+app.register_blueprint(refund_bp)
 app.register_blueprint(term_bp)
 app.register_blueprint(mpesa_bp)
 app.register_blueprint(student_auth_bp)
@@ -390,6 +405,24 @@ def inject_branding():
     except Exception:
         late_grace = 0
 
+    pending_guardian_receipts = 0
+    if school_id and (sess.get("is_admin") or sess.get("role") in ("owner", "admin")):
+        try:
+            _conn = get_db_connection()
+            try:
+                ensure_guardian_receipts_table(_conn)
+                cur = _conn.cursor()
+                cur.execute(
+                    "SELECT COUNT(*) FROM guardian_receipts WHERE school_id=%s AND status IN ('pending','in_review')",
+                    (school_id,),
+                )
+                row = cur.fetchone()
+                pending_guardian_receipts = int((row[0] if row else 0) or 0)
+            finally:
+                _conn.close()
+        except Exception:
+            pending_guardian_receipts = 0
+
     def _balance_class(value):
         try:
             val = float(value or 0)
@@ -429,6 +462,7 @@ def inject_branding():
         # Raw uploaded logo path if present
         "SCHOOL_LOGO_URL": school_logo_url or "",
         "balance_class": _balance_class,
+        "PENDING_GUARDIAN_RECEIPTS": pending_guardian_receipts,
     }
 
 # ---------- AUTH GUARD ----------
@@ -475,12 +509,16 @@ def require_login_for_app():
         # Let admin area be reachable separately (e.g., /admin, /admin/..)
         if path.startswith("/admin"):
             return None
+        if path.startswith("/api/") or request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"error": "login_required"}), 401
         # API endpoints should also be protected
         if path not in ("/auth/", "/auth/entry", "/auth/login"):
             return redirect(url_for("auth.entry", next=path))
     # After login, require a selected school for app routes
     if not (path.startswith("/admin") or path.startswith("/auth")):
         if not session.get("school_id") and path != "/choose_school":
+            if path.startswith("/api/") or request.headers.get("X-Requested-With") == "fetch":
+                return jsonify({"error": "school_required"}), 409
             return redirect(url_for("choose_school", next=path))
     return None
 
@@ -785,6 +823,15 @@ def _bootstrap_db_safely():
             pass
         ensure_student_enrollments_table(db)
         ensure_term_fees_table(db)
+        try:
+            ensure_reconciliation_tables(db)
+            ensure_payment_plan_tables(db)
+            ensure_refund_requests_table(db)
+            ensure_reminder_messages_table(db)
+            ensure_reminder_reads_table(db)
+            ensure_guardian_push_table(db)
+        except Exception:
+            pass
         # Strengthen per-school uniqueness where safe
         try:
             ensure_unique_indices_per_school(db)
@@ -2639,6 +2686,19 @@ def payments():
             (new_balance, new_credit, student_id, session.get("school_id")),
         )
         db.commit()
+        try:
+            apply_payment_to_plan(
+                db,
+                int(session.get("school_id")),
+                int(student_id),
+                int(payment_id),
+                float(amount),
+                payment_date.date(),
+                cy,
+                ct,
+            )
+        except Exception:
+            pass
         # Ledger only
         try:
             ensure_ledger_table(db)
@@ -2681,6 +2741,19 @@ def payments():
                 )
                 carried_payment_id = cursor.lastrowid
                 db.commit()
+                try:
+                    apply_payment_to_plan(
+                        db,
+                        int(session.get("school_id")),
+                        int(student_id),
+                        int(carried_payment_id),
+                        float(overpaid_total),
+                        payment_date.date(),
+                        next_year,
+                        next_term,
+                    )
+                except Exception:
+                    pass
                 # Ledger entry for carry-forward credit
                 try:
                     ensure_ledger_table(db)
@@ -4586,6 +4659,38 @@ if _should_start_backup_scheduler:
         _start_backup_scheduler()
     except Exception:
         app.logger.exception("Failed to start backup scheduler")
+
+
+def _start_auto_reminder_scheduler():
+    enabled = str(os.environ.get("AUTO_REMINDERS_ENABLED", "1")).strip().lower() not in ("0", "false", "no")
+    if not enabled:
+        return
+    scheduler = BackgroundScheduler(timezone=EAST_AFRICA_TZ)
+    trigger = CronTrigger(day_of_week="mon", hour=1, minute=0, timezone=EAST_AFRICA_TZ)
+    try:
+        min_balance = float(os.environ.get("AUTO_REMINDERS_MIN_BALANCE", "0.01"))
+    except Exception:
+        min_balance = 0.01
+
+    def _run_auto_job():
+        with app.app_context():
+            try:
+                run_auto_reminders(min_balance=min_balance)
+                app.logger.info("Auto reminders dispatched")
+            except Exception:
+                app.logger.exception("Auto reminders failed")
+
+    scheduler.add_job(_run_auto_job, trigger=trigger, id="auto_reminders", replace_existing=True)
+    scheduler.start()
+    app.config["REMINDER_SCHEDULER"] = scheduler
+
+
+_should_start_reminder_scheduler = os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug
+if _should_start_reminder_scheduler:
+    try:
+        _start_auto_reminder_scheduler()
+    except Exception:
+        app.logger.exception("Failed to start auto reminder scheduler")
 
 if __name__ == "__main__":
     app.run(debug=True)

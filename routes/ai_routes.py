@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, render_template, request, jsonify, session, Response, stream_with_context
 import json
+import re
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -218,6 +219,48 @@ def _find_student_by_hint(db, name: str | None, admission_no: str | None) -> Dic
     return None
 
 
+def _extract_top_n(q_lower: str, default: int = 10, cap: int = 25) -> int:
+    m = re.search(r"\btop\s+(\d{1,2})\b", q_lower)
+    if not m:
+        return default
+    try:
+        n = int(m.group(1))
+    except Exception:
+        return default
+    if n < 1:
+        return default
+    if n > cap:
+        return cap
+    return n
+
+
+def _apply_operational_overrides(intent: str, query: str, entities: Dict[str, Any] | None) -> tuple[str, Dict[str, Any]]:
+    q_lower = query.lower()
+    ents = dict(entities or {})
+
+    nil_balance_terms = ["nil balance", "nill balance", "zero balance", "no balance", "balance 0", "balance zero", "cleared fees"]
+    pending_terms = ["not cleared", "unpaid", "outstanding", "pending", "owing", "defaulter", "debtors", "have not paid"]
+    count_terms = ["how many", "number of", "count", "total students"]
+
+    if any(t in q_lower for t in nil_balance_terms):
+        return "students_zero_balance", ents
+
+    if ("student" in q_lower or "students" in q_lower) and any(t in q_lower for t in pending_terms):
+        if any(t in q_lower for t in count_terms):
+            return "pending_students_count", ents
+        if "top" in q_lower or "debtor" in q_lower or "defaulter" in q_lower:
+            ents.setdefault("count", _extract_top_n(q_lower))
+            return "top_debtors", ents
+
+    if ("all students" in q_lower or (("list" in q_lower or "show" in q_lower) and "student" in q_lower)):
+        return "list_students", ents
+
+    if any(k in q_lower for k in ["most used collection method", "most used payment method", "top payment method", "most used method"]):
+        return "most_used_collection_method", ents
+
+    return intent, ents
+
+
 @ai_bp.route("/api/chats", methods=["GET"])
 def list_chats_api():
     try:
@@ -303,6 +346,7 @@ def get_messages_api():
 def ai_chat():
     data = request.get_json(silent=True) or {}
     query = (data.get("message") or "").strip()
+    q_lower = query.lower()
     chat_id = data.get("chat_id")
     model = (data.get("model") or "").strip() or None
     redo = bool(data.get("redo"))
@@ -310,6 +354,9 @@ def ai_chat():
         return jsonify({"ok": False, "answer": "Please provide a message."}), 400
 
     intent, entities = classify_intent(query)
+    if q_lower in ("hi", "hello", "hey", "hi there", "hello there"):
+        intent = "greeting"
+    intent, entities = _apply_operational_overrides(intent, query, entities if isinstance(entities, dict) else {})
 
     # Try DB-backed flow first; if DB not available, run stateless fallback
     try:
@@ -379,6 +426,37 @@ def ai_chat():
             db.commit()
             return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
+        if intent == "pending_students_count":
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            has_balance = bool(cur.fetchone())
+            bal_col = "balance" if has_balance else "fee_balance"
+            sid = session.get("school_id") if session else None
+            if sid:
+                cur.execute(
+                    f"SELECT COUNT(*) AS c, COALESCE(SUM(COALESCE({bal_col},0)),0) AS total "
+                    f"FROM students WHERE school_id=%s AND COALESCE({bal_col},0) > 0",
+                    (sid,),
+                )
+            else:
+                cur.execute(
+                    f"SELECT COUNT(*) AS c, COALESCE(SUM(COALESCE({bal_col},0)),0) AS total "
+                    f"FROM students WHERE COALESCE({bal_col},0) > 0"
+                )
+            row = cur.fetchone() or {}
+            c = int(row.get("c") or 0)
+            total = float(row.get("total") or 0.0)
+            answer = (
+                f"{c} students have not cleared school fees. "
+                f"Total pending balance is KES {total:,.2f}."
+            )
+            cur.execute(
+                "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                (chat_id, 'assistant', answer, now),
+            )
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
+            db.commit()
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
+
         if intent == "top_debtors":
             n = int((entities or {}).get("count", 5))
             if n < 1:
@@ -413,8 +491,162 @@ def ai_chat():
             db.commit()
             return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
+        if intent == "list_students":
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            has_balance = bool(cur.fetchone())
+            bal_col = "balance" if has_balance else "fee_balance"
+            sid = session.get("school_id") if session else None
+            params = ()
+            where = ""
+            if sid:
+                where = "WHERE school_id=%s"
+                params = (sid,)
+            cur.execute(f"SELECT COUNT(*) AS c FROM students {where}", params)
+            total = int((cur.fetchone() or {}).get("c") or 0)
+            cur.execute(
+                f"SELECT name, admission_no, class_name, COALESCE({bal_col},0) AS balance, COALESCE(credit,0) AS credit "
+                f"FROM students {where} ORDER BY name ASC LIMIT 200",
+                params,
+            )
+            rows = cur.fetchall() or []
+            if not rows:
+                answer = "No students found."
+            else:
+                lines = [
+                    f"{i+1}. {r.get('name') or '-'} | Adm: {r.get('admission_no') or '-'} | "
+                    f"Class: {r.get('class_name') or '-'} | Balance: KES {float(r.get('balance') or 0):,.2f}"
+                    for i, r in enumerate(rows)
+                ]
+                answer = f"Students (showing {len(rows)} of {total}):\n" + "\n".join(lines)
+            cur.execute(
+                "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                (chat_id, 'assistant', answer, now),
+            )
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
+            db.commit()
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
+
+        if intent == "students_zero_balance":
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            has_balance = bool(cur.fetchone())
+            bal_col = "balance" if has_balance else "fee_balance"
+            sid = session.get("school_id") if session else None
+            if sid:
+                cur.execute(
+                    f"SELECT name, admission_no, class_name FROM students "
+                    f"WHERE school_id=%s AND COALESCE({bal_col},0)=0 ORDER BY name ASC LIMIT 200",
+                    (sid,),
+                )
+            else:
+                cur.execute(
+                    f"SELECT name, admission_no, class_name FROM students "
+                    f"WHERE COALESCE({bal_col},0)=0 ORDER BY name ASC LIMIT 200"
+                )
+            rows = cur.fetchall() or []
+            if not rows:
+                answer = "No students with nil balance found."
+            else:
+                lines = [
+                    f"{i+1}. {r.get('name') or '-'} | Adm: {r.get('admission_no') or '-'} | Class: {r.get('class_name') or '-'}"
+                    for i, r in enumerate(rows)
+                ]
+                answer = f"Students with nil balance ({len(rows)} shown):\n" + "\n".join(lines)
+            cur.execute(
+                "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                (chat_id, 'assistant', answer, now),
+            )
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
+            db.commit()
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
+
+        if intent == "most_used_collection_method":
+            sid = session.get("school_id") if session else None
+            if sid:
+                cur.execute(
+                    "SELECT method, COUNT(*) AS tx_count, COALESCE(SUM(amount),0) AS total "
+                    "FROM payments WHERE method <> 'Credit Transfer' AND school_id=%s "
+                    "GROUP BY method ORDER BY tx_count DESC, total DESC LIMIT 3",
+                    (sid,),
+                )
+            else:
+                cur.execute(
+                    "SELECT method, COUNT(*) AS tx_count, COALESCE(SUM(amount),0) AS total "
+                    "FROM payments WHERE method <> 'Credit Transfer' "
+                    "GROUP BY method ORDER BY tx_count DESC, total DESC LIMIT 3"
+                )
+            rows = cur.fetchall() or []
+            if not rows:
+                answer = "No payment records found yet."
+            else:
+                top = rows[0]
+                answer = (
+                    f"Most used collection method: {top.get('method') or 'Unknown'} "
+                    f"({int(top.get('tx_count') or 0)} payments, KES {float(top.get('total') or 0):,.2f})."
+                )
+                if len(rows) > 1:
+                    answer += "\nNext methods:\n" + "\n".join([
+                        f"- {r.get('method') or 'Unknown'} ({int(r.get('tx_count') or 0)} payments, KES {float(r.get('total') or 0):,.2f})"
+                        for r in rows[1:]
+                    ])
+            cur.execute(
+                "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                (chat_id, 'assistant', answer, now),
+            )
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
+            db.commit()
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
+
         if intent == "analytics_summary":
-            answer = "Analytics are disabled."
+            # Deterministic school-level summary from live DB values
+            sid = session.get("school_id") if session else None
+            school_filter = "WHERE school_id=%s" if sid else ""
+            school_filter_and = "AND school_id=%s" if sid else ""
+            params = (sid,) if sid else ()
+            cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+            has_balance = bool(cur.fetchone())
+            bal_col = "balance" if has_balance else "fee_balance"
+
+            cur.execute(
+                f"SELECT COALESCE(SUM(amount),0) AS collected FROM payments WHERE method <> 'Credit Transfer' {school_filter_and}",
+                params,
+            )
+            collected = float((cur.fetchone() or {}).get("collected") or 0)
+
+            cur.execute(
+                f"SELECT COALESCE(SUM(COALESCE({bal_col},0)),0) AS pending FROM students {school_filter}",
+                params,
+            )
+            pending = float((cur.fetchone() or {}).get("pending") or 0)
+
+            cur.execute(
+                f"SELECT COALESCE(SUM(credit),0) AS credit FROM students {school_filter}",
+                params,
+            )
+            credit = float((cur.fetchone() or {}).get("credit") or 0)
+            rate = (collected / (collected + pending) * 100.0) if (collected + pending) else 0.0
+
+            cur.execute(
+                f"SELECT method, COALESCE(SUM(amount),0) AS total "
+                f"FROM payments WHERE method <> 'Credit Transfer' {school_filter_and} "
+                "GROUP BY method ORDER BY total DESC LIMIT 3",
+                params,
+            )
+            methods = cur.fetchall() or []
+            if methods:
+                method_lines = ", ".join(
+                    [f"{m.get('method') or 'Unknown'} (KES {float(m.get('total') or 0):,.0f})" for m in methods]
+                )
+            else:
+                method_lines = "No payment method data yet."
+
+            answer = (
+                "Collection summary:\n"
+                f"- Collected: KES {collected:,.2f}\n"
+                f"- Pending balances: KES {pending:,.2f}\n"
+                f"- Credit on account: KES {credit:,.2f}\n"
+                f"- Collection rate: {rate:.1f}%\n"
+                f"- Top payment methods: {method_lines}"
+            )
             cur.execute(
                 "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
                 (chat_id, 'assistant', answer, now),
@@ -424,7 +656,7 @@ def ai_chat():
             return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
 
         if intent == "generate_reminder":
-            # Try infer student to personalize
+            # Try infer student to personalize (aligned with reminder tone)
             cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
             has_balance = bool(cur.fetchone())
             bal_col = "balance" if has_balance else "fee_balance"
@@ -435,16 +667,41 @@ def ai_chat():
             if student:
                 balance = float(student.get(bal_col) or 0)
                 name = student.get("name")
+                cls = student.get("class_name") or "their class"
                 answer = (
-                    f"Dear {name}, this is a friendly reminder that your outstanding "
-                    f"fee balance is KES {balance:,.2f}. Kindly clear payment at your "
-                    f"earliest convenience. Thank you."
+                    "Subject: Friendly Fee Payment Reminder\n\n"
+                    f"Hello {name},\n\n"
+                    f"We hope you are well. This is a gentle reminder that {cls} has an outstanding "
+                    f"fee balance of KES {balance:,.2f}. Kindly clear the balance as soon as possible.\n\n"
+                    "If you have already made payment, please disregard this message.\n\n"
+                    "Thank you."
                 )
             else:
                 answer = (
-                    "Dear Parent/Guardian, this is a reminder that there is an outstanding "
-                    "school fee balance. Kindly clear payment at your earliest convenience. Thank you."
+                    "Subject: Friendly Fee Payment Reminder\n\n"
+                    "Hello Parent/Guardian,\n\n"
+                    "This is a gentle reminder that there is an outstanding school fee balance. "
+                    "Kindly clear payment as soon as possible.\n\n"
+                    "If you have already made payment, please disregard this message.\n\n"
+                    "Thank you."
                 )
+            cur.execute(
+                "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                (chat_id, 'assistant', answer, now),
+            )
+            cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (now, chat_id))
+            db.commit()
+            return jsonify({"ok": True, "answer": answer, "chat_id": chat_id, "title": t if 't' in locals() else None})
+
+        if intent == "greeting":
+            answer = (
+                "Hello. I can help with:\n"
+                "- Top debtors\n"
+                "- Students with nil balance\n"
+                "- Full student list\n"
+                "- Most used collection method\n"
+                "- Collection summary"
+            )
             cur.execute(
                 "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
                 (chat_id, 'assistant', answer, now),
@@ -465,6 +722,22 @@ def ai_chat():
         if redo and history and history[-1].get('role') == 'assistant':
             history = history[:-1]
         answer = chat_anything(history, model=model or None)
+        if isinstance(answer, str) and answer.startswith("AI error:"):
+            lower_err = answer.lower()
+            if "429" in lower_err or "quota" in lower_err or "rate limit" in lower_err:
+                answer = (
+                    "AI provider quota/rate limit reached right now. "
+                    "Try again shortly, or run deterministic queries like: "
+                    "'top 10 debtors', 'list all students', 'students with nil balance', "
+                    "or 'most used collection method'."
+                )
+            elif "google/vertex ai unavailable" in lower_err:
+                answer = (
+                    "AI provider is temporarily unavailable. "
+                    "You can still use deterministic queries: "
+                    "'top 10 debtors', 'list all students', 'students with nil balance', "
+                    "'most used collection method', or 'collection summary'."
+                )
         cur.execute(
             "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
             (chat_id, 'assistant', answer, now),
@@ -494,6 +767,7 @@ def ai_chat_stream():
     Sends an initial meta event with chat_id/title, then streams data chunks.
     """
     q = (request.args.get('q') or '').strip()
+    q_lower = q.lower()
     model = (request.args.get('model') or '').strip() or None
     redo = (request.args.get('redo') or '').strip() in ('1','true','True','yes')
     if not q:
@@ -543,6 +817,273 @@ def ai_chat_stream():
             meta = {"chat_id": chat_id, "title": title}
             yield sse_format('meta', json.dumps(meta))
 
+            # Intent-first deterministic handling (keeps stream mode aligned with /api/chat)
+            intent, entities = classify_intent(q)
+            if q_lower in ("hi", "hello", "hey", "hi there", "hello there"):
+                intent = "greeting"
+            intent, entities = _apply_operational_overrides(intent, q, entities if isinstance(entities, dict) else {})
+            answer_full = None
+
+            if intent == "student_balance":
+                name = (entities.get("student_name") or "").strip() if isinstance(entities, dict) else ""
+                adm = (entities.get("admission_no") or "").strip() if isinstance(entities, dict) else ""
+                student = _find_student_by_hint(db, name or None, adm or None)
+                if not student:
+                    import re
+                    m = re.search(r"for\s+([a-zA-Z\s\-']{2,50})", q, re.IGNORECASE)
+                    hint = m.group(1).strip() if m else None
+                    student = _find_student_by_hint(db, hint, None) if hint else None
+                if not student:
+                    answer_full = "I couldn't find that student. Provide name or admission number."
+                else:
+                    cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                    has_balance = bool(cur.fetchone())
+                    bal_col = "balance" if has_balance else "fee_balance"
+                    balance = float(student.get(bal_col) or 0)
+                    credit = float(student.get("credit") or 0)
+                    cls = student.get("class_name")
+                    name_out = student.get("name")
+                    answer_full = (
+                        f"{name_out} ({cls}) currently owes KES {balance:,.2f}. "
+                        f"Credit on account: KES {credit:,.2f}."
+                    )
+
+            elif intent == "top_debtors":
+                n = int((entities or {}).get("count", 5))
+                if n < 1:
+                    n = 5
+                if n > 25:
+                    n = 25
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute(
+                        f"SELECT name, class_name, COALESCE({bal_col},0) AS balance FROM students WHERE school_id=%s ORDER BY COALESCE({bal_col},0) DESC LIMIT %s",
+                        (sid, n),
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT name, class_name, COALESCE({bal_col},0) AS balance FROM students ORDER BY COALESCE({bal_col},0) DESC LIMIT %s",
+                        (n,),
+                    )
+                rows = cur.fetchall() or []
+                if not rows:
+                    answer_full = "No students found."
+                else:
+                    lines = [f"{i+1}. {r['name']} ({r['class_name']}): KES {float(r['balance']):,.2f}" for i, r in enumerate(rows)]
+                    answer_full = "Top debtors:\n" + "\n".join(lines)
+
+            elif intent == "pending_students_count":
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute(
+                        f"SELECT COUNT(*) AS c, COALESCE(SUM(COALESCE({bal_col},0)),0) AS total "
+                        f"FROM students WHERE school_id=%s AND COALESCE({bal_col},0) > 0",
+                        (sid,),
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT COUNT(*) AS c, COALESCE(SUM(COALESCE({bal_col},0)),0) AS total "
+                        f"FROM students WHERE COALESCE({bal_col},0) > 0"
+                    )
+                row = cur.fetchone() or {}
+                c = int(row.get("c") or 0)
+                total = float(row.get("total") or 0.0)
+                answer_full = (
+                    f"{c} students have not cleared school fees. "
+                    f"Total pending balance is KES {total:,.2f}."
+                )
+
+            elif intent == "list_students":
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+                sid = session.get("school_id") if session else None
+                params = ()
+                where = ""
+                if sid:
+                    where = "WHERE school_id=%s"
+                    params = (sid,)
+                cur.execute(f"SELECT COUNT(*) AS c FROM students {where}", params)
+                total = int((cur.fetchone() or {}).get("c") or 0)
+                cur.execute(
+                    f"SELECT name, admission_no, class_name, COALESCE({bal_col},0) AS balance, COALESCE(credit,0) AS credit "
+                    f"FROM students {where} ORDER BY name ASC LIMIT 200",
+                    params,
+                )
+                rows = cur.fetchall() or []
+                if not rows:
+                    answer_full = "No students found."
+                else:
+                    lines = [
+                        f"{i+1}. {r.get('name') or '-'} | Adm: {r.get('admission_no') or '-'} | "
+                        f"Class: {r.get('class_name') or '-'} | Balance: KES {float(r.get('balance') or 0):,.2f}"
+                        for i, r in enumerate(rows)
+                    ]
+                    answer_full = f"Students (showing {len(rows)} of {total}):\n" + "\n".join(lines)
+
+            elif intent == "students_zero_balance":
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute(
+                        f"SELECT name, admission_no, class_name FROM students "
+                        f"WHERE school_id=%s AND COALESCE({bal_col},0)=0 ORDER BY name ASC LIMIT 200",
+                        (sid,),
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT name, admission_no, class_name FROM students "
+                        f"WHERE COALESCE({bal_col},0)=0 ORDER BY name ASC LIMIT 200"
+                    )
+                rows = cur.fetchall() or []
+                if not rows:
+                    answer_full = "No students with nil balance found."
+                else:
+                    lines = [
+                        f"{i+1}. {r.get('name') or '-'} | Adm: {r.get('admission_no') or '-'} | Class: {r.get('class_name') or '-'}"
+                        for i, r in enumerate(rows)
+                    ]
+                    answer_full = f"Students with nil balance ({len(rows)} shown):\n" + "\n".join(lines)
+
+            elif intent == "most_used_collection_method":
+                sid = session.get("school_id") if session else None
+                if sid:
+                    cur.execute(
+                        "SELECT method, COUNT(*) AS tx_count, COALESCE(SUM(amount),0) AS total "
+                        "FROM payments WHERE method <> 'Credit Transfer' AND school_id=%s "
+                        "GROUP BY method ORDER BY tx_count DESC, total DESC LIMIT 3",
+                        (sid,),
+                    )
+                else:
+                    cur.execute(
+                        "SELECT method, COUNT(*) AS tx_count, COALESCE(SUM(amount),0) AS total "
+                        "FROM payments WHERE method <> 'Credit Transfer' "
+                        "GROUP BY method ORDER BY tx_count DESC, total DESC LIMIT 3"
+                    )
+                rows = cur.fetchall() or []
+                if not rows:
+                    answer_full = "No payment records found yet."
+                else:
+                    top = rows[0]
+                    answer_full = (
+                        f"Most used collection method: {top.get('method') or 'Unknown'} "
+                        f"({int(top.get('tx_count') or 0)} payments, KES {float(top.get('total') or 0):,.2f})."
+                    )
+                    if len(rows) > 1:
+                        answer_full += "\nNext methods:\n" + "\n".join([
+                            f"- {r.get('method') or 'Unknown'} ({int(r.get('tx_count') or 0)} payments, KES {float(r.get('total') or 0):,.2f})"
+                            for r in rows[1:]
+                        ])
+
+            elif intent == "analytics_summary":
+                sid = session.get("school_id") if session else None
+                school_filter = "WHERE school_id=%s" if sid else ""
+                school_filter_and = "AND school_id=%s" if sid else ""
+                params = (sid,) if sid else ()
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+
+                cur.execute(
+                    f"SELECT COALESCE(SUM(amount),0) AS collected FROM payments WHERE method <> 'Credit Transfer' {school_filter_and}",
+                    params,
+                )
+                collected = float((cur.fetchone() or {}).get("collected") or 0)
+
+                cur.execute(
+                    f"SELECT COALESCE(SUM(COALESCE({bal_col},0)),0) AS pending FROM students {school_filter}",
+                    params,
+                )
+                pending = float((cur.fetchone() or {}).get("pending") or 0)
+
+                cur.execute(
+                    f"SELECT COALESCE(SUM(credit),0) AS credit FROM students {school_filter}",
+                    params,
+                )
+                credit = float((cur.fetchone() or {}).get("credit") or 0)
+                rate = (collected / (collected + pending) * 100.0) if (collected + pending) else 0.0
+
+                cur.execute(
+                    f"SELECT method, COALESCE(SUM(amount),0) AS total "
+                    f"FROM payments WHERE method <> 'Credit Transfer' {school_filter_and} "
+                    "GROUP BY method ORDER BY total DESC LIMIT 3",
+                    params,
+                )
+                methods = cur.fetchall() or []
+                if methods:
+                    method_lines = ", ".join(
+                        [f"{m.get('method') or 'Unknown'} (KES {float(m.get('total') or 0):,.0f})" for m in methods]
+                    )
+                else:
+                    method_lines = "No payment method data yet."
+
+                answer_full = (
+                    "Collection summary:\n"
+                    f"- Collected: KES {collected:,.2f}\n"
+                    f"- Pending balances: KES {pending:,.2f}\n"
+                    f"- Credit on account: KES {credit:,.2f}\n"
+                    f"- Collection rate: {rate:.1f}%\n"
+                    f"- Top payment methods: {method_lines}"
+                )
+
+            elif intent == "generate_reminder":
+                cur.execute("SHOW COLUMNS FROM students LIKE 'balance'")
+                has_balance = bool(cur.fetchone())
+                bal_col = "balance" if has_balance else "fee_balance"
+                import re
+                m = re.search(r"for\s+([a-zA-Z\s\-']{2,50})", q, re.IGNORECASE)
+                hint = m.group(1).strip() if m else None
+                student = _find_student_by_hint(db, hint, None) if hint else None
+                if student:
+                    balance = float(student.get(bal_col) or 0)
+                    name = student.get("name")
+                    cls = student.get("class_name") or "their class"
+                    answer_full = (
+                        "Subject: Friendly Fee Payment Reminder\n\n"
+                        f"Hello {name},\n\n"
+                        f"We hope you are well. This is a gentle reminder that {cls} has an outstanding "
+                        f"fee balance of KES {balance:,.2f}. Kindly clear the balance as soon as possible.\n\n"
+                        "If you have already made payment, please disregard this message.\n\n"
+                        "Thank you."
+                    )
+                else:
+                    answer_full = (
+                        "Subject: Friendly Fee Payment Reminder\n\n"
+                        "Hello Parent/Guardian,\n\n"
+                        "This is a gentle reminder that there is an outstanding school fee balance. "
+                        "Kindly clear payment as soon as possible.\n\n"
+                        "If you have already made payment, please disregard this message.\n\n"
+                        "Thank you."
+                    )
+
+            elif intent == "greeting":
+                answer_full = (
+                    "Hello. I can help with:\n"
+                    "- Top debtors\n"
+                    "- Students with nil balance\n"
+                    "- Full student list\n"
+                    "- Most used collection method\n"
+                    "- Collection summary"
+                )
+
+            if answer_full is not None:
+                yield sse_format(None, answer_full)
+                cur.execute(
+                    "INSERT INTO ai_messages (chat_id, role, content, created_at) VALUES (%s,%s,%s,%s)",
+                    (chat_id, 'assistant', answer_full, datetime.now()),
+                )
+                cur.execute("UPDATE ai_chats SET updated_at=%s WHERE id=%s", (datetime.now(), chat_id))
+                db.commit()
+                return
+
             # Build history (limit last 40) and stream
             cur.execute("SELECT role, content FROM ai_messages WHERE chat_id=%s ORDER BY id ASC", (chat_id,))
             rows = cur.fetchall() or []
@@ -562,6 +1103,20 @@ def ai_chat_stream():
                 err = str(e)
             except Exception:
                 err = 'stream_error'
+            low = err.lower()
+            if "429" in low or "quota" in low or "rate limit" in low:
+                err = (
+                    "AI provider quota/rate limit reached right now. "
+                    "Try again shortly, or use deterministic queries like "
+                    "'top 10 debtors', 'list all students', 'students with nil balance', "
+                    "or 'most used collection method'."
+                )
+            elif "google/vertex ai unavailable" in low:
+                err = (
+                    "AI provider is temporarily unavailable. "
+                    "Use deterministic queries like 'top 10 debtors', 'list all students', "
+                    "'students with nil balance', 'most used collection method', or 'collection summary'."
+                )
             yield sse_format('error', err)
         finally:
             try:

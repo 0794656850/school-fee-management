@@ -1,0 +1,91 @@
+<section class="sample-section sample-card" id="uploadProof">
+  <div class="sample-section__header">
+    <div>
+      <h2>Upload Payment Proof</h2>
+      <p>Attach a slip or paste statement text.</p>
+    </div>
+  </div>
+  <div class="sample-grid-2">
+    <div class="sample-dropzone">
+      <div class="sample-drop-icon"><i data-lucide="file-plus-2"></i></div>
+      <div class="sample-drop-title">Upload a receipt</div>
+      <div class="sample-drop-sub">We will tag it to {{ student.name }}.</div>
+      <form id="inlineProofForm" action="{{ url_for('guardian.guardian_receipt_upload', token=token) }}" method="post" enctype="multipart/form-data" class="space-y-2">
+        <input type="hidden" name="description" value="Proof upload for {{ student.name }} {{ year }}/{{ term }}">
+        <input type="file" name="receipt" id="inlineProofFile" accept=".png,.jpg,.jpeg,.pdf" class="hidden" />
+        <button type="button" id="inlineProofBtn" class="sample-primary-btn sample-primary-btn--full">
+          <i data-lucide="arrow-up-right"></i>
+          Upload proof
+        </button>
+        <div id="inlineProofStatus" class="sample-help"></div>
+      </form>
+    </div>
+    <div class="sample-note-panel">
+      <div class="sample-note-title">Paste MPesa text</div>
+      <p>Include transaction ID, amount, and timestamp to speed up matching.</p>
+      <button type="button" id="pasteProofBtn" class="sample-secondary-btn">
+        <i data-lucide="clipboard"></i>
+        Paste MPesa text
+      </button>
+    </div>
+  </div>
+</section>
+
+<section class="sample-section sample-card" id="proofStatus">
+  <div class="sample-section__header">
+    <div>
+      <h2 id="proofStatusTitle" title="Press and hold to reveal full history">Proof Status Tracker</h2>
+      <p>Status updates are emailed when proofs are accepted or rejected.</p>
+    </div>
+    <button id="proofRefresh" type="button" class="sample-secondary-btn">
+      <i data-lucide="refresh-cw"></i>
+      Refresh
+    </button>
+  </div>
+  {% if proof_statuses and proof_statuses|length > 0 %}
+  <div class="proof-grid" id="proofGrid" data-total="{{ proof_statuses|length }}">
+    {% for proof in proof_statuses %}
+    <div class="proof-card {% if loop.index > 5 %}is-hidden{% endif %}">
+      <div class="proof-card__top">
+        <div>
+          <div class="proof-card__title">Proof #{{ proof.id }}</div>
+          <div class="proof-card__meta">{{ proof.created_at or 'Recently uploaded' }}</div>
+        </div>
+        <span class="sample-status {{ proof.status_classes }}">{{ proof.status_label }}</span>
+      </div>
+      <div class="proof-card__row">
+        <span class="proof-card__label">Amount</span>
+        <span class="proof-card__value">KES {{ '%.0f'|format(proof.amount or 0) }}</span>
+      </div>
+      {% if proof.description %}
+      <div class="proof-card__note">{{ proof.description }}</div>
+      {% endif %}
+      {% if proof.notes %}
+      <div class="proof-card__note proof-card__note--alert">Note: {{ proof.notes }}</div>
+      {% endif %}
+      <div class="proof-card__actions">
+        {% if proof.file_url %}
+        <a class="sample-secondary-btn" href="{{ proof.file_url }}" target="_blank" rel="noopener">
+          <i data-lucide="file-text"></i>
+          View proof
+        </a>
+        {% endif %}
+        <a class="sample-secondary-btn" href="{{ portal_nav.get('proofs', '#') }}#uploadProof">
+          <i data-lucide="upload-cloud"></i>
+          Upload new
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="proof-empty">
+    <div class="proof-empty__title">No proofs uploaded yet.</div>
+    <p class="text-sm text-gray-600">Upload a receipt and track its verification status here.</p>
+    <a class="sample-primary-btn" href="{{ portal_nav.get('proofs', '#') }}#uploadProof">
+      <i data-lucide="upload-cloud"></i>
+      Upload proof
+    </a>
+  </div>
+  {% endif %}
+</section>

@@ -1,0 +1,89 @@
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <span class="sample-badge"><i data-lucide="settings"></i> Parent Settings</span>
+      <h2 style="margin-top: 10px;">Communication control center</h2>
+      <p>Update your name and contacts. Once saved, the school will use these details for reminders and communication.</p>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('guardian.guardian_settings_page', token=token) }}" class="sample-form-grid">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>
+      <span class="sample-label">Parent Name</span>
+      <input
+        type="text"
+        name="parent_name"
+        value="{{ guardian_name or guardian_full_name or student.parent_name or '' }}"
+        placeholder="e.g. Jane Wanjiku"
+        class="sample-input"
+        required
+      >
+    </label>
+    <label>
+      <span class="sample-label">Email Address</span>
+      <input
+        type="email"
+        name="parent_email"
+        value="{{ guardian_email or student.parent_email or '' }}"
+        placeholder="e.g. parent@example.com"
+        class="sample-input"
+      >
+    </label>
+    <label>
+      <span class="sample-label">Phone Number</span>
+      <input
+        type="text"
+        name="parent_phone"
+        value="{{ guardian_phone or student.parent_phone or '' }}"
+        placeholder="e.g. +254700000000"
+        class="sample-input"
+      >
+    </label>
+    <label>
+      <span class="sample-label">Preferred Reminder Channel</span>
+      <select name="preferred_channel" class="sample-input">
+        <option value="auto" {% if (guardian_preferred_channel or 'auto') == 'auto' %}selected{% endif %}>Auto (best available)</option>
+        <option value="email" {% if guardian_preferred_channel == 'email' %}selected{% endif %}>Email only</option>
+        <option value="sms" {% if guardian_preferred_channel == 'sms' %}selected{% endif %}>SMS only</option>
+      </select>
+    </label>
+    <div>
+      <span class="sample-label">Preview</span>
+      <div class="portal-kpi">
+        Welcome back, <strong>{{ guardian_name or guardian_full_name or student.parent_name or 'Parent' }}</strong>
+      </div>
+    </div>
+    <div style="grid-column: 1 / -1; border: 1px solid #d6e1ea; border-radius: 16px; padding: 14px 16px; background: #f8fcfb;">
+      <div class="sample-label" style="margin-bottom: 10px;">Communication Preferences</div>
+      <div style="display: grid; gap: 8px;">
+        <label style="display:flex; align-items:center; gap:10px;">
+          <input type="checkbox" name="comm_opt_in" {% if guardian_comm_opt_in %}checked{% endif %}>
+          <span>Allow school communication (general updates and reminders)</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px;">
+          <input type="checkbox" name="email_opt_in" {% if guardian_email_opt_in %}checked{% endif %}>
+          <span>Allow email reminders</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px;">
+          <input type="checkbox" name="sms_opt_in" {% if guardian_sms_opt_in %}checked{% endif %}>
+          <span>Allow SMS reminders</span>
+        </label>
+      </div>
+      <div class="sample-help" style="margin-top: 10px;">
+        Active contact for school messaging: <strong>{{ guardian_email or student.parent_email or 'No email set' }}</strong> and
+        <strong>{{ guardian_phone or student.parent_phone or 'No phone set' }}</strong>.
+      </div>
+    </div>
+    <div style="grid-column: 1 / -1; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px;">
+      <button type="submit" class="sample-primary-btn sample-primary-btn--full" style="max-width: 240px;">
+        <i data-lucide="save"></i>
+        Save My Preferences
+      </button>
+      <a href="{{ portal_nav.get('dashboard', '#') }}" class="sample-secondary-btn">
+        <i data-lucide="arrow-left"></i>
+        Back to Dashboard
+      </a>
+    </div>
+  </form>
+</section>

@@ -9,14 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="icon" href="{{ url_for('static', filename=FAVICON) }}" type="image/jpeg">
-  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% with messages = get_flashed_messages(with_categories=true, category_filter=['error','warning','info']) %}
   {% if messages %}
     <script>window.__flash__ = {{ messages|tojson }};</script>
   {% endif %}
   {% endwith %}
  </head>
- <body class="bg-white min-h-screen text-[var(--text)]">
-  <header class="bg-white">
+ <body class="min-h-screen text-[var(--text)] bg-gradient-to-br from-slate-50 via-white to-teal-50">
+  <header class="bg-transparent">
     <div class="brand-hero">
       <div class="brand-hero__row">
         <div class="app-badge">
@@ -37,7 +37,17 @@
 
   <main class="max-w-2xl mx-auto px-4 pb-10">
     <div id="flash" class="mb-4"></div>
-    <div class="glass rounded-2xl p-6 md:p-8 border border-gray-100">
+    <div class="mb-6 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-6">
+      <div class="text-3xl md:text-4xl font-extrabold tracking-wide text-slate-900">LOVATO_TECH</div>
+      <div class="mt-2 flex items-center gap-2 text-sm text-slate-700">
+        <i data-lucide="graduation-cap" class="h-4 w-4 text-blue-600"></i>
+        <span>Fee Management portal</span>
+      </div>
+      <div class="mt-3 text-center text-sm">
+        <a href="{{ url_for('auth.entry') }}" class="text-emerald-700 hover:underline">All Login Options</a>
+      </div>
+    </div>
+    <div class="rounded-2xl p-6 md:p-8 border border-slate-200 bg-white shadow-[0_18px_36px_rgba(10,26,47,0.10)]">
       <div class="flex items-center gap-2 mb-4">
         <div class="w-8 h-8 rounded-lg bg-emerald-600/90 text-white grid place-items-center"><i data-lucide="user-round"></i></div>
         <h2 class="text-xl font-semibold">Student / Guardian Login</h2>
@@ -84,7 +94,7 @@
           <span class="text-emerald-600">Smart School Solutions</span>
         </div>
       </div>
-      <div class="mt-1 text-xs text-gray-400">Education made simpler — one login away.</div>
+      <div class="mt-1 text-xs text-gray-400">Education made simpler, one login away.</div>
     </div>
   </main>
 

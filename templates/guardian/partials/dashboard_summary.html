@@ -1,0 +1,15 @@
+<section class="sample-section sample-card">
+  <div class="sample-section__header">
+    <div>
+      <h2>Smart Summary</h2>
+      <p>Progress for the current term.</p>
+    </div>
+  </div>
+  <div class="sample-summary">
+    {% if percent is not none %}
+    Your child has cleared <strong>{{ percent }}%</strong> of this term's fees. Outstanding balance: <strong>Ksh {{ '%.0f'|format(balance or 0) }}</strong>.
+    {% else %}
+    No fee summary available for the current term yet.
+    {% endif %}
+  </div>
+</section>

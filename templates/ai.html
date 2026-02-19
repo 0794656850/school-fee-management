@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}AI Assistant - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}AI Assistant{% endblock %}
 
@@ -23,8 +23,9 @@
           Model
           <select id="modelPick" class="border rounded px-1 py-0.5 text-xs">
             <option value="">Default</option>
-            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
           </select>
         </label>
         <label class="flex items-center gap-1 text-xs text-gray-600">
@@ -39,6 +40,22 @@
     <div class="border-t p-3 flex items-center gap-2">
       <input id="msg" type="text" class="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring" placeholder="Type your question..." />
       <button id="send" class="btn-primary px-4 py-2 rounded-lg text-white">Send</button>
+    </div>
+    <div class="border-t px-3 py-2">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[11px] uppercase tracking-wide text-gray-500">Quick Templates</div>
+        <label class="inline-flex items-center gap-1 text-[11px] text-gray-600">
+          <input id="templateAutoSend" type="checkbox" class="rounded" />
+          Use + Send
+        </label>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="ai-template px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50" data-template="Give me an analytics summary for this school: collected, pending balances, credit on account, collection rate, and top payment methods.">Collection Summary</button>
+        <button type="button" class="ai-template px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50" data-template="Show top 10 debtors by outstanding balance.">Top 10 Debtors</button>
+        <button type="button" class="ai-template px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50" data-template="What is the fee balance for student [NAME] admission [ADM_NO]?">Student Balance Check</button>
+        <button type="button" class="ai-template px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50" data-template="Generate reminder for [NAME].">Reminder Message Draft</button>
+        <button type="button" class="ai-template px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50" data-template="List top 5 debtors and suggest one follow-up action for each based on balance size.">Follow-up Action Plan</button>
+      </div>
     </div>
   </section>
 </div>
@@ -196,6 +213,8 @@
   const modelPick = document.getElementById('modelPick');
   const stopBtn = document.getElementById('stopBtn');
   const regenBtn = document.getElementById('regenBtn');
+  const templateButtons = document.querySelectorAll('.ai-template');
+  const templateAutoSend = document.getElementById('templateAutoSend');
   let currentChatId = null;
   let lastQuestion = null;
   let currentStream = null;
@@ -280,7 +299,7 @@
         try {
           const meta = JSON.parse(ev.data||'{}');
           if (meta.chat_id && !currentChatId){ currentChatId = meta.chat_id; loadChats(); delBtn.classList.remove('hidden'); chatTitle.textContent = meta.title || 'Chat'; }
-        } catch(_){}
+        } catch(_){ }
       });
       es.onmessage = (ev) => {
         if (!ev.data) return;
@@ -350,8 +369,20 @@
   msg.addEventListener('keydown', (e) => { if (e.key === 'Enter' && msg.value.trim()) ask(msg.value.trim()); });
   stopBtn.addEventListener('click', () => { if (currentStream) { try{ currentStream.close(); }catch(_){} currentStream = null; stopBtn.classList.add('hidden'); regenBtn.classList.remove('hidden'); } });
   regenBtn.addEventListener('click', () => { if (lastQuestion) ask(lastQuestion, { redo: true, replaceLast: true }); });
+  templateButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-template') || '';
+      if (templateAutoSend && templateAutoSend.checked) {
+        ask(t);
+        return;
+      }
+      msg.value = t;
+      msg.focus();
+    });
+  });
   if (window.lucide) try{ lucide.createIcons(); }catch(e){}
   loadChats();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 {% endblock %}
+

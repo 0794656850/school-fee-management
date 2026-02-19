@@ -150,32 +150,50 @@
         </form>
       </section>
       <section class="space-y-2">
-        <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">AI Assistant (Vertex AI)</h4>
-        <p class="text-xs text-slate-400">Optional: configure Gemini for assistant + reminder context.</p>
+        <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">AI Assistant Providers</h4>
+        <p class="text-xs text-slate-400">Google AI Studio is default. Vertex can be used as secondary fallback or switched to primary.</p>
         <form method="post" class="space-y-3">
           <input type="hidden" name="form" value="ai" />
+          <div>
+            <label class="text-[11px] uppercase tracking-wide text-slate-500">Primary Provider</label>
+            <select name="AI_PROVIDER_PREFERENCE" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+              <option value="google_ai_studio" {% if (values.AI_PROVIDER_PREFERENCE or 'google_ai_studio') == 'google_ai_studio' %}selected{% endif %}>Google AI Studio (Default)</option>
+              <option value="vertex" {% if (values.AI_PROVIDER_PREFERENCE or '') == 'vertex' %}selected{% endif %}>Vertex AI (Use Vertex first)</option>
+            </select>
+            <p class="text-[11px] text-slate-500 mt-0.5">If primary provider fails, assistant automatically falls back to the other provider.</p>
+          </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <label class="text-[11px] uppercase tracking-wide text-slate-500">GCP Project ID</label>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Google API Key</label>
+              <input type="text" name="GOOGLE_API_KEY" value="{{ values.GOOGLE_API_KEY or '' }}" placeholder="AIza..." class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Gemini Model (Google Studio)</label>
+              <input type="text" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL or 'gemini-1.5-flash' }}" placeholder="gemini-1.5-flash" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+            </div>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">GCP Project ID (Vertex)</label>
               <input type="text" name="VERTEX_PROJECT_ID" value="{{ values.VERTEX_PROJECT_ID or '' }}" placeholder="my-gcp-project" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
             </div>
             <div>
-              <label class="text-[11px] uppercase tracking-wide text-slate-500">Region</label>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Region (Vertex)</label>
               <input type="text" name="VERTEX_LOCATION" value="{{ values.VERTEX_LOCATION or 'us-central1' }}" placeholder="us-central1" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
             </div>
           </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <label class="text-[11px] uppercase tracking-wide text-slate-500">Service Account JSON (path)</label>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Service Account JSON (Vertex path)</label>
               <input type="text" name="GOOGLE_APPLICATION_CREDENTIALS" value="{{ values.GOOGLE_APPLICATION_CREDENTIALS or '' }}" placeholder="C:\\path\\to\\sa.json (optional if using ADC)" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
             </div>
             <div>
-              <label class="text-[11px] uppercase tracking-wide text-slate-500">Gemini Model</label>
+              <label class="text-[11px] uppercase tracking-wide text-slate-500">Gemini Model (Vertex)</label>
               <input type="text" name="VERTEX_GEMINI_MODEL" value="{{ values.VERTEX_GEMINI_MODEL or 'gemini-1.5-flash' }}" placeholder="gemini-1.5-flash" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm">
             </div>
           </div>
           <p class="text-[11px] text-slate-500">Settings stored in app DB; env vars still take precedence.</p>
-          <button class="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 px-4 py-2 text-sm font-semibold text-white">Save Vertex Settings</button>
+          <button class="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 px-4 py-2 text-sm font-semibold text-white">Save AI Provider Settings</button>
         </form>
       </section>
     </article>

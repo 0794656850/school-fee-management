@@ -5,6 +5,31 @@ rules:
   - intent: greet
   - action: utter_greet
 
+- rule: goodbye behavior
+  steps:
+  - intent: goodbye
+  - action: utter_goodbye
+
+- rule: thank you behavior
+  steps:
+  - intent: thank_you
+  - action: utter_greet
+
+- rule: balance hint behavior
+  steps:
+  - intent: balance_inquiry
+  - action: utter_balance_hint
+
+- rule: exam hint behavior
+  steps:
+  - intent: exam_inquiry
+  - action: utter_exam_info
+
+- rule: receipt help behavior
+  steps:
+  - intent: receipt_help
+  - action: utter_receipt_help
+
 - rule: fallback response
   steps:
   - intent: nlu_fallback

@@ -3,12 +3,23 @@ import json
 import time
 import random
 import threading
+import warnings
 from typing import List, Dict, Any, Tuple
 
 import requests
 import numpy as np
 import pickle
 from pathlib import Path
+
+# Suppress known Vertex SDK deprecation warning noise while we keep compatibility.
+# Warning text references deprecation date and migration guide:
+# https://cloud.google.com/vertex-ai/generative-ai/docs/deprecations/genai-vertexai-sdk
+warnings.filterwarnings(
+    "ignore",
+    message=r"This feature is deprecated as of June 24, 2025.*genai-vertexai-sdk.*",
+    category=UserWarning,
+    module=r"vertexai\.generative_models\._generative_models",
+)
 
 
 DEFAULT_MODEL = os.environ.get(
@@ -303,16 +314,79 @@ def _has_vertex_config() -> bool:
 
 
 def ai_is_configured() -> bool:
-    """Return True if Vertex AI appears configured."""
-    return _has_vertex_config()
+    """Return True if a usable provider is configured under current policy."""
+    try:
+        pref = (os.environ.get("AI_PROVIDER_PREFERENCE") or _get_setting_db("AI_PROVIDER_PREFERENCE") or "google_ai_studio").strip().lower()
+        google_ok = bool(os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"))
+        vertex_enabled = os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True")
+        vertex_ok = vertex_enabled and _has_vertex_config()
+        azure_ok = bool(os.environ.get("AZURE_OPENAI_API_KEY") or _get_setting_db("AZURE_OPENAI_API_KEY"))
+        openai_ok = bool(os.environ.get("OPENAI_API_KEY") or _get_setting_db("OPENAI_API_KEY"))
+
+        if google_ok or vertex_ok:
+            return True
+
+        raw = os.environ.get("AI_ALLOW_OPENAI_FALLBACK")
+        if raw is None:
+            raw = _get_setting_db("AI_ALLOW_OPENAI_FALLBACK")
+        if raw is not None and str(raw).strip() != "":
+            allow_openai = str(raw).strip().lower() in ("1", "true", "yes", "on")
+        else:
+            allow_openai = pref in ("openai", "azure", "azure_openai")
+
+        if allow_openai and (azure_ok or openai_ok):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def ai_provider() -> str:
-    """Return which AI provider is configured: 'vertex' or 'none'."""
+    """Return which AI provider is configured, honoring preferred order."""
     try:
-        return "vertex" if _has_vertex_config() else "none"
+        pref = (os.environ.get("AI_PROVIDER_PREFERENCE") or _get_setting_db("AI_PROVIDER_PREFERENCE") or "google_ai_studio").strip().lower()
+        raw = os.environ.get("AI_ALLOW_OPENAI_FALLBACK")
+        if raw is None:
+            raw = _get_setting_db("AI_ALLOW_OPENAI_FALLBACK")
+        if raw is not None and str(raw).strip() != "":
+            allow_openai = str(raw).strip().lower() in ("1", "true", "yes", "on")
+        else:
+            allow_openai = pref in ("openai", "azure", "azure_openai")
+
+        if pref in ("google", "google_ai_studio", "google-studio", "google_api"):
+            if os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"):
+                return "google_ai_studio"
+            if os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config():
+                return "vertex"
+        elif pref in ("vertex", "vertex_ai"):
+            if os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config():
+                return "vertex"
+            if os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"):
+                return "google_ai_studio"
+        else:
+            # Unknown preference -> default to Google first.
+            if os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"):
+                return "google_ai_studio"
+            if os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config():
+                return "vertex"
+        if allow_openai and (os.environ.get("AZURE_OPENAI_API_KEY") or _get_setting_db("AZURE_OPENAI_API_KEY")):
+            return "azure_openai"
+        if allow_openai and (os.environ.get("OPENAI_API_KEY") or _get_setting_db("OPENAI_API_KEY")):
+            return "openai"
+        return "none"
     except Exception:
         return "none"
+
+
+def _should_allow_openai_fallback(pref: str) -> bool:
+    """Return whether Azure/OpenAI fallback is allowed after Google/Vertex."""
+    raw = os.environ.get("AI_ALLOW_OPENAI_FALLBACK")
+    if raw is None:
+        raw = _get_setting_db("AI_ALLOW_OPENAI_FALLBACK")
+    if raw is not None and str(raw).strip() != "":
+        return str(raw).strip().lower() in ("1", "true", "yes", "on")
+    # If no explicit setting, only allow when preference explicitly targets OpenAI/Azure.
+    return pref in ("openai", "azure", "azure_openai")
 
 
 def _vertex_generate(messages: List[Dict[str, str]]) -> str:
@@ -392,6 +466,36 @@ def _vertex_generate(messages: List[Dict[str, str]]) -> str:
             return ""
     except Exception as e:
         raise RuntimeError(f"Vertex AI error: {e}")
+
+
+def _google_ai_studio_generate(messages: List[Dict[str, str]], temperature: float = 0.2) -> str:
+    """Generate text via Google AI Studio REST API (no SDK dependency)."""
+    gkey = (os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY") or "").strip()
+    if not gkey:
+        raise RuntimeError("GOOGLE_API_KEY is not configured")
+
+    g_model = (os.environ.get("GEMINI_MODEL") or _get_setting_db("GEMINI_MODEL") or "gemini-1.5-flash").strip()
+    if not g_model or g_model.lower() == "gemini-pro":
+        g_model = "gemini-1.5-flash"
+
+    parts: List[str] = []
+    for m in messages or []:
+        role = (m.get("role") or "user").capitalize()
+        parts.append(f"{role}: {(m.get('content') or '')}\n")
+    prompt = "".join(parts).strip()
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gkey}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": float(temperature)},
+    }
+    resp = requests.post(url, json=payload, timeout=int(os.environ.get("OPENAI_TIMEOUT", "60")))
+    resp.raise_for_status()
+    data = resp.json() or {}
+    try:
+        return (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "") or ""
+    except Exception:
+        return ""
 
 
 def _openai_chat(messages: List[Dict[str, str]], model: str = DEFAULT_MODEL, temperature: float = 0.2) -> str:
@@ -520,6 +624,11 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
     Known intents:
       - student_balance
       - top_debtors
+      - pending_students_count
+      - list_students
+      - students_zero_balance
+      - most_used_collection_method
+      - analytics_summary
       - generate_reminder
     """
     system = {
@@ -527,7 +636,8 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
         "content": (
             "You are an intent classifier for a School Fee Management app. "
             "Return STRICT JSON with keys: intent, entities. "
-            "intents: student_balance, top_debtors, generate_reminder. "
+            "intents: student_balance, top_debtors, pending_students_count, list_students, students_zero_balance, "
+            "most_used_collection_method, analytics_summary, generate_reminder. "
             "Entities may include: student_name, admission_no, count."
         ),
     }
@@ -541,22 +651,54 @@ def classify_intent(query: str) -> Tuple[str, Dict[str, Any]]:
             end = out.rfind("}")
             if start != -1 and end != -1 and end > start:
                 obj = json.loads(out[start : end + 1])
-                return obj.get("intent", "unknown"), obj.get("entities", {})
+                intent = str(obj.get("intent", "unknown") or "unknown").strip()
+                entities = obj.get("entities", {}) if isinstance(obj.get("entities", {}), dict) else {}
+                allowed = {
+                    "student_balance",
+                    "top_debtors",
+                    "pending_students_count",
+                    "list_students",
+                    "students_zero_balance",
+                    "most_used_collection_method",
+                    "analytics_summary",
+                    "generate_reminder",
+                }
+                if intent in allowed:
+                    return intent, entities
         except Exception:
             pass
 
     q = query.lower()
     # Heuristic fallback
+    import re
+    debtor_patterns = [
+        r"\btop\b.*\bdebt",         # top debt / top debtors
+        r"\bdebtor[s]?\b",          # debtor / debtors
+        r"\bdeptor[s]?\b",          # common misspelling
+        r"\bdefaulter[s]?\b",       # defaulter / defaulters
+        r"\bhighest\s+balance\b",
+        r"\bmost\s+owing\b",
+        r"\boverdue\b.*\bstudent",
+    ]
+    if any(re.search(p, q) for p in debtor_patterns):
+        # Extract a small integer if mentioned (e.g., "top 10 debtors")
+        m = re.search(r"\btop\s+(\d{1,2})\b", q)
+        cnt = int(m.group(1)) if m else 10
+        return "top_debtors", {"count": cnt}
+    if ("student" in q or "students" in q) and any(k in q for k in ["how many", "number of", "count", "total students"]) and any(k in q for k in ["not cleared", "unpaid", "outstanding", "pending", "owing", "have not paid"]):
+        return "pending_students_count", {}
+    if ("student" in q and any(k in q for k in ["list", "show", "all"])) or "all students" in q:
+        if any(k in q for k in ["nil balance", "nill balance", "zero balance", "no balance", "balance 0", "balance zero"]):
+            return "students_zero_balance", {}
+        return "list_students", {}
+    if any(k in q for k in ["students with nil balance", "students with zero balance", "students who cleared fees", "students with no balance"]):
+        return "students_zero_balance", {}
+    if any(k in q for k in ["most used collection method", "most used payment method", "top payment method", "most used method"]):
+        return "most_used_collection_method", {}
     if any(k in q for k in ["balance", "owing", "due", "fees for"]):
         return "student_balance", {}
-    if any(k in q for k in ["top debt", "highest balance", "debtors"]):
-        # Extract a small integer if mentioned
-        import re
-
-        m = re.search(r"top\s+(\d{1,2})", q)
-        cnt = int(m.group(1)) if m else 5
-        return "top_debtors", {"count": cnt}
-    # analytics disabled
+    if any(k in q for k in ["analytics", "summary", "collection rate", "top payment methods", "financial health"]):
+        return "analytics_summary", {}
     if any(k in q for k in ["remind", "notice", "notify", "compose message"]):
         return "generate_reminder", {}
     return "unknown", {}
@@ -776,16 +918,17 @@ def chat_anything(history: List[Dict[str, str]], temperature: float = 0.7, model
         except Exception:
             pass
         return ("AI not configured. Top context:\n\n" + context) if context else (
-            "AI not configured. Configure Vertex AI (service account + VERTEX_PROJECT_ID) to enable chat.")
+            "AI not configured. Configure Google AI Studio (GOOGLE_API_KEY) or Vertex AI to enable chat.")
 
     # Normalize model: callers may pass None/"" to mean default
     model = model or DEFAULT_MODEL
 
     system_prompt = (
         "You are a helpful AI assistant for a school fee management system. "
-        "You can also answer general real-world questions clearly and concisely. "
-        "When questions involve data from the system, be precise and avoid guessing. "
-        "If you are missing information, ask for clarification briefly."
+        "Prioritize factual, system-grounded answers. "
+        "Never invent student names, balances, payment totals, or dates. "
+        "If requested data is not available in the provided context/history, state that clearly and ask one short clarifying question. "
+        "For reminders, keep tone polite and concise."
     )
     messages = [{"role": "system", "content": system_prompt}] + history
     try:
@@ -953,85 +1096,261 @@ def chat_anything_stream(history: List[Dict[str, str]], temperature: float = 0.7
                 return
         except Exception:
             pass
-        yield "AI not configured. Build the index (scripts/ai_index.py) or enable Vertex AI."
+        yield "AI not configured. Build the index (scripts/ai_index.py) or configure Google AI Studio (GOOGLE_API_KEY) or Vertex AI."
         return
     system_prompt = (
         "You are a helpful AI assistant for a school fee management system. "
-        "You can also answer general real-world questions clearly and concisely. "
-        "When questions involve data from the system, be precise and avoid guessing. "
-        "If you are missing information, ask for clarification briefly."
+        "Prioritize factual, system-grounded answers. "
+        "Never invent student names, balances, payment totals, or dates. "
+        "If requested data is not available in the provided context/history, state that clearly and ask one short clarifying question. "
+        "For reminders, keep tone polite and concise."
     )
     messages = [{"role": "system", "content": system_prompt}] + history
     for chunk in _openai_chat_stream(messages, model=model, temperature=temperature):
         yield chunk
 
 
-# ---- Vertex-only overrides ----
+# ---- Provider-priority overrides ----
 def _openai_chat(messages: List[Dict[str, str]], model: str = DEFAULT_MODEL, temperature: float = 0.2) -> str:  # type: ignore[override]
-    """Vertex-only implementation (kept name for compatibility)."""
+    """Provider chain with preference: Google AI Studio default, Vertex secondary."""
+    model = model or DEFAULT_MODEL
     try:
         _respect_min_interval()
         _global_rate_gate()
     except Exception:
         pass
-    return _vertex_generate(messages)
+
+    pref = (os.environ.get("AI_PROVIDER_PREFERENCE") or _get_setting_db("AI_PROVIDER_PREFERENCE") or "google_ai_studio").strip().lower()
+    google_first = pref in ("", "google", "google_ai_studio", "google-studio", "google_api")
+    google_configured = bool(os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"))
+    vertex_configured = os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config()
+    allow_openai_fallback = _should_allow_openai_fallback(pref)
+
+    if google_first:
+        if google_configured:
+            try:
+                return _google_ai_studio_generate(messages, temperature=temperature)
+            except Exception:
+                pass
+        if vertex_configured:
+            try:
+                return _vertex_generate(messages)
+            except Exception:
+                pass
+    else:
+        if vertex_configured:
+            try:
+                return _vertex_generate(messages)
+            except Exception:
+                pass
+        if google_configured:
+            try:
+                return _google_ai_studio_generate(messages, temperature=temperature)
+            except Exception:
+                pass
+
+    if not allow_openai_fallback:
+        raise RuntimeError(
+            "Google/Vertex AI unavailable. OpenAI fallback is disabled. "
+            "Configure GOOGLE_API_KEY or Vertex settings, or enable AI_ALLOW_OPENAI_FALLBACK=1."
+        )
+
+    # 3) Azure OpenAI / OpenAI fallback
+    azure_key = os.environ.get("AZURE_OPENAI_API_KEY") or _get_setting_db("AZURE_OPENAI_API_KEY")
+    if azure_key:
+        endpoint = (os.environ.get("AZURE_OPENAI_ENDPOINT") or _get_setting_db("AZURE_OPENAI_ENDPOINT") or "").rstrip("/")
+        deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT") or _get_setting_db("AZURE_OPENAI_DEPLOYMENT") or model
+        api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or _get_setting_db("AZURE_OPENAI_API_VERSION") or "2024-06-01"
+        url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+        headers = {"Content-Type": "application/json", "api-key": azure_key}
+        payload = {"messages": messages, "temperature": temperature}
+    else:
+        def _resolve_openai_model(candidate: str) -> str:
+            c = (candidate or "").strip()
+            lower = c.lower()
+            # If caller did not choose a model or passed a Gemini model while using
+            # OpenAI, prefer explicit OPENAI_MODEL or a safe OpenAI default.
+            if (not c) or lower.startswith("gemini"):
+                pref = (os.environ.get("OPENAI_MODEL") or _get_setting_db("OPENAI_MODEL") or "").strip()
+                if pref:
+                    return pref
+                return "gpt-4o-mini"
+            return c
+
+        key = os.environ.get("OPENAI_API_KEY") or _get_setting_db("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("No AI provider available after Vertex and Google AI Studio fallback.")
+        base = (os.environ.get("OPENAI_BASE_URL") or _get_setting_db("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        url = f"{base}/chat/completions"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+        payload = {"model": _resolve_openai_model(model), "messages": messages, "temperature": temperature}
+
+    timeout = int(os.environ.get("OPENAI_TIMEOUT", "60"))
+    resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=timeout)
+    if not (200 <= resp.status_code < 300):
+        detail = ""
+        try:
+            body = resp.json() or {}
+            err = body.get("error")
+            if isinstance(err, dict):
+                detail = str(err.get("message") or "").strip()
+            elif err:
+                detail = str(err).strip()
+        except Exception:
+            detail = (resp.text or "").strip()
+        if detail:
+            raise RuntimeError(f"AI request failed ({resp.status_code}): {detail}")
+        resp.raise_for_status()
+    data = resp.json()
+    return data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
 
 def _openai_chat_stream(messages: List[Dict[str, str]], model: str = DEFAULT_MODEL, temperature: float = 0.7):  # type: ignore[override]
-    """Vertex-only streaming implementation (kept name for compatibility)."""
+    """Streaming provider chain with preference: Google AI Studio default, Vertex secondary."""
+    model = model or DEFAULT_MODEL
     try:
         _respect_min_interval()
         _global_rate_gate()
     except Exception:
         pass
 
-    try:
+    def _stream_vertex():
         import vertexai  # type: ignore
         from vertexai.generative_models import GenerativeModel  # type: ignore
         from google.oauth2 import service_account  # type: ignore
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Vertex AI libraries not installed. Add google-cloud-aiplatform.") from e
 
-    project = os.environ.get("VERTEX_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT")
-    location = os.environ.get("VERTEX_LOCATION", "us-central1")
-    creds = None
-    sa_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not sa_path and os.path.exists("service_account.json"):
-        sa_path = "service_account.json"
-    if sa_path and os.path.exists(sa_path):
-        try:
-            creds = service_account.Credentials.from_service_account_file(sa_path)
-        except Exception:
-            creds = None
-    if not project:
-        raise RuntimeError(
-            "Missing GCP project. Set VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT, "
-            "or ensure service_account.json has project_id, or configure ADC via gcloud."
+        project = _resolve_gcp_project()
+        location = os.environ.get("VERTEX_LOCATION", "us-central1")
+        creds = None
+        sa_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if not sa_path and os.path.exists("service_account.json"):
+            sa_path = "service_account.json"
+        if sa_path and os.path.exists(sa_path):
+            try:
+                creds = service_account.Credentials.from_service_account_file(sa_path)
+            except Exception:
+                creds = None
+        if not project:
+            raise RuntimeError(
+                "Missing GCP project. Set VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT, "
+                "or ensure service_account.json has project_id, or configure ADC via gcloud."
+            )
+        vertexai.init(project=project, location=location, credentials=creds)
+
+        g_model = (
+            os.environ.get("VERTEX_GEMINI_MODEL")
+            or os.environ.get("GEMINI_MODEL")
+            or "gemini-1.5-flash"
         )
-    vertexai.init(project=project, location=location, credentials=creds)
+        if str(g_model).strip().lower() == "gemini-pro":
+            g_model = "gemini-1.5-flash"
+        parts: List[str] = []
+        for m in messages or []:
+            role = (m.get("role") or "user").capitalize()
+            parts.append(f"{role}: {(m.get('content') or '')}\n")
+        prompt = "".join(parts).strip()
+        model_obj = GenerativeModel(g_model)
+        resp = model_obj.generate_content(prompt, stream=True)
+        for chunk in resp:
+            try:
+                delta = getattr(chunk, "text", None)
+                if delta:
+                    yield delta
+            except Exception:
+                continue
 
-    g_model = (
-        os.environ.get("VERTEX_GEMINI_MODEL")
-        or os.environ.get("GEMINI_MODEL")
-        or "gemini-1.5-flash"
-    )
-    if str(g_model).strip().lower() == "gemini-pro":
-        g_model = "gemini-1.5-flash"
-    parts: List[str] = []
-    for m in messages or []:
-        role = (m.get("role") or "user").capitalize()
-        parts.append(f"{role}: {(m.get('content') or '')}\n")
-    prompt = "".join(parts).strip()
+    pref = (os.environ.get("AI_PROVIDER_PREFERENCE") or _get_setting_db("AI_PROVIDER_PREFERENCE") or "google_ai_studio").strip().lower()
+    google_first = pref in ("", "google", "google_ai_studio", "google-studio", "google_api")
+    google_configured = bool(os.environ.get("GOOGLE_API_KEY") or _get_setting_db("GOOGLE_API_KEY"))
+    vertex_configured = os.environ.get("DISABLE_VERTEX", "0") not in ("1", "true", "True") and _has_vertex_config()
+    allow_openai_fallback = _should_allow_openai_fallback(pref)
 
-    model_obj = GenerativeModel(g_model)
-    resp = model_obj.generate_content(prompt, stream=True)
-    for chunk in resp:
-        try:
-            delta = getattr(chunk, "text", None)
-            if delta:
-                yield delta
-        except Exception:
-            continue
+    if google_first:
+        if google_configured:
+            try:
+                text = _google_ai_studio_generate(messages, temperature=temperature)
+                if text:
+                    yield text
+                    return
+            except Exception:
+                pass
+        if vertex_configured:
+            try:
+                for delta in _stream_vertex():
+                    yield delta
+                return
+            except Exception:
+                pass
+    else:
+        if vertex_configured:
+            try:
+                for delta in _stream_vertex():
+                    yield delta
+                return
+            except Exception:
+                pass
+        if google_configured:
+            try:
+                text = _google_ai_studio_generate(messages, temperature=temperature)
+                if text:
+                    yield text
+                    return
+            except Exception:
+                pass
+
+    if not allow_openai_fallback:
+        raise RuntimeError(
+            "Google/Vertex AI unavailable. OpenAI fallback is disabled. "
+            "Configure GOOGLE_API_KEY or Vertex settings, or enable AI_ALLOW_OPENAI_FALLBACK=1."
+        )
+
+    # 3) Azure OpenAI / OpenAI fallback
+    azure_key = os.environ.get("AZURE_OPENAI_API_KEY") or _get_setting_db("AZURE_OPENAI_API_KEY")
+    if azure_key:
+        endpoint = (os.environ.get("AZURE_OPENAI_ENDPOINT") or _get_setting_db("AZURE_OPENAI_ENDPOINT") or "").rstrip("/")
+        deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT") or _get_setting_db("AZURE_OPENAI_DEPLOYMENT") or model
+        api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or _get_setting_db("AZURE_OPENAI_API_VERSION") or "2024-06-01"
+        url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+        headers = {"Content-Type": "application/json", "api-key": azure_key}
+        payload = {"messages": messages, "temperature": temperature, "stream": True}
+    else:
+        def _resolve_openai_model(candidate: str) -> str:
+            c = (candidate or "").strip()
+            lower = c.lower()
+            if (not c) or lower.startswith("gemini"):
+                pref = (os.environ.get("OPENAI_MODEL") or _get_setting_db("OPENAI_MODEL") or "").strip()
+                if pref:
+                    return pref
+                return "gpt-4o-mini"
+            return c
+
+        key = os.environ.get("OPENAI_API_KEY") or _get_setting_db("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("No AI provider available after Vertex and Google AI Studio fallback.")
+        base = (os.environ.get("OPENAI_BASE_URL") or _get_setting_db("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        url = f"{base}/chat/completions"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+        payload = {"model": _resolve_openai_model(model), "messages": messages, "temperature": temperature, "stream": True}
+
+    timeout = int(os.environ.get("OPENAI_TIMEOUT", "60"))
+    with requests.post(url, headers=headers, data=json.dumps(payload), timeout=timeout, stream=True) as resp:
+        resp.raise_for_status()
+        for raw in resp.iter_lines(decode_unicode=True):
+            if not raw:
+                continue
+            line = raw.strip()
+            if line.startswith('data:'):
+                data = line[len('data:'):].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                    for choice in obj.get('choices', []):
+                        delta = ((choice.get('delta') or {}).get('content'))
+                        if delta:
+                            yield delta
+                except Exception:
+                    continue
 
 
 # ---- Local HF generation fallback ----

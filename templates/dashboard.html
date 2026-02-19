@@ -274,43 +274,66 @@ const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyV
 const hexToRgba = (hex, a=1)=>{ const h=(hex||'').replace('#',''); if(!h) return `rgba(79,70,229,${a})`; const v=h.length===3?h.split('').map(c=>c+c).join(''):h; const n=parseInt(v,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r},${g},${b},${a})`; };
 const CHART = { brand: cssVar('--chart-brand')||'#4f46e5', accent: cssVar('--chart-accent')||'#06b6d4', palette:[cssVar('--chart-brand'),cssVar('--chart-2'),cssVar('--chart-3'),cssVar('--chart-4'),cssVar('--chart-5'),cssVar('--chart-6')] };
   // Icons
-  lucide.createIcons();
+  try { lucide.createIcons(); } catch (_) {}
 
-  // Live totals
-  function updateDashboardData() {
-    const url = `/api/dashboard_data?ts=${Date.now()}`;
-    fetch(url, { cache: "no-store", credentials: "same-origin" })
-      .then(res => res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`)))
-      .then(data => {
-        document.getElementById("total_students").textContent = data.total_students;
-        document.getElementById("total_collected").textContent =
-          "KES " + Number(data.total_collected || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
-        if (document.getElementById("term_outstanding")) {
-          document.getElementById("term_outstanding").textContent =
-            "KES " + Number(data.term_outstanding || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
-        }
-        document.getElementById("pending_balance").textContent =
-          "KES " + Number(data.total_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
-        if (data.total_credit !== undefined) {
-          document.getElementById("total_credit").textContent =
-            "KES " + Number(data.total_credit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
-        }
-        // Refit KPI values to avoid overlap
-        if (window.fitKpis) window.fitKpis();
-      })
-      .catch(err => console.error("Error fetching dashboard data:", err));
-  }
-  setInterval(updateDashboardData, 10000);
-  updateDashboardData();
-
-  // Analytics-driven charts and insights
-  const balanceClassName = (value) => {
+  function balanceClassName(value) {
     const num = Number(value);
     if (!Number.isFinite(num)) return "balance-value balance-neutral";
     if (num > 0) return "balance-value balance-negative";
     if (num < 0) return "balance-value balance-positive";
     return "balance-value balance-neutral";
-  };
+  }
+
+  // Live totals
+  async function updateDashboardData() {
+    const url = `/api/dashboard_data?ts=${Date.now()}`;
+    try {
+      const res = await fetch(url, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json", "X-Requested-With": "fetch" }
+      });
+      if (res.redirected) {
+        window.location.href = res.url;
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const ctype = (res.headers.get("content-type") || "").toLowerCase();
+      if (!ctype.includes("application/json")) {
+        throw new Error("Non-JSON response");
+      }
+      const data = await res.json();
+      document.getElementById("total_students").textContent = data.total_students;
+      document.getElementById("total_collected").textContent =
+        "KES " + Number(data.total_collected || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+      const termEl = document.getElementById("term_outstanding");
+      if (termEl) {
+        termEl.textContent =
+          "KES " + Number(data.term_outstanding || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+      }
+      const pendingEl = document.getElementById("pending_balance");
+      if (pendingEl) {
+        pendingEl.textContent =
+          "KES " + Number(data.total_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        pendingEl.className = `fit-text ${balanceClassName(data.total_balance || 0)} tracking-tight`;
+      }
+      const creditEl = document.getElementById("total_credit");
+      if (creditEl && data.total_credit !== undefined) {
+        creditEl.textContent =
+          "KES " + Number(data.total_credit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+      }
+      // Refit KPI values to avoid overlap
+      if (window.fitKpis) window.fitKpis();
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+    }
+  }
+  setInterval(updateDashboardData, 10000);
+  updateDashboardData();
+
+  // Analytics-driven charts and insights
   const formatCurrency = (value) => {
     const num = Number(value || 0);
     return Number.isFinite(num)

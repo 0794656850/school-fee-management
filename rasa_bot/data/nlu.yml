@@ -7,12 +7,25 @@ nlu:
     - good morning
     - hey SmartEduPay
     - hi bot
+    - hey
+    - good afternoon
+    - good evening
+    - hello assistant
+    - hi assistant
+    - habari
+    - mambo
+    - hi smart pay
 - intent: goodbye
   examples: |
     - bye
     - goodbye
     - see you later
     - thanks, bye
+    - talk to you later
+    - that is all
+    - close chat
+    - i am done
+    - okay bye
 - intent: balance_inquiry
   examples: |
     - how much do I owe
@@ -21,6 +34,18 @@ nlu:
     - balance for this term
     - what is my child's current balance
     - do we still have any dues
+    - show my balance
+    - what is pending for fees
+    - how much fee is left
+    - total amount due
+    - what is unpaid this term
+    - school fees status
+    - any arrears on this account
+    - can you check the remaining fee
+    - i want to know my current dues
+    - what do i need to clear
+    - outstanding school fees
+    - amount pending for my child
 - intent: exam_inquiry
   examples: |
     - when is the next exam
@@ -28,6 +53,16 @@ nlu:
     - upcoming tests
     - are there any assessments soon
     - exam schedule for this term
+    - when are cats
+    - when is the next cat
+    - test timetable
+    - do we have exams this week
+    - when are assessments
+    - when will exams start
+    - date for next tests
+    - is there an exam notice
+    - exam calendar
+    - i need exam information
 - intent: receipt_help
   examples: |
     - how do I download the receipt
@@ -36,8 +71,22 @@ nlu:
     - download receipt
     - proof of payment
     - I want to print a receipt
+    - where can i get my receipt
+    - send me the payment receipt
+    - how do i print receipt
+    - receipt for this payment
+    - i cannot find proof upload
+    - how to upload payment proof
+    - where do i upload receipt
+    - show me paid receipts
+    - i need fee payment proof
+    - how do i get confirmation slip
 - intent: thank_you
   examples: |
     - thanks
     - thank you
     - appreciate it
+    - many thanks
+    - thank you so much
+    - that helps
+    - much appreciated

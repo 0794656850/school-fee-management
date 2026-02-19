@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Guardian Receipts — {{ APP_TITLE }}{% endblock %}
+{% block title %}Guardian Receipts - {{ APP_TITLE }}{% endblock %}
 {% block page_title %}Guardian Receipts Uploads{% endblock %}
 
 {% block content %}
@@ -7,20 +7,30 @@
   <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-lg">
     <div class="flex items-center justify-between">
       <div>
-        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Uploads</p>
-        <h2 class="text-xl font-semibold text-slate-900">Guardian receipt submissions</h2>
+        <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Verification Queue</p>
+        <h2 class="text-xl font-semibold text-slate-900">Guardian payment verification requests</h2>
       </div>
-      <span class="text-xs text-slate-500">Verified receipts can seed approvals</span>
+      <span class="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        {{ pending_count or 0 }} pending
+      </span>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      {% set active_status = request.args.get('status') or '' %}
+      <a href="{{ url_for('admin.guardian_receipts') }}" class="px-3 py-1 rounded-full border {{ 'bg-slate-900 text-white border-slate-900' if not active_status else 'bg-white text-slate-600 border-slate-200' }}">All</a>
+      <a href="{{ url_for('admin.guardian_receipts', status='pending') }}" class="px-3 py-1 rounded-full border {{ 'bg-amber-500 text-white border-amber-500' if active_status=='pending' else 'bg-white text-slate-600 border-slate-200' }}">Pending</a>
+      <a href="{{ url_for('admin.guardian_receipts', status='verified') }}" class="px-3 py-1 rounded-full border {{ 'bg-emerald-600 text-white border-emerald-600' if active_status=='verified' else 'bg-white text-slate-600 border-slate-200' }}">Verified</a>
+      <a href="{{ url_for('admin.guardian_receipts', status='rejected') }}" class="px-3 py-1 rounded-full border {{ 'bg-rose-600 text-white border-rose-600' if active_status=='rejected' else 'bg-white text-slate-600 border-slate-200' }}">Rejected</a>
     </div>
     <div class="mt-4 overflow-x-auto rounded-2xl border border-slate-100">
       <table class="min-w-full text-sm">
         <thead class="bg-slate-50 text-xs uppercase tracking-[0.4em] text-slate-500">
           <tr>
-            <th class="px-4 py-3 text-left">Uploaded</th>
-            <th class="px-4 py-3 text-left">Guardian</th>
-            <th class="px-4 py-3 text-left">Student ID</th>
+            <th class="px-4 py-3 text-left">Submitted</th>
+            <th class="px-4 py-3 text-left">Student</th>
+            <th class="px-4 py-3 text-left">Parent</th>
+            <th class="px-4 py-3 text-left">Payment</th>
             <th class="px-4 py-3 text-left">Status</th>
-            <th class="px-4 py-3 text-left">File</th>
+            <th class="px-4 py-3 text-left">Proof</th>
             <th class="px-4 py-3 text-left">Action</th>
           </tr>
         </thead>
@@ -29,29 +39,62 @@
           <tr class="border-b border-slate-100 hover:bg-slate-50">
             <td class="px-4 py-3 text-xs text-slate-500">{{ receipt.created_at }}</td>
             <td class="px-4 py-3">
-              <div class="font-semibold text-slate-900">{{ receipt.guardian_name or 'Guardian' }}</div>
-              <div class="text-[11px] text-slate-500">{{ receipt.guardian_email or receipt.guardian_phone or 'Contact unknown' }}</div>
+              <div class="font-semibold text-slate-900">
+                <a href="{{ url_for('student_detail', student_id=receipt.student_id) }}" class="text-indigo-700 hover:underline">
+                  {{ receipt.student_name or ('Student #' ~ receipt.student_id) }}
+                </a>
+              </div>
+              <div class="text-[11px] text-slate-500">
+                {{ receipt.class_name or 'Class' }} · {{ receipt.admission_no or 'Admission' }}
+              </div>
             </td>
-            <td class="px-4 py-3 text-slate-600">{{ receipt.student_id }}</td>
             <td class="px-4 py-3">
-              <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold {% if receipt.status == 'verified' %}bg-emerald-50 text-emerald-700{% elif receipt.status == 'rejected' %}bg-rose-50 text-rose-600{% else %}bg-slate-50 text-slate-600{% endif %}">
-                {{ receipt.status }}
+              <div class="font-semibold text-slate-900">{{ receipt.guardian_name or receipt.parent_name or 'Parent' }}</div>
+              <div class="text-[11px] text-slate-500">{{ receipt.guardian_email or receipt.guardian_phone or receipt.student_parent_email or receipt.student_parent_phone or 'Contact unknown' }}</div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">
+              <div class="font-semibold text-slate-900">KES {{ '%.0f'|format(receipt.amount or 0) }}</div>
+              <div class="text-[11px] text-slate-500">{{ receipt.bank_name or 'M-Pesa' }}{% if receipt.payment_date %} · {{ receipt.payment_date }}{% endif %}</div>
+            </td>
+            <td class="px-4 py-3">
+              {% set status_label = 'verified' if receipt.status in ['verified', 'accepted'] else (receipt.status or 'pending') %}
+              <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold {% if status_label == 'verified' %}bg-emerald-50 text-emerald-700{% elif status_label == 'rejected' %}bg-rose-50 text-rose-600{% else %}bg-slate-50 text-slate-600{% endif %}">
+                {{ status_label }}
               </span>
+              {% if status_label in ['verified', 'rejected'] %}
+                <span class="ml-2 inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">Audit logged</span>
+              {% endif %}
             </td>
             <td class="px-4 py-3 text-xs text-slate-500">
-              <a href="{{ url_for('static', filename=receipt.file_path) }}" target="_blank" class="font-semibold text-indigo-600 hover:text-indigo-500">View file</a>
+              {% if receipt.file_path %}
+                {% if receipt.file_missing %}
+                  <span class="text-xs text-rose-500">File missing</span>
+                {% else %}
+                  <a href="{{ receipt.file_url or url_for('static', filename=receipt.file_path) }}" target="_blank" class="font-semibold text-indigo-600 hover:text-indigo-500">View file</a>
+                {% endif %}
+              {% else %}
+                <span class="text-xs text-slate-400">Text submission</span>
+              {% endif %}
             </td>
             <td class="px-4 py-3">
-              <form method="post" class="flex gap-2">
-                <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
-                <button name="action" value="verify" class="h-8 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white">Verify</button>
-                <button name="action" value="reject" class="h-8 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white">Reject</button>
-              </form>
+              {% if receipt.status in ['verified', 'accepted', 'rejected'] %}
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs text-slate-400">Resolved</span>
+                  {% if receipt.payment_id %}
+                  <button type="button" class="text-xs text-indigo-600 hover:underline" data-receipt-url="{{ url_for('payment_receipt', payment_id=receipt.payment_id) }}" data-receipt-id="{{ receipt.payment_id }}">Receipt</button>
+                  {% endif %}
+                </div>
+              {% else %}
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" class="h-8 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white" data-verify-id="{{ receipt.id }}" data-student="{{ receipt.student_name or ('Student #' ~ receipt.student_id) }}" data-amount="{{ receipt.amount or 0 }}" data-channel="{{ receipt.bank_name or 'M-Pesa' }}">Verify</button>
+                  <button type="button" class="h-8 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white" data-reject-id="{{ receipt.id }}" data-student="{{ receipt.student_name or ('Student #' ~ receipt.student_id) }}">Reject</button>
+                </div>
+              {% endif %}
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" class="px-4 py-6 text-center text-slate-500">No guardian uploads yet.</td>
+            <td colspan="7" class="px-4 py-6 text-center text-slate-500">No guardian uploads yet.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -59,4 +102,125 @@
     </div>
   </section>
 </div>
+
+<div id="verifyModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4">
+  <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-slate-900" id="verifyTitle">Verify payment</h3>
+      <button type="button" id="closeVerify" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+    </div>
+    <p class="mt-2 text-sm text-slate-500" id="verifySubtitle">Confirm this payment before it posts to the student ledger.</p>
+    <form method="post" id="verifyForm" class="mt-4 grid gap-3">
+      <input type="hidden" name="receipt_id" id="verifyReceiptId">
+      <input type="hidden" name="action" id="verifyAction">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" id="verifyContext"></div>
+      <div id="verifyNoteWrap">
+        <label class="block text-xs font-semibold text-slate-600">Admin note (optional)</label>
+        <input type="text" name="admin_note" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Verified by accounts desk">
+      </div>
+      <div id="rejectNoteWrap" class="hidden">
+        <label class="block text-xs font-semibold text-slate-600">Rejection reason</label>
+        <input type="text" name="rejection_reason" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Amount mismatch">
+      </div>
+      <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white" id="verifySubmit">Confirm</button>
+    </form>
+  </div>
+</div>
+
+<div id="receiptModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4">
+  <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-slate-900">Receipt preview</h3>
+      <button type="button" id="closeReceipt" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+    </div>
+    <div class="mt-3 text-sm text-slate-500">Scan or open the receipt link.</div>
+    <div class="mt-4 flex items-center justify-center">
+      <div id="receiptQR" class="h-40 w-40 rounded-xl border border-slate-200 bg-slate-50"></div>
+    </div>
+    <a id="receiptLink" href="#" target="_blank" class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+      <i data-lucide="external-link"></i>
+      Open receipt
+    </a>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  (function(){
+    const verifyModal = document.getElementById('verifyModal');
+    const receiptModal = document.getElementById('receiptModal');
+    const verifyForm = document.getElementById('verifyForm');
+    const verifyReceiptId = document.getElementById('verifyReceiptId');
+    const verifyAction = document.getElementById('verifyAction');
+    const verifyTitle = document.getElementById('verifyTitle');
+    const verifySubtitle = document.getElementById('verifySubtitle');
+    const verifyContext = document.getElementById('verifyContext');
+    const verifySubmit = document.getElementById('verifySubmit');
+    const verifyNoteWrap = document.getElementById('verifyNoteWrap');
+    const rejectNoteWrap = document.getElementById('rejectNoteWrap');
+    const receiptQR = document.getElementById('receiptQR');
+    const receiptLink = document.getElementById('receiptLink');
+    const closeVerify = document.getElementById('closeVerify');
+    const closeReceipt = document.getElementById('closeReceipt');
+
+    document.querySelectorAll('[data-verify-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        verifyReceiptId.value = btn.dataset.verifyId || '';
+        verifyAction.value = 'verify';
+        verifyTitle.textContent = 'Verify payment';
+        verifySubtitle.textContent = 'Confirm this payment before it posts to the student ledger.';
+        verifyContext.textContent = `Student: ${btn.dataset.student || 'Student'} | Amount: KES ${btn.dataset.amount || '0'} | Channel: ${btn.dataset.channel || 'M-Pesa'}`;
+        verifySubmit.textContent = 'Verify & Post';
+        verifyNoteWrap.classList.remove('hidden');
+        rejectNoteWrap.classList.add('hidden');
+        verifyModal.classList.remove('hidden');
+        verifyModal.classList.add('flex');
+      });
+    });
+
+    document.querySelectorAll('[data-reject-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        verifyReceiptId.value = btn.dataset.rejectId || '';
+        verifyAction.value = 'reject';
+        verifyTitle.textContent = 'Reject payment';
+        verifySubtitle.textContent = 'Add a short reason so the parent can resubmit correctly.';
+        verifyContext.textContent = `Student: ${btn.dataset.student || 'Student'}`;
+        verifySubmit.textContent = 'Reject Verification';
+        verifyNoteWrap.classList.add('hidden');
+        rejectNoteWrap.classList.remove('hidden');
+        verifyModal.classList.remove('hidden');
+        verifyModal.classList.add('flex');
+      });
+    });
+
+    document.querySelectorAll('[data-receipt-url]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.dataset.receiptUrl || '#';
+        receiptLink.href = url;
+        receiptQR.innerHTML = '';
+        if (typeof QRCode !== 'undefined' && url && url !== '#') {
+          new QRCode(receiptQR, { text: url, width: 160, height: 160 });
+        }
+        receiptModal.classList.remove('hidden');
+        receiptModal.classList.add('flex');
+      });
+    });
+
+    [closeVerify, verifyModal].forEach(el => {
+      if (!el) return;
+      el.addEventListener('click', (e) => {
+        if (e.target !== verifyModal && e.target !== closeVerify) return;
+        verifyModal.classList.add('hidden');
+        verifyModal.classList.remove('flex');
+      });
+    });
+    [closeReceipt, receiptModal].forEach(el => {
+      if (!el) return;
+      el.addEventListener('click', (e) => {
+        if (e.target !== receiptModal && e.target !== closeReceipt) return;
+        receiptModal.classList.add('hidden');
+        receiptModal.classList.remove('flex');
+      });
+    });
+  })();
+</script>
 {% endblock %}

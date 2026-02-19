@@ -1,0 +1,48 @@
+<section class="sample-section sample-card">
+  {% set assistant_mode = assistant_mode or 'dashboard' %}
+  <div class="sample-grid-2">
+    {% if assistant_mode != 'assistant' %}
+    <div>
+      <div class="sample-section__header">
+        <div>
+          <h2>Calendar</h2>
+          <p>Upcoming school events.</p>
+        </div>
+        <div class="sample-cal-nav">
+          <button id="calPrev" class="sample-icon-btn" type="button"><i data-lucide="chevron-left"></i></button>
+          <div id="calTitle" class="sample-cal-title"></div>
+          <button id="calNext" class="sample-icon-btn" type="button"><i data-lucide="chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div id="calGrid" class="grid grid-cols-7 gap-2 text-sm"></div>
+      <div id="calEvents" class="mt-3 text-sm"></div>
+    </div>
+    {% endif %}
+    {% if assistant_mode != 'calendar' %}
+    <div>
+      <div class="sample-section__header">
+        <div>
+          <h2>SmartBot</h2>
+          <p>Ask anything about fees or receipts.</p>
+        </div>
+      </div>
+      <div id="aiLog" class="sample-chat-log"></div>
+      <form id="aiForm" class="sample-chat-form">
+        <input type="hidden" name="token" value="{{ token }}" />
+        <input id="aiQ" class="sample-input" placeholder="Ask a question...">
+        <button class="sample-primary-btn" type="submit"><i data-lucide="message-square"></i> Ask</button>
+      </form>
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        <button type="button" class="sample-secondary-btn" data-ai-template="What is my current balance?">Balance</button>
+        <button type="button" class="sample-secondary-btn" data-ai-template="How do I download my receipt?">Receipt</button>
+        <button type="button" class="sample-secondary-btn" data-ai-template="When is the next exam?">Exam</button>
+        <button type="button" class="sample-secondary-btn" data-ai-template="What payment methods can I use?">Payment options</button>
+        <button type="button" class="sample-secondary-btn" data-ai-template="Who do I contact for fees help?">Contact school</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Refund Requests - {{ APP_TITLE }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Refund Requests</h1>
+      <p class="text-sm text-gray-500 mt-1">Create, approve, and process refunds.</p>
+    </div>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">New refund request</h2>
+    <form method="POST" action="{{ url_for('refunds.refund_request_create') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-xs text-gray-500">Student</label>
+        <select name="student_id" class="w-full border rounded-lg p-2 text-sm" required>
+          <option value="">Select student</option>
+          {% for s in students %}
+          <option value="{{ s.id }}">{{ s.name }}{% if s.class_name %} · {{ s.class_name }}{% endif %} (credit: {{ '{:,.0f}'.format(s.credit or 0) }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Amount (KES)</label>
+        <input type="number" step="0.01" min="1" name="amount" class="w-full border rounded-lg p-2 text-sm" required>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Method</label>
+        <input type="text" name="method" placeholder="Manual refund" class="w-full border rounded-lg p-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Phone (for B2C)</label>
+        <input type="tel" name="phone" placeholder="07xx..." class="w-full border rounded-lg p-2 text-sm">
+        {% if not b2c_enabled %}<p class="text-xs text-gray-400 mt-1">B2C not configured.</p>{% endif %}
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Reference</label>
+        <input type="text" name="reference" class="w-full border rounded-lg p-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Reason</label>
+        <input type="text" name="reason" class="w-full border rounded-lg p-2 text-sm">
+      </div>
+      <div class="md:col-span-3">
+        <button class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">Create request</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white/90 rounded-2xl border border-gray-100 shadow-sm">
+    <div class="p-6 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-800">Recent requests</h2>
+    </div>
+    <div class="p-6">
+      {% if requests %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-gray-500 uppercase text-xs">
+            <tr>
+              <th class="text-left py-2">Student</th>
+              <th class="text-left py-2">Amount</th>
+              <th class="text-left py-2">Status</th>
+              <th class="text-left py-2">Requested</th>
+              <th class="text-left py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for r in requests %}
+            <tr>
+              <td class="py-2 text-gray-800">{{ r.student_name }}{% if r.class_name %} · {{ r.class_name }}{% endif %}</td>
+              <td class="py-2 text-gray-600">KES {{ '{:,.2f}'.format(r.amount or 0) }}</td>
+              <td class="py-2 text-gray-600">{{ r.status }}</td>
+              <td class="py-2 text-gray-600">{{ r.requested_at }}</td>
+              <td class="py-2">
+                {% if r.status == 'pending' %}
+                <form method="POST" action="{{ url_for('refunds.refund_approve', req_id=r.id) }}" class="inline">
+                  <button class="text-xs text-emerald-600 font-semibold">Approve</button>
+                </form>
+                <form method="POST" action="{{ url_for('refunds.refund_reject', req_id=r.id) }}" class="inline ml-2">
+                  <input type="hidden" name="admin_note" value="Rejected">
+                  <button class="text-xs text-rose-600 font-semibold">Reject</button>
+                </form>
+                {% elif r.status == 'approved' %}
+                <form method="POST" action="{{ url_for('refunds.refund_process', req_id=r.id) }}" class="inline">
+                  <button class="text-xs text-indigo-600 font-semibold">Process</button>
+                </form>
+                {% else %}
+                <span class="text-xs text-gray-400">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-500">No refund requests yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

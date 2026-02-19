@@ -51,6 +51,15 @@
             Term {{ CURRENT_TERM or '-' }} | {{ CURRENT_YEAR or '-' }}
           </span>
         </span>
+        {% if session.get("is_admin") or session.get("role") in ("owner", "admin") %}
+        <a href="{{ url_for('admin.guardian_receipts') }}" class="nav-button top-banner__notify-btn" title="Payment verification requests">
+          <i data-lucide="bell"></i>
+          <span>Verifications</span>
+          {% if PENDING_GUARDIAN_RECEIPTS %}
+          <span class="top-banner__badge">{{ PENDING_GUARDIAN_RECEIPTS }}</span>
+          {% endif %}
+        </a>
+        {% endif %}
         <a href="{{ url_for('admin.payment_records') }}" class="nav-button top-banner__record-btn" title="View fee payment records">
           <i data-lucide="file-text"></i>
           <span>Fee payment record</span>
@@ -65,7 +74,7 @@
 
   <div class="flex flex-1 overflow-hidden">
   <!-- Sidebar -->
-  <aside class="sidebar w-64 flex flex-col border-r border-gray-200">
+  <aside class="sidebar w-72 flex flex-col border-r border-gray-200">
     <div class="p-4 border-b border-gray-100 flex items-center justify-between">
       <div class="leading-tight select-none text-xs text-gray-500">
         <span class="hidden md:inline">SmartEduPay Portal</span>
@@ -102,6 +111,14 @@
           <i data-lucide="coins"></i>
           <span>Credit Ops</span>
         </a>
+        <a href="{{ url_for('plans.plans_home') }}" class="nav-link {% if '/plans' in request.path %}active-link{% endif %}">
+          <i data-lucide="list-check"></i>
+          <span>Payment Plans</span>
+        </a>
+        <a href="{{ url_for('reconciliation.reconciliation_home') }}" class="nav-link {% if '/reconciliation' in request.path %}active-link{% endif %}">
+          <i data-lucide="file-check"></i>
+          <span>Reconciliation</span>
+        </a>
         <a href="{{ url_for('terms.manage_terms') }}" class="nav-link {% if '/terms' in request.path %}active-link{% endif %}">
           <i data-lucide="calendar"></i>
           <span>Terms</span>
@@ -109,6 +126,10 @@
         <a href="{{ url_for('terms.invoices_list') }}" class="nav-link {% if '/terms/invoices' in request.path %}active-link{% endif %}">
           <i data-lucide="receipt"></i>
           <span>Invoices</span>
+        </a>
+        <a href="{{ url_for('refunds.refunds_home') }}" class="nav-link {% if '/refunds' in request.path %}active-link{% endif %}">
+          <i data-lucide="rotate-ccw"></i>
+          <span>Refunds</span>
         </a>
         <a href="{{ url_for('reminders.reminders_home') }}" class="nav-link {% if '/reminders' in request.path %}active-link{% endif %}">
           <i data-lucide="bell"></i>
@@ -200,7 +221,7 @@
     <!-- Header -->
     <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center gap-3 bg-white/80 backdrop-blur-md">
       <div class="flex items-center gap-3">
-        <a href="{{ url_for('students') }}" data-back class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
+        <a href="#" data-back onclick="event.preventDefault(); try { if (window.neoBack) { window.neoBack(); } else if (window.history && window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('dashboard') }}'; } } catch (e) { if (window.history && window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('dashboard') }}'; } }" class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
           <i data-lucide="arrow-left"></i>
           <span class="text-sm">Back</span>
         </a>
@@ -330,6 +351,13 @@
     }
     function recordNav() {
       const key = window.location.pathname + window.location.search;
+      try {
+        const current = sessionStorage.getItem('__nav_current') || '';
+        if (current && current !== key) {
+          sessionStorage.setItem('__nav_prev', current);
+        }
+        sessionStorage.setItem('__nav_current', key);
+      } catch (_) {}
       const stack = getNavStack();
       const last = stack[stack.length - 1];
       if (last !== key) {
@@ -341,10 +369,33 @@
     // Record once per page load (keeps the original path order)
     try { recordNav(); } catch (_) {}
 
-    // Robust Back button handler
+    // Back handler: prefer native browser history; use safe fallback only when needed.
     function neoBack() {
+      const key = window.location.pathname + window.location.search;
       try {
-        const key = window.location.pathname + window.location.search;
+        if (window.history && window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+      } catch (e) {}
+      try {
+        const prev = (sessionStorage.getItem('__nav_prev') || '').trim();
+        if (prev && prev !== key) {
+          window.location.href = prev;
+          return;
+        }
+      } catch (e) {}
+      try {
+        const ref = document.referrer || '';
+        if (ref) {
+          const refUrl = new URL(ref, window.location.origin);
+          if (refUrl.origin === window.location.origin && refUrl.href !== window.location.href) {
+            window.location.href = refUrl.href;
+            return;
+          }
+        }
+      } catch (e) {}
+      try {
         const stack = getNavStack();
         let target = null;
         while (stack.length) {
@@ -360,20 +411,10 @@
           return;
         }
       } catch (e) {}
-      try {
-        if (window.history && window.history.length > 1) {
-          window.history.back();
-          return;
-        }
-        const ref = document.referrer || '';
-        if (ref && new URL(ref, window.location.origin).origin === window.location.origin) {
-          window.location.href = ref;
-          return;
-        }
-      } catch (e) {}
-      // Fallback to Students list, else Dashboard
-      try { window.location.href = "{{ url_for('dashboard') }}"; } catch(e) { window.location.href = "{{ url_for('students') }}"; }
+      // Last fallback
+      try { window.location.href = "{{ url_for('dashboard') }}"; } catch(e) { window.location.href = "/"; }
     }
+    try { window.neoBack = neoBack; } catch (_) {}
 
     // Flash close + auto-dismiss (supports future flash injections)
     (function() {
@@ -496,7 +537,7 @@
           container.querySelectorAll('.flash-item').forEach(item => {
             item.childNodes.forEach(n => {
               if (n.nodeType === Node.TEXT_NODE) {
-                n.nodeValue = n.nodeValue.replace(/^?o\.\s*/, '');
+                n.nodeValue = n.nodeValue.replace(/^\?o\.\s*/, '');
               }
             });
           });
@@ -594,7 +635,7 @@
       let out = s;
       MAP.forEach((to,from)=>{ out = out.split(from).join(to); });
       // Generic cleanup for replacement char
-      out = out.replace(/?+/g,'-');
+      out = out.replace(/\?+/g,'-');
       return out;
     }
 
@@ -785,6 +826,8 @@
     }
   })();
 </script>
+
+{% block scripts %}{% endblock %}
 
 </body>
 </html>

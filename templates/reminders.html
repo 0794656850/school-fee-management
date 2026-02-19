@@ -56,6 +56,17 @@
             Authorize Gmail
           </a>
         {% endif %}
+        {% if sms_enabled %}
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+            <i data-lucide="message-square"></i>
+            SMS Enabled
+          </span>
+        {% else %}
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+            <i data-lucide="message-square"></i>
+            SMS Disabled
+          </span>
+        {% endif %}
         <button id="testEmailBtn" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">
           <i data-lucide="mail"></i>
           Send Test Email
@@ -80,7 +91,7 @@
         <label class="block text-xs text-gray-600 mb-1">Search</label>
         <div class="relative">
           <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400"></i>
-          <input type="text" name="q" value="{{ q or '' }}" placeholder="Search name, ID, admission no, email" class="w-full pl-9 rounded-lg border-gray-300 text-sm" />
+          <input type="text" name="q" value="{{ q or '' }}" placeholder="Search name, ID, admission no, email, phone" class="w-full pl-9 rounded-lg border-gray-300 text-sm" />
           {% if q %}
           <a href="{{ url_for('reminders.reminders_home') }}?class={{ selected_class or '' }}&min_balance={{ min_balance or 0 }}" class="absolute right-3 top-2.5 text-xs text-gray-500 hover:text-gray-700">Clear</a>
           {% endif %}
@@ -109,6 +120,23 @@
             <span class="px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-700">{contact_details}</span>
           </div>
       </div>
+      <div class="mb-3 flex flex-wrap gap-2 text-xs">
+        <button type="button" class="reminder-template-btn inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-indigo-700 hover:bg-indigo-50" data-template="template_1">
+          Template 1
+        </button>
+        <button type="button" class="reminder-template-btn inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-indigo-700 hover:bg-indigo-50" data-template="template_2">
+          Template 2
+        </button>
+        <button type="button" class="reminder-template-btn inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-indigo-700 hover:bg-indigo-50" data-template="template_3">
+          Template 3
+        </button>
+        <button type="button" class="reminder-template-btn inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-indigo-700 hover:bg-indigo-50" data-template="template_4">
+          Template 4
+        </button>
+        <button type="button" class="reminder-template-btn inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-indigo-700 hover:bg-indigo-50" data-template="template_5">
+          Template 5
+        </button>
+      </div>
       <textarea id="messageTemplate" rows="4"
                 class="w-full mt-1 rounded-lg border border-gray-300 bg-white p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 placeholder="Type the message template here...">{{ default_message_template or 'Hello {name}, this is a fee reminder from {school_name}. Your outstanding balance is KES {balance}. Kindly clear at your earliest convenience.' }}</textarea>
@@ -120,12 +148,22 @@
 
     <!-- Bulk Action -->
     <form id="sendAllForm" action="{{ url_for('reminders.send_all_reminders') }}" method="post" class="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-3">
-      <div class="text-sm text-gray-600">Send to all contacts with an email using the message above.</div>
+      <div class="text-sm text-gray-600">Send the message above by email or SMS.</div>
       <div class="flex items-center gap-2">
         <input type="hidden" name="message" id="sendAllMessage" />
-        <button type="submit" class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+        <input type="hidden" name="class" value="{{ selected_class or '' }}" />
+        <input type="hidden" name="min_balance" value="{{ min_balance or 0 }}" />
+        <input type="hidden" name="q" value="{{ q or '' }}" />
+        <button id="sendAllEmailBtn" type="submit" class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg">
           <i data-lucide="mail" class="w-4 h-4"></i>
           <span>Send All Via Email</span>
+        </button>
+        <button id="sendAllSmsBtn" type="submit"
+                formaction="{{ url_for('reminders.send_all_sms_reminders') }}"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                {% if not sms_enabled %}disabled{% endif %}>
+          <i data-lucide="message-square" class="w-4 h-4"></i>
+          <span>Send All Via SMS</span>
         </button>
       </div>
     </form>
@@ -141,6 +179,7 @@
             <th class="px-4 py-3 text-left">Class</th>
             <th class="px-4 py-3 text-left">Balance</th>
             <th class="px-4 py-3 text-left">Email</th>
+            <th class="px-4 py-3 text-left">Phone</th>
             <th class="px-4 py-3 text-center">Action</th>
           </tr>
           </thead>
@@ -177,11 +216,18 @@
                   <span class="text-gray-400">N/A</span>
                 {% endif %}
               </td>
+              <td class="px-4 py-3">
+                {% if s.phone %}
+                  <span class="inline-flex items-center gap-1 text-gray-700"><i data-lucide="phone" class="w-4 h-4"></i>{{ s.phone }}</span>
+                {% else %}
+                  <span class="text-gray-400">N/A</span>
+                {% endif %}
+              </td>
               <td class="px-4 py-3 text-center">
-                {% if s.balance > 0 and s.email %}
+                {% if s.balance > 0 and (s.email or s.phone) %}
                   <a href="{{ url_for('reminders.send_email_reminder', student_id=s.id) }}"
                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                     onclick="return openSendModal({{ s.id }}, '{{ s.name|replace("'","\\'") }}', '{{ s.class_name|default('')|replace("'","\\'") }}', {{ (s.balance or 0)|float }}, '{{ s.email|default('')|replace("'","\\'") }}')">
+                     onclick="return openSendModal({{ s.id }}, '{{ s.name|replace("'","\\'") }}', '{{ s.class_name|default('')|replace("'","\\'") }}', {{ (s.balance or 0)|float }}, '{{ s.email|default('')|replace("'","\\'") }}', '{{ s.phone|default('')|replace("'","\\'") }}')">
                     <i data-lucide="send" class="w-4 h-4"></i>
                     <span>Send</span>
                   </a>
@@ -192,7 +238,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="6" class="text-center text-gray-500 py-6">No students found.</td>
+              <td colspan="7" class="text-center text-gray-500 py-6">No students found.</td>
             </tr>
           {% endfor %}
           </tbody>
@@ -202,12 +248,29 @@
   </div>
 </div>
 
+<!-- Reminder Result Popup -->
+<div id="reminderPopup" class="fixed inset-0 hidden items-center justify-center p-4 z-50">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" id="reminderPopupOverlay"></div>
+  <div class="relative max-w-md w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl">
+    <div class="flex items-start gap-3">
+      <div id="reminderPopupIcon" class="mt-0.5 grid h-9 w-9 place-items-center rounded-full bg-green-50 text-green-700">
+        <i data-lucide="check-circle"></i>
+      </div>
+      <div class="flex-1">
+        <div id="reminderPopupTitle" class="text-sm font-semibold text-gray-900">Reminder sent</div>
+        <div id="reminderPopupMessage" class="mt-1 text-sm text-gray-600"></div>
+      </div>
+      <button type="button" class="text-gray-400 hover:text-gray-600" id="reminderPopupClose"><i data-lucide="x"></i></button>
+    </div>
+  </div>
+</div>
+
 <!-- Premium Modal -->
 <div id="sendModal" class="fixed inset-0 hidden items-center justify-center p-4">
   <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeSendModal()"></div>
   <div class="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100">
     <div class="flex items-center justify-between mb-4">
-      <h4 class="text-base font-semibold">Send Email Reminder</h4>
+      <h4 class="text-base font-semibold">Send Reminder</h4>
       <button class="text-gray-400 hover:text-gray-600" type="button" onclick="closeSendModal()"><i data-lucide="x"></i></button>
     </div>
     <div>
@@ -218,6 +281,13 @@
       <input type="hidden" name="message" id="sendMessage" />
       <div class="flex justify-end gap-2">
         <button type="button" class="px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50" onclick="closeSendModal()">Cancel</button>
+        <button id="sendSmsBtn" type="submit"
+                formaction="{{ url_for('reminders.send_sms_reminder', student_id=0) }}"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                disabled>
+          <i data-lucide="message-square"></i>
+          <span>Send SMS</span>
+        </button>
         <button type="submit" class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg">
           <i data-lucide="send"></i>
           <span>Send Email</span>
@@ -229,7 +299,8 @@
 
 <script>
   function fmt(num) { try { return Number(num).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); } catch { return num; } }
-  function openSendModal(id, name, className, balance, email) {
+  const smsEnabled = {{ 'true' if sms_enabled else 'false' }};
+  function openSendModal(id, name, className, balance, email, phone) {
     const tpl = document.getElementById('messageTemplate').value || '';
     const msg = tpl
       .replaceAll('{name}', name)
@@ -239,6 +310,11 @@
     document.getElementById('sendMessage').value = msg;
     const form = document.getElementById('sendForm');
     form.action = `{{ url_for('reminders.send_email_reminder', student_id=0) }}`.replace('/0', `/${id}`);
+    const smsBtn = document.getElementById('sendSmsBtn');
+    if (smsBtn) {
+      smsBtn.formAction = `{{ url_for('reminders.send_sms_reminder', student_id=0) }}`.replace('/0', `/${id}`);
+      smsBtn.disabled = !(smsEnabled && phone);
+    }
     const modal = document.getElementById('sendModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -257,10 +333,40 @@
     const update = ()=>{ if(ta&&cc){ cc.textContent = (ta.value||'').length + ' characters'; } };
     if (ta) { ta.addEventListener('input', update); update(); }
   })();
+  // Creative template presets
+  (function(){
+    const templates = {
+      template_1: "Hello {name}, a gentle nudge from {school_name}: KES {balance} is still outstanding for {class_name}. Please clear by {due_date} if possible. Thank you!",
+      template_2: "Hi {name}! Quick update from {school_name}: your balance is KES {balance} for {purpose}. We’d appreciate settlement by {due_date}. {contact_details}",
+      template_3: "Warm reminder from {school_name}: {name}'s account shows KES {balance} due. If already paid, kindly ignore. Otherwise, please clear at your earliest convenience.",
+      template_4: "Greetings {name}, this is a friendly fee reminder from {school_name}. Outstanding: KES {balance}. Need help? Reach us at {contact_details}.",
+      template_5: "Hello {name}, thanks for supporting {school_name}. Our records show KES {balance} pending for {class_name}. Please settle by {due_date}. We’re here if you need assistance."
+    };
+    const ta = document.getElementById('messageTemplate');
+    const buttons = document.querySelectorAll('.reminder-template-btn');
+    if (!ta || !buttons.length) return;
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.template;
+        if (templates[key]) {
+          ta.value = templates[key];
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.focus();
+        }
+      });
+    });
+  })();
   // Attach message to bulk form on submit
-  document.getElementById('sendAllForm')?.addEventListener('submit', () => {
-    document.getElementById('sendAllMessage').value = document.getElementById('messageTemplate').value;
-  });
+  const sendAllForm = document.getElementById('sendAllForm');
+  const sendAllMessage = document.getElementById('sendAllMessage');
+  const messageTemplate = document.getElementById('messageTemplate');
+  const syncBulkMessage = () => {
+    if (sendAllMessage && messageTemplate) {
+      sendAllMessage.value = messageTemplate.value || '';
+    }
+  };
+  sendAllForm?.addEventListener('submit', syncBulkMessage);
+  document.getElementById('sendAllEmailBtn')?.addEventListener('click', syncBulkMessage);
   // Icons
   if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
     // Test email helper
@@ -273,6 +379,39 @@
       else alert('Test failed: ' + (j.error || 'Unknown error'));
     } catch (e) { alert('Test failed.'); }
   });
+
+  // Popup for reminder result based on flash messages
+  (function(){
+    const container = document.getElementById('flash-container');
+    if (!container) return;
+    const items = Array.from(container.querySelectorAll('.flash-item'));
+    if (!items.length) return;
+    const match = items.find(el => (el.textContent || '').toLowerCase().includes('reminder'));
+    if (!match) return;
+    const message = match.querySelector('.flash-text')?.textContent || match.textContent || '';
+    const isSuccess = match.classList.contains('flash-success');
+    const isError = match.classList.contains('flash-error');
+    const isWarning = match.classList.contains('flash-warning');
+    const title = isSuccess ? 'Reminder sent' : (isError ? 'Reminder failed' : (isWarning ? 'Reminder warning' : 'Reminder update'));
+    const popup = document.getElementById('reminderPopup');
+    const popupMsg = document.getElementById('reminderPopupMessage');
+    const popupTitle = document.getElementById('reminderPopupTitle');
+    const popupIcon = document.getElementById('reminderPopupIcon');
+    if (!popup || !popupMsg || !popupTitle || !popupIcon) return;
+    popupMsg.textContent = message.trim();
+    popupTitle.textContent = title;
+    popupIcon.className = isSuccess
+      ? 'mt-0.5 grid h-9 w-9 place-items-center rounded-full bg-green-50 text-green-700'
+      : isError
+        ? 'mt-0.5 grid h-9 w-9 place-items-center rounded-full bg-rose-50 text-rose-700'
+        : 'mt-0.5 grid h-9 w-9 place-items-center rounded-full bg-amber-50 text-amber-700';
+    popup.classList.remove('hidden');
+    popup.classList.add('flex');
+    const close = () => { popup.classList.add('hidden'); popup.classList.remove('flex'); };
+    document.getElementById('reminderPopupClose')?.addEventListener('click', close);
+    document.getElementById('reminderPopupOverlay')?.addEventListener('click', close);
+    setTimeout(close, 6000);
+  })();
   
 </script>
 {% endblock %}
