@@ -3,7 +3,7 @@ import json
 import hmac
 import hashlib
 import mysql.connector
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 import csv
 from io import StringIO
 from urllib.parse import urlparse
@@ -438,6 +438,7 @@ def inject_branding():
         "BRAND_NAME": brand,
         "PORTAL_TITLE": portal_title,
         "APP_TITLE": app_title,
+        "CALENDAR_YEAR": datetime.now().year,
         "LOGO_PRIMARY": logo_primary,
         "LOGO_SECONDARY": logo_secondary,
         "FAVICON": app.config.get("FAVICON", logo_primary),
@@ -1285,6 +1286,7 @@ def add_student():
         admission_no = request.form.get("admission_no", "").strip()
         class_name = request.form["class_name"].strip()
         phone = request.form.get("phone", "").strip()
+        parent_phone = request.form.get("parent_phone", "").strip()
         # Email for reminders; save to whichever column exists (email or parent_email)
         email_val = (request.form.get("email") or "").strip()
         total_fees = float(request.form.get("total_fees", 0))
@@ -1300,6 +1302,8 @@ def add_student():
         # Detect optional phone column
         cursor.execute("SHOW COLUMNS FROM students LIKE 'phone'")
         has_phone_col = bool(cursor.fetchone())
+        cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_phone'")
+        has_parent_phone_col = bool(cursor.fetchone())
         # Detect possible email columns
         cursor.execute("SHOW COLUMNS FROM students LIKE 'email'")
         has_email_col = bool(cursor.fetchone())
@@ -1327,11 +1331,18 @@ def add_student():
             flash("No valid balance column found in 'students' table!", "error")
             return redirect(url_for("students"))
 
+        # Normalize phone inputs to canonical 254XXXXXXXXX format
+        phone = normalize_phone(phone) if phone else ""
+        parent_phone = normalize_phone(parent_phone) if parent_phone else ""
+
         cols = ["name", "admission_no", "class_name"]
         params_list = [name, admission_no or None, class_name]
         if has_phone_col:
             cols.append("phone")
             params_list.append(phone or None)
+        if has_parent_phone_col:
+            cols.append("parent_phone")
+            params_list.append(parent_phone or None)
         # Prefer 'email' if present; else 'parent_email' if present
         email_col = None
         if has_email_col:
@@ -1588,6 +1599,8 @@ def edit_student(student_id):
     has_fee_balance = bool(cursor.fetchone())
     cursor.execute("SHOW COLUMNS FROM students LIKE 'phone'")
     has_phone_col = bool(cursor.fetchone())
+    cursor.execute("SHOW COLUMNS FROM students LIKE 'parent_phone'")
+    has_parent_phone_col = bool(cursor.fetchone())
     # Optional: one-time retention flag
     try:
         cursor.execute("SHOW COLUMNS FROM students LIKE 'retain_next_year'")
@@ -1609,7 +1622,10 @@ def edit_student(student_id):
         class_name = request.form.get("class_name", student.get("class_name", "")).strip()
         balance_val = float(request.form.get("balance", student.get("balance") or student.get("fee_balance") or 0))
         phone_val = (request.form.get("phone") or student.get("phone") or "").strip()
+        parent_phone_val = (request.form.get("parent_phone") or student.get("parent_phone") or "").strip()
         email_val = (request.form.get("email") or student.get("email") or student.get("parent_email") or "").strip()
+        phone_val = normalize_phone(phone_val) if phone_val else ""
+        parent_phone_val = normalize_phone(parent_phone_val) if parent_phone_val else ""
 
         # Enforce unique admission_no if changed and provided
         if admission_no and admission_no.lower() != (student.get("admission_no") or "").lower():
@@ -1641,6 +1657,9 @@ def edit_student(student_id):
         if has_phone_col:
             sets.append("phone = %s")
             params.append(phone_val or None)
+        if has_parent_phone_col:
+            sets.append("parent_phone = %s")
+            params.append(parent_phone_val or None)
         # Update the appropriate email column if present
         if has_email_col:
             sets.append("email = %s")
@@ -3617,7 +3636,7 @@ def analytics_data():
 
     db.close()
 
-    # Normalize rows to JSON‑safe primitives (avoid Decimal/date serialization issues)
+    # Normalize rows to JSON-safe primitives (avoid Decimal/date serialization issues)
     try:
         from datetime import date, datetime  # type: ignore
     except Exception:  # pragma: no cover
@@ -4358,7 +4377,7 @@ def export_fees_xlsx():
         ws5.append([m.get('method'), m.get('cnt'), m.get('total')])
 
     mem = BytesIO(); wb.save(mem); mem.seek(0)
-    from datetime import datetime as _dt
+    from utils.timezone_helpers import EATDateTime as _dt
     ts = _dt.now().strftime('%Y%m%d_%H%M%S')
     return Response(mem.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': f'attachment; filename=fees_full_report_{ts}.xlsx'})
 
@@ -4712,7 +4731,7 @@ def export_fees_full():
       - method_breakdown.csv: totals per payment method
     """
     import zipfile
-    from datetime import datetime
+    from utils.timezone_helpers import EATDateTime as datetime
     from io import BytesIO, StringIO
 
     db = get_db_connection()
@@ -4985,7 +5004,7 @@ def export_school_profile_docx():
     school_phone = get_setting('SCHOOL_PHONE') or ''
     school_email = get_setting('SCHOOL_EMAIL') or ''
     school_website = get_setting('SCHOOL_WEBSITE') or ''
-    from datetime import datetime as _dt
+    from utils.timezone_helpers import EATDateTime as _dt
     generated_at = _dt.now()
     generated_str = generated_at.strftime('%Y-%m-%d %H:%M:%S')
 

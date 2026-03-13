@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
 import csv
@@ -8,7 +8,8 @@ import hashlib
 import mysql.connector
 from io import StringIO
 from urllib.parse import urlparse
-from datetime import date, datetime
+from datetime import date
+from utils.timezone_helpers import EATDateTime as datetime
 import os
 from utils.pro import is_pro_enabled, upgrade_url
 from utils.audit import log_event
@@ -256,6 +257,148 @@ def _apply_credit_to_balance_for_school(conn, school_id):
         return applied_count
     except Exception:
         return 0
+
+
+def _rollover_credit_into_next_term(conn, year: int, term: int, school_id=None) -> dict[str, int | float]:
+    """Move available student credits into the next term as carry-forward payments.
+
+    Returns a summary dict with keys: students, amount.
+    """
+    try:
+        next_term = 1 if int(term) == 3 else (int(term) + 1)
+        next_year = (int(year) + 1) if int(term) == 3 else int(year)
+    except Exception:
+        return {"students": 0, "amount": 0.0}
+
+    try:
+        ensure_payments_term_columns(conn)
+    except Exception:
+        pass
+
+    bal_col = _detect_balance_column(conn)
+    cur = conn.cursor(dictionary=True)
+    write_cur = conn.cursor()
+    students_rolled = 0
+    total_amount = 0.0
+    now_ts = datetime.utcnow()
+
+    try:
+        if school_id:
+            cur.execute(
+                f"""
+                SELECT id, COALESCE(credit,0) AS credit, COALESCE({bal_col},0) AS balance
+                FROM students
+                WHERE school_id=%s AND COALESCE(credit,0) > 0
+                """,
+                (school_id,),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT id, COALESCE(credit,0) AS credit, COALESCE({bal_col},0) AS balance
+                FROM students
+                WHERE COALESCE(credit,0) > 0
+                """
+            )
+        rows = cur.fetchall() or []
+        if not rows:
+            return {"students": 0, "amount": 0.0}
+
+        try:
+            ensure_ledger_table(conn)
+        except Exception:
+            pass
+
+        for row in rows:
+            student_id = int(row.get("id") or 0)
+            credit_amt = float(row.get("credit") or 0.0)
+            if student_id <= 0 or credit_amt <= 0:
+                continue
+
+            ref = f"ROLLOVER-{year}T{term}-TO-{next_year}T{next_term}-S{student_id}"
+
+            if school_id:
+                cur.execute(
+                    """
+                    SELECT id FROM payments
+                    WHERE student_id=%s AND year=%s AND term=%s AND reference=%s AND school_id=%s
+                    LIMIT 1
+                    """,
+                    (student_id, next_year, next_term, ref, school_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id FROM payments
+                    WHERE student_id=%s AND year=%s AND term=%s AND reference=%s
+                    LIMIT 1
+                    """,
+                    (student_id, next_year, next_term, ref),
+                )
+            if cur.fetchone():
+                continue
+
+            if school_id:
+                write_cur.execute(
+                    """
+                    INSERT INTO payments (student_id, amount, method, reference, date, year, term, school_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (student_id, credit_amt, "Carry Forward", ref, now_ts, next_year, next_term, school_id),
+                )
+                write_cur.execute(
+                    "UPDATE students SET credit=0 WHERE id=%s AND school_id=%s",
+                    (student_id, school_id),
+                )
+            else:
+                write_cur.execute(
+                    """
+                    INSERT INTO payments (student_id, amount, method, reference, date, year, term)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (student_id, credit_amt, "Carry Forward", ref, now_ts, next_year, next_term),
+                )
+                write_cur.execute("UPDATE students SET credit=0 WHERE id=%s", (student_id,))
+
+            try:
+                if school_id:
+                    add_entry(
+                        conn,
+                        school_id=int(school_id),
+                        student_id=student_id,
+                        entry_type="credit",
+                        amount=credit_amt,
+                        ref=ref,
+                        description=f"Rolled over credit from {year} T{term} to {next_year} T{next_term}",
+                        link_type="payment",
+                        link_id=int(write_cur.lastrowid or 0),
+                    )
+            except Exception:
+                pass
+
+            students_rolled += 1
+            total_amount += credit_amt
+
+        try:
+            conn.commit()
+        except Exception:
+            pass
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            write_cur.close()
+        except Exception:
+            pass
+
+    return {"students": int(students_rolled), "amount": float(total_amount)}
 
 
 def _send_term_memos(db, year: int, term: int, due_date=None) -> tuple[int, int]:
@@ -1481,7 +1624,17 @@ def close_term_route():
             _publish_term_event(db, year, term, "close", {"timestamp": datetime.utcnow()})
         except Exception:
             pass
-        # TODO: apply rollover credits into next term (future enhancement)
+        roll = _rollover_credit_into_next_term(db, year, term, sid)
+        rolled_students = int(roll.get("students") or 0)
+        rolled_amount = float(roll.get("amount") or 0.0)
+        if rolled_students > 0 and rolled_amount > 0:
+            next_term = 1 if term == 3 else (term + 1)
+            next_year = (year + 1) if term == 3 else year
+            flash(
+                f"Rolled over KES {rolled_amount:,.2f} credit for {rolled_students} student"
+                f"{'s' if rolled_students != 1 else ''} into {next_year} Term {next_term}.",
+                "success",
+            )
     except Exception as e:
         try:
             db.rollback()

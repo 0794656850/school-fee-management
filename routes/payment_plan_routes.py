@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Optional
 
 import mysql.connector

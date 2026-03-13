@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from models import db, Student, Payment
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 fee_bp = Blueprint('fees', __name__, url_prefix='/fees')
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, request, jsonify, current_app, url_for, redirect, flash, session, abort
 import json
 import mysql.connector
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 from utils.mpesa import stk_push, DarajaError, parse_callback_items
 from routes.student_portal import ensure_mpesa_student_table, record_mpesa_payment_if_missing  # reuse table creator

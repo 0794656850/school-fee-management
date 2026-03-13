@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask import jsonify
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 import json
 import mysql.connector
 from urllib.parse import urlparse

@@ -1,4 +1,4 @@
-﻿from utils.report_scheduler import schedule_reports
+from utils.report_scheduler import schedule_reports
 from apscheduler.schedulers.background import BackgroundScheduler
 
 def enable_reports_scheduler(app):

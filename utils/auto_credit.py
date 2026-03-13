@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Any
 
 from routes.credit_routes import ensure_credit_ops_table

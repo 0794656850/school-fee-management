@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 
 def ensure_payment_sources_tables(db) -> None:

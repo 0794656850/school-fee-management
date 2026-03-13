@@ -5,6 +5,9 @@
       <p>Record M-Pesa payments instantly.</p>
     </div>
   </div>
+  <div class="mb-3">
+    <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="Lipa na M-Pesa" class="h-10 w-auto" />
+  </div>
   <form id="payForm" class="sample-form-grid">
     <input type="hidden" name="token" value="{{ token }}" />
     <div>
@@ -19,7 +22,7 @@
       <input name="amount" type="number" min="1" step="1" placeholder="e.g. 500" class="sample-input" />
     </div>
     <button type="submit" class="sample-primary-btn sample-primary-btn--full">
-      <i data-lucide="smartphone"></i>
+      <img src="{{ url_for('static', filename='images/mpesa_logo.svg') }}" alt="M-Pesa" class="h-5 w-auto" />
       Pay Now with M-Pesa
     </button>
   </form>

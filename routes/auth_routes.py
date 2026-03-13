@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
-from datetime import datetime, timedelta
+from datetime import timedelta
+from utils.timezone_helpers import EATDateTime as datetime
 from utils.settings import get_setting, set_school_setting, set_setting
 from utils.security import verify_password, hash_password, is_hashed
 from utils.tenant import slugify_code, get_or_create_school, bootstrap_new_school
@@ -43,6 +44,8 @@ def _send_school_registration_otp(admin_email: str, recipient_name: str, school_
 @auth_bp.route('/', methods=['GET'])
 def entry():
     """Entry screen with School vs Parent login options."""
+    if session.get("user_logged_in"):
+        return redirect(url_for("dashboard"))
     return render_template('entry.html')
 
 
@@ -195,6 +198,13 @@ def login():
             return redirect(next_url or url_for('dashboard'))
         flash('Invalid credentials.', 'error')
         return redirect(url_for('auth.login', next=next_url))
+
+    # GET: if already signed in, keep the active session on dashboard.
+    if session.get("user_logged_in"):
+        next_url = request.args.get('next', '').strip()
+        if next_url:
+            return redirect(next_url)
+        return redirect(url_for('dashboard'))
 
     # GET
     next_url = request.args.get('next', '')

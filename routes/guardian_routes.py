@@ -8,7 +8,8 @@ import json
 from urllib.parse import urlparse
 import uuid
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import timedelta
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Any
 
 from utils.tenant import slugify_code
@@ -261,6 +262,15 @@ def _allowed_receipt_file(filename: str) -> bool:
 @guardian_bp.route("/", strict_slashes=False)
 def guardian_index():
     """Guardian landing page -> render login directly."""
+    if session.get("guardian_logged_in"):
+        token = (session.get("guardian_token") or "").strip()
+        if token:
+            return redirect(url_for("guardian.guardian_dashboard", token=token))
+        sid = int(session.get("guardian_student_id") or 0)
+        if sid:
+            token = _sign_token(sid)
+            session["guardian_token"] = token
+            return redirect(url_for("guardian.guardian_dashboard", token=token))
     return render_template("guardian_login.html")
 
 
@@ -268,6 +278,17 @@ def guardian_index():
 @limiter.limit("8 per minute", methods=["POST"])  # throttle brute-force
 def guardian_login():
     """Secure guardian/parent login by school, last name and admission number."""
+    if request.method == "GET":
+        if session.get("guardian_logged_in"):
+            token = (session.get("guardian_token") or "").strip()
+            if token:
+                return redirect(url_for("guardian.guardian_dashboard", token=token))
+            sid = int(session.get("guardian_student_id") or 0)
+            if sid:
+                token = _sign_token(sid)
+                session["guardian_token"] = token
+                return redirect(url_for("guardian.guardian_dashboard", token=token))
+
     if request.method == "POST":
         school_raw = (request.form.get("school") or "").strip()
         candidate_pw = (request.form.get("admission_no") or request.form.get("regNo") or "").strip()
@@ -1438,7 +1459,7 @@ def guardian_make_payment():
         db.close()
         return jsonify({"ok": False, "error": str(e)}), 400
 
-    from datetime import datetime as _dt
+    from utils.timezone_helpers import EATDateTime as _dt
     now = _dt.now()
     cur2 = db.cursor()
     cur2.execute(
@@ -1755,7 +1776,7 @@ def guardian_analytics():
     if not sid:
         return jsonify({"ok": False, "error": "Invalid token"}), 403
 
-    from datetime import datetime as _dt
+    from utils.timezone_helpers import EATDateTime as _dt
     now = _dt.now(); year_now = now.year; year_prev = year_now - 1
     labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     cur_year = [0.0]*12; prev_year = [0.0]*12
@@ -1819,6 +1840,10 @@ def ensure_events_table(db) -> None:
             category VARCHAR(40) NULL,
             start_date DATE NOT NULL,
             end_date DATE NULL,
+            event_time TIME NULL,
+            venue VARCHAR(190) NULL,
+            is_all_day TINYINT(1) NOT NULL DEFAULT 1,
+            created_by VARCHAR(120) NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_events_school (school_id),
             INDEX idx_events_dates (start_date)
@@ -1826,6 +1851,21 @@ def ensure_events_table(db) -> None:
         """
     )
     db.commit()
+    # Backward-compatible upgrades for older schemas.
+    for stmt in (
+        "ALTER TABLE calendar_events ADD COLUMN event_time TIME NULL AFTER end_date",
+        "ALTER TABLE calendar_events ADD COLUMN venue VARCHAR(190) NULL AFTER event_time",
+        "ALTER TABLE calendar_events ADD COLUMN is_all_day TINYINT(1) NOT NULL DEFAULT 1 AFTER venue",
+        "ALTER TABLE calendar_events ADD COLUMN created_by VARCHAR(120) NULL AFTER is_all_day",
+    ):
+        try:
+            cur.execute(stmt)
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
 @guardian_bp.route("/events", methods=["GET"])
 def guardian_events():
@@ -1862,11 +1902,11 @@ def guardian_events():
     start = f"{y:04d}-{m:02d}-01"; end = f"{y:04d}-{m:02d}-{last_day:02d}"
     cur.execute(
         """
-        SELECT id, title, category, description, start_date, end_date
+        SELECT id, title, category, description, start_date, end_date, event_time, venue, is_all_day
         FROM calendar_events
         WHERE (school_id=%s OR school_id IS NULL)
           AND start_date <= %s AND (end_date IS NULL OR end_date >= %s)
-        ORDER BY start_date ASC, id ASC
+        ORDER BY start_date ASC, event_time ASC, id ASC
         """,
         (school_id, end, start)
     )

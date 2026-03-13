@@ -2,7 +2,8 @@ import argparse
 import os
 import sys
 import random
-from datetime import datetime, timedelta, date
+from datetime import timedelta, date
+from utils.timezone_helpers import EATDateTime as datetime
 
 # Ensure project root is importable when running from scripts/
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))

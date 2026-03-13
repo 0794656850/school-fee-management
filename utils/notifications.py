@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Iterable
 
 from utils.gmail_api import send_email

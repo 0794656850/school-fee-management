@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 import mysql.connector
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app

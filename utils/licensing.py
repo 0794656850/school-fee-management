@@ -3,7 +3,7 @@ import json
 import base64
 import hashlib
 import os
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 # Read secret key from environment or fallback
 LICENSE_SECRET = os.getenv("LICENSE_SECRET", "my_super_secret_license_key_2025")

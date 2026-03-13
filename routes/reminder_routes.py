@@ -1,6 +1,6 @@
-﻿from flask import Blueprint, render_template, current_app, redirect, url_for, flash, request, session, jsonify
+from flask import Blueprint, render_template, current_app, redirect, url_for, flash, request, session, jsonify
 from decimal import Decimal
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 import os
 import random
 
@@ -18,7 +18,7 @@ from routes.term_routes import (
     ensure_invoices_tables,
 )
 
-DEFAULT_REMINDER_TEMPLATE = """📌 Payment Reminder (Gentle Reminder)
+DEFAULT_REMINDER_TEMPLATE = """?? Payment Reminder (Gentle Reminder)
 
 Subject: Friendly Fee Payment Reminder
 
@@ -442,7 +442,7 @@ def reminders_home():
     has_parent_phone = _column_exists(cursor, "parent_phone")
     has_phone = _column_exists(cursor, "phone")
 
-    # Filters for Kâ€“12 operations
+    # Filters for K–12 operations
     selected_class = (request.args.get('class') or '').strip()
     q = (request.args.get('q') or '').strip()
     try:

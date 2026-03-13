@@ -7,6 +7,29 @@ from zoneinfo import ZoneInfo
 EAST_AFRICA_TZ = ZoneInfo("Africa/Nairobi")
 
 
+class EATDateTime(datetime):
+    """Datetime wrapper that defaults naive "now" operations to East Africa Time."""
+
+    @classmethod
+    def now(cls, tz=None):
+        tz = EAST_AFRICA_TZ if tz is None else tz
+        return super().now(tz)
+
+    @classmethod
+    def utcnow(cls):
+        # Preserve a naive return type for compatibility while using EAT clock.
+        return super().now(EAST_AFRICA_TZ).replace(tzinfo=None)
+
+    @classmethod
+    def today(cls):
+        return super().now(EAST_AFRICA_TZ).replace(tzinfo=None)
+
+    @classmethod
+    def fromtimestamp(cls, timestamp, tz=None):
+        tz = EAST_AFRICA_TZ if tz is None else tz
+        return super().fromtimestamp(timestamp, tz=tz)
+
+
 def to_east_africa(value: Any) -> datetime | None:
     """Convert the provided value to an East Africa timezone-aware datetime."""
     if not value:

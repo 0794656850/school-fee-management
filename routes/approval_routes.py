@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from flask import Blueprint, render_template, request, session, flash, redirect, url_for, current_app
 
 from utils.db_helpers import ensure_approval_requests_table

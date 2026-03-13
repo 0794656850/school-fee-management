@@ -8,15 +8,20 @@ def normalize_phone(raw: str | None) -> str | None:
     if not raw:
         return None
     phone = str(raw).strip()
+    cc = str(current_app.config.get("DEFAULT_COUNTRY_CODE", "254") or "254").strip()
+    cc_digits = "".join(ch for ch in cc if ch.isdigit()) or "254"
     if phone.startswith("+"):
-        return phone
-    cc = current_app.config.get("DEFAULT_COUNTRY_CODE", "+254")
-    if phone.startswith("0"):
-        return f"{cc}{phone[1:]}"
+        phone = phone[1:]
     digits = "".join(ch for ch in phone if ch.isdigit())
+    if not digits:
+        return None
+    if digits.startswith(cc_digits):
+        return digits
+    if phone.startswith("0"):
+        return f"{cc_digits}{phone[1:]}"
     if 9 <= len(digits) <= 10:
-        return f"{cc}{digits[-9:]}"
-    return phone
+        return f"{cc_digits}{digits[-9:]}"
+    return digits
 
 
 """

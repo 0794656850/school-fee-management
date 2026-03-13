@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timedelta, date
+from datetime import timedelta, date
+from utils.timezone_helpers import EATDateTime as datetime
 from io import StringIO
 from typing import Dict, Any, Optional
 

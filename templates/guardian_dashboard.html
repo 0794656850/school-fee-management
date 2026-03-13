@@ -2495,6 +2495,45 @@
       if (!title || !grid || !list) return;
       let d = new Date();
       const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const catStyles = {
+        academic: 'bg-indigo-50 text-indigo-700',
+        exam: 'bg-rose-50 text-rose-700',
+        sports: 'bg-emerald-50 text-emerald-700',
+        meeting: 'bg-amber-50 text-amber-700',
+        holiday: 'bg-sky-50 text-sky-700',
+        trip: 'bg-purple-50 text-purple-700',
+        other: 'bg-slate-100 text-slate-700'
+      };
+      const dayFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' });
+      const hmFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const toDate = (v) => {
+        try {
+          if (!v) return null;
+          const raw = String(v);
+          let dt = new Date(raw);
+          if (!Number.isNaN(dt.getTime())) {
+            return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+          }
+          const iso = raw.match(/\d{4}-\d{2}-\d{2}/);
+          if (iso && iso[0]) {
+            dt = new Date(`${iso[0]}T00:00:00`);
+            if (!Number.isNaN(dt.getTime())) return dt;
+          }
+          return null;
+        } catch(_) { return null; }
+      };
+      const normalize = (ev) => {
+        const start = toDate(ev.start_date);
+        const end = toDate(ev.end_date || ev.start_date);
+        let timeLabel = '';
+        if (ev.event_time && !Number(ev.is_all_day || 0)) {
+          try {
+            const dt = new Date(`1970-01-01T${String(ev.event_time).slice(0,5)}:00`);
+            if (!Number.isNaN(dt.getTime())) timeLabel = hmFmt.format(dt);
+          } catch(_) {}
+        }
+        return { ...ev, start, end, timeLabel, category: (ev.category || 'other').toLowerCase() };
+      };
       async function load(){
         const y = d.getFullYear(); const m = d.getMonth()+1;
         title.textContent = `${monthNames[m-1]} ${y}`;
@@ -2504,10 +2543,13 @@
           u.searchParams.set('token', {{ token|tojson }}); u.searchParams.set('y', y); u.searchParams.set('m', m);
           const r = await fetch(u.toString());
           const j = await r.json();
-          if (j && j.ok) items = j.items || [];
+          if (j && j.ok) items = (j.items || []).map(normalize);
         }catch(_){ items = []; }
         grid.innerHTML = ''; list.innerHTML = '';
         const first = new Date(y, m-1, 1); const startDay = first.getDay(); const last = new Date(y, m, 0).getDate();
+        const monthStart = new Date(y, m-1, 1);
+        const monthEnd = new Date(y, m-1, last);
+        const today = new Date(); today.setHours(0,0,0,0);
         for (let i=0;i<startDay;i++){
           const ph = document.createElement('div');
           ph.className='p-3 rounded-xl border border-dashed border-gray-100 text-gray-300';
@@ -2515,15 +2557,27 @@
         }
         const byDay = {};
         items.forEach(ev => {
-          try{
-            const sd = new Date(ev.start_date);
-            const key = sd.getDate();
-            (byDay[key] ||= []).push(ev);
-          }catch(_){}
+          try {
+            const st = ev.start;
+            const ed = ev.end || ev.start;
+            if (!st || !ed) return;
+            const s = st > monthStart ? st : monthStart;
+            const e = ed < monthEnd ? ed : monthEnd;
+            if (s > e) return;
+            const cur = new Date(s);
+            while (cur <= e) {
+              const key = cur.getDate();
+              (byDay[key] ||= []).push(ev);
+              cur.setDate(cur.getDate() + 1);
+            }
+          } catch(_) {}
         });
         for (let day=1; day<=last; day++){
           const cell = document.createElement('div');
-          cell.className='p-3 rounded-xl border border-gray-100 bg-white/70';
+          cell.className='p-3 rounded-xl border border-gray-100 bg-white/70 min-h-[94px]';
+          if (today.getFullYear() === y && (today.getMonth()+1) === m && today.getDate() === day) {
+            cell.classList.add('ring-2','ring-indigo-200','border-indigo-300');
+          }
           const h = document.createElement('div');
           h.className='text-xs text-gray-500';
           h.textContent = day;
@@ -2533,8 +2587,9 @@
           const evs = byDay[day] || [];
           evs.slice(0,2).forEach(e => {
             const b = document.createElement('div');
-            b.className='px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs';
+            b.className=`px-2 py-1 rounded text-xs truncate ${catStyles[e.category] || catStyles.other}`;
             b.textContent = e.title;
+            b.title = `${e.title}${e.timeLabel ? ` (${e.timeLabel})` : ''}`;
             listEl.appendChild(b);
           });
           if (evs.length > 2){
@@ -2547,12 +2602,27 @@
           grid.appendChild(cell);
         }
         if (items.length){
-          const ul = document.createElement('ul');
-          ul.className='space-y-2';
-          items.slice(0,4).forEach(e => {
-            const li = document.createElement('li');
-            li.innerHTML = `<strong>${e.title}</strong> <span class="text-xs text-gray-500">(${e.start_date}${e.end_date?(' - '+e.end_date):''})</span>`;
-            ul.appendChild(li);
+          const upcoming = items
+            .filter(e => e.end && e.end >= today)
+            .sort((a,b) => (a.start - b.start))
+            .slice(0,6);
+          const ul = document.createElement('div');
+          ul.className='grid gap-2';
+          upcoming.forEach(e => {
+            const row = document.createElement('div');
+            row.className = 'rounded-lg border border-gray-100 bg-white px-3 py-2';
+            const span = e.end && e.end > e.start ? `${dayFmt.format(e.start)} - ${dayFmt.format(e.end)}` : dayFmt.format(e.start);
+            const venue = e.venue ? ` • ${e.venue}` : '';
+            const when = `${span}${e.timeLabel ? ` • ${e.timeLabel}` : ''}${venue}`;
+            row.innerHTML = `
+              <div class="flex items-center justify-between gap-2">
+                <strong class="text-sm text-gray-900">${e.title}</strong>
+                <span class="text-[10px] px-2 py-0.5 rounded-full ${catStyles[e.category] || catStyles.other}">${e.category || 'other'}</span>
+              </div>
+              <div class="text-xs text-gray-500 mt-0.5">${when}</div>
+              ${e.description ? `<div class="text-xs text-gray-600 mt-1">${e.description}</div>` : ''}
+            `;
+            ul.appendChild(row);
           });
           list.appendChild(ul);
         } else {

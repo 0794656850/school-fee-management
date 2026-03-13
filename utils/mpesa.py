@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import time
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -27,6 +27,9 @@ def _cfg(key: str, default: str = "") -> str:
         db_val = get_setting(key, None)
         if db_val is not None and str(db_val).strip():
             return str(db_val).strip()
+        env_val = (os.environ.get(key) or "").strip()
+        if env_val:
+            return env_val
         return default
     except Exception:
         return default
@@ -38,6 +41,14 @@ def _stub_enabled() -> bool:
         return bool(str(v or "").strip()) and str(v or "").strip().lower() not in {"0", "false", "no"}
     except Exception:
         return False
+
+
+def _int_cfg(key: str, default: int) -> int:
+    raw = (_cfg(key, str(default)) or str(default)).strip()
+    try:
+        return int(raw)
+    except Exception:
+        return default
 
 
 def _base_url() -> str:
@@ -54,14 +65,27 @@ def get_access_token(timeout: int = 15) -> str:
         raise DarajaError("Daraja consumer key/secret not configured")
     token_url = f"{_base_url()}/oauth/v1/generate?grant_type=client_credentials"
     auth = (key, secret)
-    try:
-        r = requests.get(token_url, auth=auth, timeout=timeout)
-    except (RequestsTimeout, SSLError, RequestsConnectionError, RequestException) as e:
+    retries = max(1, _int_cfg("DARAJA_TOKEN_RETRIES", 2))
+    backoff = max(0, _int_cfg("DARAJA_RETRY_BACKOFF_SECONDS", 2))
+    last_err: Exception | None = None
+    r = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(token_url, auth=auth, timeout=timeout)
+            last_err = None
+            break
+        except (RequestsTimeout, SSLError, RequestsConnectionError, RequestException) as e:
+            last_err = e
+            if attempt < retries and backoff > 0:
+                time.sleep(backoff * attempt)
+    if last_err is not None:
         err = (
-            "Network/SSL error contacting Daraja token endpoint: "
-            f"{type(e).__name__}: {e}"
+            "Network/SSL error contacting Daraja token endpoint after retries: "
+            f"{type(last_err).__name__}: {last_err}"
         )
         raise DarajaError(err)
+    if r is None:
+        raise DarajaError("Auth failed: no response from Daraja token endpoint")
     if r.status_code != 200:
         raise DarajaError(f"Auth failed: {r.status_code} {r.text}")
     try:
@@ -84,19 +108,30 @@ def _password(short_code: str, passkey: str, ts: str) -> str:
 
 
 def _resolve_callback_url(callback_url: Optional[str] = None) -> str:
-    cb = (callback_url or _cfg("DARAJA_CALLBACK_URL") or "").strip()
-    if not cb:
+    # Keep the older, known-working fallback order:
+    # explicit arg -> configured URL -> route-derived URL.
+    try:
+        cb = (callback_url or _cfg("DARAJA_CALLBACK_URL") or url_for("mpesa.callback", _external=True) or "").strip()
+        # In production Daraja requires HTTPS callback endpoints.
+        if cb.startswith("http://") and (_cfg("DARAJA_ENV", "sandbox").lower() != "sandbox"):
+            cb = cb.replace("http://", "https://", 1)
+        pr = urlparse(cb)
+        host = (pr.hostname or "").lower()
+        if (not pr.scheme) or (not host):
+            raise DarajaError(
+                "Invalid CallBackURL. Set DARAJA_CALLBACK_URL to your public https URL (e.g. https://your-domain/mpesa/callback)."
+            )
+        if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
+            raise DarajaError(
+                "Invalid CallBackURL (localhost). Use a public URL (ngrok/Cloudflare) to /mpesa/callback and set DARAJA_CALLBACK_URL."
+            )
+        return cb
+    except DarajaError:
+        raise
+    except Exception:
         raise DarajaError(
-            "DARAJA_CALLBACK_URL is not set. Provide your public HTTPS callback (e.g. https://your-ngrok-url/mpesa/callback)."
+            "Failed to resolve CallBackURL. Set DARAJA_CALLBACK_URL to your public https URL."
         )
-    pr = urlparse(cb)
-    scheme = (pr.scheme or "").lower()
-    host = (pr.hostname or "").lower()
-    if scheme != "https" or not host:
-        raise DarajaError("CallBackURL must be a public HTTPS endpoint ending in /mpesa/callback.")
-    if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
-        raise DarajaError("CallBackURL must not target a localhost or private host.")
-    return cb
 
 
 def _resolve_b2c_urls() -> tuple[str, str]:
@@ -144,6 +179,10 @@ def stk_push(phone: str, amount: int, account_ref: Optional[str] = None, trans_d
     if not short_code or not passkey:
         raise DarajaError("Daraja ShortCode/Passkey not configured")
 
+    req_timeout = _int_cfg("DARAJA_STK_TIMEOUT_SECONDS", timeout)
+    retries = max(1, _int_cfg("DARAJA_STK_RETRIES", 3))
+    backoff = max(0, _int_cfg("DARAJA_RETRY_BACKOFF_SECONDS", 2))
+
     token = get_access_token()
     ts = _timestamp()
     cb = _resolve_callback_url(callback_url)
@@ -163,14 +202,42 @@ def stk_push(phone: str, amount: int, account_ref: Optional[str] = None, trans_d
     }
     url = f"{_base_url()}/mpesa/stkpush/v1/processrequest"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    try:
-        r = requests.post(url, json=payload, headers=headers, timeout=timeout)
-    except (RequestsTimeout, SSLError, RequestsConnectionError, RequestException) as e:
+    last_err: Exception | None = None
+    r = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.post(url, json=payload, headers=headers, timeout=req_timeout)
+            last_err = None
+            break
+        except (RequestsTimeout, SSLError, RequestsConnectionError, RequestException) as e:
+            last_err = e
+            if attempt < retries and backoff > 0:
+                time.sleep(backoff * attempt)
+    if last_err is not None:
         err = (
-            "Network/SSL error during STK push: "
-            f"{type(e).__name__}: {e}"
+            "Network/SSL error during STK push after retries: "
+            f"{type(last_err).__name__}: {last_err}"
         )
         raise DarajaError(err)
+    if r is None:
+        raise DarajaError("STK push failed: no response from Daraja")
+    # Some Daraja edge/proxy failures are caused by stale callback URLs (e.g. expired tunnel).
+    # If that happens and callback_url was not explicitly forced by caller, retry once with
+    # the route-derived callback URL.
+    if (
+        r.status_code == 503
+        and not callback_url
+        and isinstance(r.text, str)
+        and ("upstream connect error" in r.text.lower() or "connection timeout" in r.text.lower())
+    ):
+        try:
+            fallback_cb = _resolve_callback_url(url_for("mpesa.callback", _external=True))
+            if fallback_cb != payload.get("CallBackURL"):
+                payload["CallBackURL"] = fallback_cb
+                r = requests.post(url, json=payload, headers=headers, timeout=req_timeout)
+        except Exception:
+            # Preserve original 503 details below if fallback retry cannot run.
+            pass
     if r.status_code != 200:
         raise DarajaError(f"STK push failed: {r.status_code} {r.text}")
     try:

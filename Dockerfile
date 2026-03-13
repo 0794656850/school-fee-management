@@ -23,5 +23,5 @@ ENV SESSION_COOKIE_SECURE=1 \
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-w", "3", "-k", "gthread", "-b", "0.0.0.0:5000", "wsgi:application"]
-
+# Render (and most PaaS) provides $PORT dynamically; use shell-form CMD for env expansion.
+CMD gunicorn -w 3 -k gthread -b 0.0.0.0:${PORT:-5000} wsgi:application

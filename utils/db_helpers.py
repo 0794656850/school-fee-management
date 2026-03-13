@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from mysql.connector.connection_cext import CMySQLConnection  # type: ignore
 
 

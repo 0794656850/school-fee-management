@@ -175,6 +175,10 @@
           <i data-lucide="file-text"></i>
           <span>Fee Records</span>
         </a>
+        <a href="{{ url_for('admin.admin_events') }}" class="nav-link {% if '/admin/events' in request.path %}active-link{% endif %}">
+          <i data-lucide="calendar-plus"></i>
+          <span>School Events</span>
+        </a>
         <a href="{{ url_for('admin.admin_backups') }}" class="nav-link {% if '/admin/backups' in request.path %}active-link{% endif %}">
           <i data-lucide="database"></i>
           <span>Backups &amp; Restore</span>
@@ -184,7 +188,7 @@
 
 
     <div class="p-4 border-t border-gray-100 text-center text-gray-500 text-xs">
-      <p>&copy; 2025 <span class="font-semibold text-blue-600">Fee_Management_System</span></p>
+      <p>&copy; {{ CALENDAR_YEAR }} <span class="font-semibold text-blue-600">Fee_Management_System</span></p>
       <p class="mt-1">Powered by Flask</p>
     </div>
   </aside>
@@ -221,7 +225,7 @@
     <!-- Header -->
     <header class="sticky top-0 z-20 border-b border-gray-200 px-8 py-4 flex items-center gap-3 bg-white/80 backdrop-blur-md">
       <div class="flex items-center gap-3">
-        <a href="#" data-back onclick="event.preventDefault(); try { if (window.neoBack) { window.neoBack(); } else if (window.history && window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('dashboard') }}'; } } catch (e) { if (window.history && window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('dashboard') }}'; } }" class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
+        <a href="#" data-back class="hidden md:inline-flex items-center gap-1 text-gray-600 hover:text-indigo-700 px-2 py-1 rounded-lg border border-gray-200 hover:border-indigo-300" title="Back" role="button">
           <i data-lucide="arrow-left"></i>
           <span class="text-sm">Back</span>
         </a>
@@ -248,11 +252,11 @@
           </span>
         </div>
         <div class="text-xs text-gray-600">
-          <span class="mr-2">&copy; {{ (now.year if now is defined else 2025) }}</span>
+          <span class="mr-2">&copy; {{ CALENDAR_YEAR }}</span>
           
         </div>
       </div>
-      <div class="px-8 pb-6 text-center text-xs text-gray-600">&copy; 2025 Fee_Management_System</div>
+      <div class="px-8 pb-6 text-center text-xs text-gray-600">&copy; {{ CALENDAR_YEAR }} Fee_Management_System</div>
     </footer>
   </main>
   </div>
@@ -337,6 +341,36 @@
 
     // Session-aware back stack (keeps "real world" navigation order)
     const NAV_STACK_KEY = "navStack";
+    const NEO_BACK_BLOCKED = [
+      "/auth/logout",
+      "/auth/login",
+      "/auth/entry",
+      "/auth/",
+      "/admin/logout",
+      "/admin/login",
+    ];
+    function _neoNormPath(pathname) {
+      const p = (pathname || "/").toString().trim() || "/";
+      if (p === "/") return "/";
+      return p.replace(/\/+$/g, "");
+    }
+    function _neoBackIsBlockedUrl(candidate) {
+      try {
+        if (!candidate) return true;
+        // Accept relative paths or full URLs.
+        const u = new URL(candidate, window.location.origin);
+        if (u.origin !== window.location.origin) return true;
+        const p = _neoNormPath(u.pathname);
+        // Normalize both sides to avoid subtle mismatches.
+        for (const blocked of NEO_BACK_BLOCKED) {
+          const b = _neoNormPath(blocked);
+          if (p === b) return true;
+        }
+        return false;
+      } catch (_) {
+        return true;
+      }
+    }
     function getNavStack() {
       try {
         const raw = sessionStorage.getItem(NAV_STACK_KEY) || "[]";
@@ -369,30 +403,14 @@
     // Record once per page load (keeps the original path order)
     try { recordNav(); } catch (_) {}
 
-    // Back handler: prefer native browser history; use safe fallback only when needed.
+    // Back handler: go back within the portal without ever landing on auth/logout pages.
     function neoBack() {
       const key = window.location.pathname + window.location.search;
       try {
-        if (window.history && window.history.length > 1) {
-          window.history.back();
-          return;
-        }
-      } catch (e) {}
-      try {
         const prev = (sessionStorage.getItem('__nav_prev') || '').trim();
-        if (prev && prev !== key) {
+        if (prev && prev !== key && !_neoBackIsBlockedUrl(prev)) {
           window.location.href = prev;
           return;
-        }
-      } catch (e) {}
-      try {
-        const ref = document.referrer || '';
-        if (ref) {
-          const refUrl = new URL(ref, window.location.origin);
-          if (refUrl.origin === window.location.origin && refUrl.href !== window.location.href) {
-            window.location.href = refUrl.href;
-            return;
-          }
         }
       } catch (e) {}
       try {
@@ -400,7 +418,7 @@
         let target = null;
         while (stack.length) {
           const prev = stack.pop();
-          if (prev && prev !== key) {
+          if (prev && prev !== key && !_neoBackIsBlockedUrl(prev)) {
             target = prev;
             break;
           }
@@ -411,10 +429,39 @@
           return;
         }
       } catch (e) {}
-      // Last fallback
-      try { window.location.href = "{{ url_for('dashboard') }}"; } catch(e) { window.location.href = "/"; }
+      try {
+        const ref = document.referrer || '';
+        if (ref && !_neoBackIsBlockedUrl(ref)) {
+          const refUrl = new URL(ref, window.location.origin);
+          if (refUrl.origin === window.location.origin && refUrl.href !== window.location.href) {
+            window.location.href = refUrl.href;
+            return;
+          }
+        }
+      } catch (e) {}
+      // Last fallback: stay on the same page (do not "back" into logout/login).
+      return;
     }
     try { window.neoBack = neoBack; } catch (_) {}
+
+    // Trap browser/device back so it doesn't accidentally hit /logout or /login.
+    (function(){
+      const isAuthed = {{ 'true' if session.get('user_logged_in') or session.get('is_admin') else 'false' }};
+      if (!isAuthed) return;
+      try {
+        if (window.__neoBackTrapInstalled) return;
+        window.__neoBackTrapInstalled = true;
+      } catch (_) {}
+      try {
+        // Add a dummy state so the first Back stays on this page and we can handle it.
+        history.replaceState(Object.assign({}, history.state, { __neo: true }), document.title, window.location.href);
+        history.pushState({ __neo_trap: true }, document.title, window.location.href);
+      } catch (_) {}
+      window.addEventListener("popstate", function() {
+        try { history.pushState({ __neo_trap: true }, document.title, window.location.href); } catch (_) {}
+        try { neoBack(); } catch (_) {}
+      });
+    })();
 
     // Flash close + auto-dismiss (supports future flash injections)
     (function() {

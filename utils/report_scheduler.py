@@ -1,11 +1,11 @@
-﻿from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 from flask_mail import Message
 from utils.pro import is_pro_enabled
 from utils.settings import get_setting
 from io import BytesIO, StringIO
 import csv
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 
 # New job: send weekly/monthly full report to school email (Pro only)
 def _build_full_report_bytes(app):

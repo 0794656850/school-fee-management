@@ -1,10 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 import mysql.connector
 from urllib.parse import urlparse
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
+from utils.timezone_helpers import EATDateTime as datetime
 from utils.security import verify_password, hash_password
 from utils.tenant import slugify_code, get_or_create_school
 from utils.login_otp import generate_login_otp, mask_email, send_portal_login_otp
@@ -80,6 +81,11 @@ def ensure_student_portal_columns(conn) -> None:
 
 @student_auth_bp.route("/login", methods=["GET", "POST"])
 def student_login():
+    if request.method == "GET":
+        sid = int(session.get("student_id") or 0)
+        if session.get("student_logged_in") and sid:
+            return redirect(url_for("student_portal.view", token="me"))
+
     if request.method == "POST":
         school_raw = (request.form.get("school") or "").strip()
         reg_no = (request.form.get("regNo") or request.form.get("admission_no") or "").strip()

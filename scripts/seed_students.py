@@ -1,7 +1,7 @@
 import argparse
 import random
 import string
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import List, Tuple, Set
 import os
 import sys

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -103,7 +103,7 @@ def send_portal_login_otp(
 <p>Your secure code for <strong>{portal_name}</strong> is <strong>{otp_code}</strong>.</p>
 <p>This code expires in {expires_minutes} minutes and can only be used once.</p>
 <p>If you didn't request access, ignore this message.</p>
-<p class="text-xs text-gray-400" style="font-size:.75rem;">Sent on {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}</p>
+<p class="text-xs text-gray-400" style="font-size:.75rem;">Sent on {datetime.now().strftime("%Y-%m-%d %H:%M EAT")}</p>
 """
     text = (
         f"Hello {recipient_label or 'guardian'},\n"

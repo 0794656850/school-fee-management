@@ -1,8 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 from io import StringIO
-from datetime import datetime, timedelta
+from datetime import timedelta
+from utils.timezone_helpers import EATDateTime as datetime
 
 from apscheduler.triggers.cron import CronTrigger
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify, Response, send_file
@@ -109,6 +110,52 @@ def ensure_pro_activations_table(db):
         """
     )
     db.commit()
+
+
+def ensure_events_table(db) -> None:
+    cur = db.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS calendar_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            school_id INT NULL,
+            title VARCHAR(200) NOT NULL,
+            description TEXT NULL,
+            category VARCHAR(40) NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NULL,
+            event_time TIME NULL,
+            venue VARCHAR(190) NULL,
+            is_all_day TINYINT(1) NOT NULL DEFAULT 1,
+            created_by VARCHAR(120) NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_events_school (school_id),
+            INDEX idx_events_dates (start_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    db.commit()
+    # Backward-compatible column upgrades for existing installations.
+    for stmt in (
+        "ALTER TABLE calendar_events ADD COLUMN event_time TIME NULL AFTER end_date",
+        "ALTER TABLE calendar_events ADD COLUMN venue VARCHAR(190) NULL AFTER event_time",
+        "ALTER TABLE calendar_events ADD COLUMN is_all_day TINYINT(1) NOT NULL DEFAULT 1 AFTER venue",
+        "ALTER TABLE calendar_events ADD COLUMN created_by VARCHAR(120) NULL AFTER is_all_day",
+    ):
+        try:
+            cur.execute(stmt)
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+
+def _event_category(value: str) -> str:
+    raw = (value or "").strip().lower()
+    allowed = {"academic", "exam", "sports", "meeting", "holiday", "trip", "other"}
+    return raw if raw in allowed else "other"
 
 
 def _require_admin():
@@ -233,6 +280,9 @@ def _serialize_audit_log(log: dict[str, Any]) -> dict[str, Any]:
 @admin_bp.route("/login", methods=["GET", "POST"])
 @limiter.limit("6 per minute", methods=["POST"])
 def login():
+    if request.method == "GET" and session.get("is_admin"):
+        return redirect(url_for("admin.dashboard"))
+
     if request.method == "POST":
         password = request.form.get("password", "").strip()
         if _verify_admin_current_password(password):
@@ -458,6 +508,158 @@ def payment_records_export():
     resp = Response(csv_buffer.getvalue(), mimetype="text/csv; charset=utf-8")
     resp.headers["Content-Disposition"] = "attachment; filename=fee_payment_records.csv"
     return resp
+
+
+@admin_bp.route("/events", methods=["GET", "POST"])
+def admin_events():
+    guard = _require_admin()
+    if guard is not None:
+        return guard
+    sid = session.get("school_id")
+    if not sid:
+        flash("Select a school before scheduling events.", "warning")
+        return redirect(url_for("choose_school", next=url_for("admin.admin_events")))
+
+    db = _db()
+    ensure_events_table(db)
+    cur = db.cursor(dictionary=True)
+    today = datetime.now().date()
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "create").strip().lower()
+        if action == "delete":
+            try:
+                event_id = int(request.form.get("event_id") or 0)
+            except Exception:
+                event_id = 0
+            if not event_id:
+                flash("Invalid event selected.", "warning")
+                db.close()
+                return redirect(url_for("admin.admin_events"))
+            cur2 = db.cursor()
+            cur2.execute("DELETE FROM calendar_events WHERE id=%s AND school_id=%s", (event_id, sid))
+            db.commit()
+            db.close()
+            flash("Event removed.", "success")
+            return redirect(url_for("admin.admin_events"))
+
+        title = (request.form.get("title") or "").strip()
+        start_raw = (request.form.get("start_date") or "").strip()
+        end_raw = (request.form.get("end_date") or "").strip()
+        category = _event_category(request.form.get("category") or "")
+        description = (request.form.get("description") or "").strip() or None
+        venue = (request.form.get("venue") or "").strip() or None
+        is_all_day = 1 if (request.form.get("is_all_day") or "0") in ("1", "on", "true", "yes") else 0
+        time_raw = (request.form.get("event_time") or "").strip()
+
+        if not title or not start_raw:
+            flash("Title and start date are required.", "warning")
+            db.close()
+            return redirect(url_for("admin.admin_events"))
+
+        try:
+            start_date = datetime.strptime(start_raw, "%Y-%m-%d").date()
+        except Exception:
+            flash("Invalid start date format.", "error")
+            db.close()
+            return redirect(url_for("admin.admin_events"))
+
+        end_date = None
+        if end_raw:
+            try:
+                end_date = datetime.strptime(end_raw, "%Y-%m-%d").date()
+            except Exception:
+                flash("Invalid end date format.", "error")
+                db.close()
+                return redirect(url_for("admin.admin_events"))
+            if end_date < start_date:
+                flash("End date cannot be before start date.", "warning")
+                db.close()
+                return redirect(url_for("admin.admin_events"))
+
+        event_time = None
+        if not is_all_day and time_raw:
+            try:
+                event_time = datetime.strptime(time_raw, "%H:%M").time()
+            except Exception:
+                flash("Event time must be in HH:MM format.", "warning")
+                db.close()
+                return redirect(url_for("admin.admin_events"))
+
+        cur2 = db.cursor()
+        cur2.execute(
+            """
+            INSERT INTO calendar_events
+                (school_id, title, description, category, start_date, end_date, event_time, venue, is_all_day, created_by, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                sid,
+                title,
+                description,
+                category,
+                start_date,
+                end_date,
+                event_time,
+                venue,
+                is_all_day,
+                session.get("username"),
+                datetime.now(),
+            ),
+        )
+        db.commit()
+        db.close()
+        flash("Event scheduled. Parents will see it on their portal calendar.", "success")
+        return redirect(url_for("admin.admin_events"))
+
+    try:
+        y = int(request.args.get("y") or today.year)
+        m = int(request.args.get("m") or today.month)
+    except Exception:
+        y, m = today.year, today.month
+    if m < 1 or m > 12:
+        m = today.month
+    from calendar import month_name, monthrange
+    last_day = monthrange(y, m)[1]
+    start = f"{y:04d}-{m:02d}-01"
+    end = f"{y:04d}-{m:02d}-{last_day:02d}"
+
+    cur.execute(
+        """
+        SELECT id, title, description, category, start_date, end_date, event_time, venue, is_all_day, created_by, created_at
+        FROM calendar_events
+        WHERE school_id=%s
+          AND start_date <= %s
+          AND (end_date IS NULL OR end_date >= %s)
+        ORDER BY start_date ASC, event_time ASC, id ASC
+        """,
+        (sid, end, start),
+    )
+    month_events = cur.fetchall() or []
+
+    cur.execute(
+        """
+        SELECT id, title, description, category, start_date, end_date, event_time, venue, is_all_day
+        FROM calendar_events
+        WHERE school_id=%s
+          AND COALESCE(end_date, start_date) >= %s
+        ORDER BY start_date ASC, event_time ASC, id ASC
+        LIMIT 8
+        """,
+        (sid, today),
+    )
+    upcoming_events = cur.fetchall() or []
+    db.close()
+
+    return render_template(
+        "admin_events.html",
+        month_events=month_events,
+        upcoming_events=upcoming_events,
+        selected_year=y,
+        selected_month=m,
+        selected_month_name=month_name[m],
+        today=today,
+    )
 
 
 @admin_bp.route("/users", methods=["GET", "POST"])
@@ -943,9 +1145,9 @@ def billing():
             flash("Enter an M-Pesa reference.", "error")
             return redirect(url_for("admin.billing"))
 
-        # Basic format guard (M-Pesa codes are typically 10–12 alphanumerics)
+        # Basic format guard (M-Pesa codes are typically 10â€“12 alphanumerics)
         if len(ref) < 8 or len(ref) > 20:
-            flash("That doesn’t look like a valid M-Pesa reference.", "error")
+            flash("That doesnâ€™t look like a valid M-Pesa reference.", "error")
             return redirect(url_for("admin.billing"))
 
         # Enforce one-time use via DB table
@@ -959,7 +1161,7 @@ def billing():
 
         # Optionally, you can verify the reference via Daraja API here.
         # For now we trust the reference and activate Pro.
-        from datetime import datetime as _dt
+        from utils.timezone_helpers import EATDateTime as _dt
         cur = db.cursor()
         cur.execute(
             "INSERT INTO pro_activations (mpesa_ref, activated_at) VALUES (%s, %s)",

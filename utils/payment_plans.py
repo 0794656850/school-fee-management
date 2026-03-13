@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Optional, Tuple, List
 
 

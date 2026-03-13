@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: fee-management-system
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT wsgi:application
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: ENFORCE_HTTPS
+        value: "1"
+      # Set this in Render (do not commit real credentials):
+      - key: SQLALCHEMY_DATABASE_URI
+        sync: false

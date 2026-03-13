@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, render_template, request, jsonify, session, Response, stream_with_context
 import json
 import re
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from typing import Any, Dict, List
 
 from utils.ai import classify_intent, answer_with_ai, answer_with_ai_rag, ai_is_configured, chat_anything, chat_anything_stream, rag_status, ai_provider

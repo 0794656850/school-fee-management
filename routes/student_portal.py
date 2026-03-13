@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from flask import Blueprint, current_app, render_template, request, jsonify, abort, url_for, Response, flash, redirect
 import hmac
 import hashlib
 import os
-from datetime import datetime
+from utils.timezone_helpers import EATDateTime as datetime
 from urllib.parse import urlparse
 import mysql.connector
 
@@ -590,7 +590,7 @@ def contact_school():
     srow = cur.fetchone() or {}
     school_id = srow.get("school_id")
     ensure_guardian_messages_table(db)
-    from datetime import datetime as _dt
+    from utils.timezone_helpers import EATDateTime as _dt
     now = _dt.now()
     cur2 = db.cursor()
     cur2.execute(

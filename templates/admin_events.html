@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}School Events{% endblock %}
+{% block page_title %}School Events Scheduler{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+  <section class="xl:col-span-1 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900">Create Event</h3>
+        <p class="text-sm text-gray-500">This appears instantly in the parent portal calendar.</p>
+      </div>
+      <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs">
+        <i data-lucide="calendar-plus"></i>
+        Live
+      </span>
+    </div>
+    <form method="post" class="mt-4 space-y-3">
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Title</label>
+        <input name="title" required maxlength="200" placeholder="e.g. Mid-Term Exams"
+               class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Start date</label>
+          <input type="date" name="start_date" required value="{{ today }}"
+                 class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">End date</label>
+          <input type="date" name="end_date"
+                 class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Category</label>
+          <select name="category" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="academic">Academic</option>
+            <option value="exam">Exam</option>
+            <option value="sports">Sports</option>
+            <option value="meeting">Meeting</option>
+            <option value="holiday">Holiday</option>
+            <option value="trip">Trip</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Time</label>
+          <input type="time" name="event_time" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Venue</label>
+        <input name="venue" maxlength="190" placeholder="e.g. Main Hall"
+               class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+      </div>
+      <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+        <input type="checkbox" name="is_all_day" value="1" checked class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+        All day event
+      </label>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Description</label>
+        <textarea name="description" rows="3" placeholder="Extra details for parents..." class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"></textarea>
+      </div>
+      <button class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2">
+        <i data-lucide="send"></i>
+        Publish Event
+      </button>
+    </form>
+  </section>
+
+  <section class="xl:col-span-2 space-y-4">
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900">Upcoming School Events</h3>
+          <p class="text-sm text-gray-500">Parents see these in the portal calendar.</p>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for e in upcoming_events %}
+          <article class="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4">
+            <div class="flex items-start justify-between gap-2">
+              <h4 class="font-semibold text-slate-900">{{ e.title }}</h4>
+              <span class="text-[11px] rounded-full px-2 py-0.5 border border-slate-200 bg-white text-slate-600 uppercase tracking-wide">{{ e.category or 'other' }}</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">
+              {{ e.start_date }}{% if e.end_date %} - {{ e.end_date }}{% endif %}
+              {% if e.event_time and not e.is_all_day %} at {{ e.event_time }}{% endif %}
+            </p>
+            {% if e.venue %}<p class="mt-1 text-xs text-indigo-700">Venue: {{ e.venue }}</p>{% endif %}
+            {% if e.description %}<p class="mt-2 text-sm text-slate-700">{{ e.description }}</p>{% endif %}
+          </article>
+        {% else %}
+          <p class="text-sm text-gray-500">No upcoming events yet. Create one to start notifying parents.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-gray-900">{{ selected_month_name }} {{ selected_year }} Schedule</h3>
+      </div>
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500 border-b">
+              <th class="py-2 pr-3">Date</th>
+              <th class="py-2 pr-3">Event</th>
+              <th class="py-2 pr-3">Category</th>
+              <th class="py-2 pr-3">Venue</th>
+              <th class="py-2 pr-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in month_events %}
+            <tr class="border-b border-gray-100 align-top">
+              <td class="py-3 pr-3 text-gray-600">
+                {{ e.start_date }}{% if e.end_date %}<br><span class="text-xs text-gray-400">to {{ e.end_date }}</span>{% endif %}
+              </td>
+              <td class="py-3 pr-3">
+                <div class="font-semibold text-gray-900">{{ e.title }}</div>
+                {% if e.event_time and not e.is_all_day %}<div class="text-xs text-indigo-700 mt-1">Time: {{ e.event_time }}</div>{% endif %}
+                {% if e.description %}<div class="text-xs text-gray-500 mt-1">{{ e.description }}</div>{% endif %}
+              </td>
+              <td class="py-3 pr-3"><span class="uppercase text-xs text-gray-600">{{ e.category or 'other' }}</span></td>
+              <td class="py-3 pr-3 text-gray-600">{{ e.venue or "-" }}</td>
+              <td class="py-3 pr-3">
+                <form method="post" onsubmit="return confirm('Delete this event?');">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="event_id" value="{{ e.id }}">
+                  <button class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs text-rose-700 hover:bg-rose-100">
+                    <i data-lucide="trash-2"></i> Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="py-4 text-gray-500">No events for this month yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

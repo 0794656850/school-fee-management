@@ -110,6 +110,7 @@ Most settings can be done in the Admin UI. Environment variables can override de
    - Env overrides: `GMAIL_CREDENTIALS_JSON` (path to client JSON), `GMAIL_TOKEN_JSON` (path to token), `GMAIL_REDIRECT_URI` (explicit redirect URI), `OAUTHLIB_INSECURE_TRANSPORT` (dev only).
 - M-Pesa (Daraja): Admin → M-Pesa Config (`/admin/mpesa`) or env vars
   - `DARAJA_ENV` (sandbox|production), `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_SHORT_CODE`, `DARAJA_PASSKEY`, `DARAJA_CALLBACK_URL`
+  - Reliability tuning: DARAJA_STK_TIMEOUT_SECONDS (default 20), DARAJA_STK_RETRIES (default 3), DARAJA_TOKEN_RETRIES (default 2), DARAJA_RETRY_BACKOFF_SECONDS (default 2)
   - STK Push: Admin → Billing triggers an STK for Pro upgrade (config required)
 - Payments QR/Link (optional): `PAYMENT_LINK` displays a QR on receipts
 
@@ -144,6 +145,18 @@ docker build -t fee-mgmt .
 docker compose up --build
 ```
 Set your envs via Compose or a `.env` file before running.
+
+## Render (Deployment)
+This repo includes `render.yaml` for Render Blueprint deploys.
+
+- In Render: New +, Blueprint, select the GitHub repo.
+- Required env vars:
+  - `SQLALCHEMY_DATABASE_URI` (point this to your MySQL instance; Render does not provide managed MySQL by default).
+  - `SECRET_KEY` (Render will auto-generate one if you deploy via the blueprint).
+- Recommended env vars:
+  - `ALLOWED_HOSTS` (comma-separated): e.g. `your-service.onrender.com,yourdomain.com`
+  - `APP_SIGNING_SECRET` / `EMAIL_INBOUND_SECRET` / `DARAJA_*` as needed by your features.
+- Note: AI dependencies (`torch`, `transformers`, `rasa`) make builds heavier; pick an adequate Render plan to avoid OOM/timeouts.
 
 ## Security Notes
 - Change all default credentials immediately after first login.
