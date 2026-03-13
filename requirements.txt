@@ -24,4 +24,3 @@ sentencepiece
 safetensors
 Pillow
 qrcode
-rasa==3.7.4
